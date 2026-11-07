@@ -36,3 +36,16 @@ desktop.ini
 
 # Temporary version cache (written at runtime)
 /tmp/csfv2_version_cache.json
+
+# Local deployment / dev-only scripts (contain server IPs / local paths)
+deploy.sh
+http_redirect.py
+
+# Mockup / design scratch files
+mockup.html
+mockup*.html
+
+# Runtime credential files (created on the server, never committed)
+/etc/csfv2/
+users.json
+secret_key
