@@ -49,7 +49,9 @@ from csf_backend import backup_restore
 from csf_backend import email_alerts
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("CSFV2_SECRET_KEY", secrets.token_hex(32))
+app.secret_key = (os.environ.get("CSFV2_SECRET_KEY")
+                  or os.environ.get("SECRET_KEY")
+                  or secrets.token_hex(32))
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
