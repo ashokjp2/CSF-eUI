@@ -1,0 +1,510 @@
+{% extends "base.html" %}
+{% block page_title %}SSL Certificates{% endblock %}
+
+{% block content %}
+<p class="text-muted" style="margin-bottom:15px">Manage HTTPS certificates for CSFv2 (port 8750)</p>
+
+        <!-- Current Certificate Status -->
+        <div class="panel panel-{{ 'success' if ssl.current_cert and not ssl.self_signed else 'warning' if ssl.current_cert else 'danger' }}">
+            <div class="panel-heading">
+                <h4 class="panel-title" style="margin:0">
+                    <span class="glyphicon glyphicon-certificate"></span> Current Certificate
+                </h4>
+            </div>
+            <div class="panel-body">
+                {% if ssl.current_cert %}
+                <table class="table table-condensed" style="margin:0">
+                    <tr>
+                        <td style="width:160px"><strong>Provider</strong></td>
+                        <td>
+                            {% if ssl.current_cert.provider == 'Self-Signed' %}
+                            <span class="label label-warning">Self-Signed</span>
+                            {% elif ssl.current_cert.provider == "Let's Encrypt" %}
+                            <span class="label label-success">Let's Encrypt</span>
+                            {% else %}
+                            <span class="label label-info">{{ ssl.current_cert.provider }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr><td><strong>Subject</strong></td><td>{{ ssl.current_cert.subject }}</td></tr>
+                    <tr><td><strong>Issuer</strong></td><td>{{ ssl.current_cert.issuer }}</td></tr>
+                    <tr><td><strong>Expires</strong></td><td>{{ ssl.current_cert.expiry }}</td></tr>
+                    <tr><td><strong>Cert File</strong></td><td><code>{{ ssl.current_cert.cert_path }}</code></td></tr>
+                    <tr><td><strong>Key File</strong></td><td><code>{{ ssl.current_cert.key_path }}</code></td></tr>
+                </table>
+                <div style="margin-top:10px">
+                    <a href="/api/ssl/download/cert" class="btn btn-default btn-sm">
+                        <span class="glyphicon glyphicon-download"></span> Download Cert
+                    </a>
+                    <a href="/api/ssl/download/key" class="btn btn-default btn-sm">
+                        <span class="glyphicon glyphicon-download"></span> Download Key
+                    </a>
+                    {% if ssl.current_cert.provider != 'Self-Signed' %}
+                    <button class="btn btn-danger btn-sm" id="btn-revoke" data-cert="{{ ssl.current_cert.cert_path }}">
+                        <span class="glyphicon glyphicon-ban-circle"></span> Revoke
+                    </button>
+                    {% endif %}
+                </div>
+                {% if ssl.self_signed %}
+                <div class="alert alert-warning" style="margin-top:10px; margin-bottom:0">
+                    <span class="glyphicon glyphicon-warning-sign"></span>
+                    You're using a self-signed certificate. Browsers will show security warnings.
+                    Consider getting a free Let's Encrypt certificate below.
+                </div>
+                {% endif %}
+                {% else %}
+                <div class="alert alert-danger" style="margin-bottom:0">
+                    <span class="glyphicon glyphicon-remove-sign"></span>
+                    No SSL certificate configured. CSFv2 may not be using HTTPS.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Let's Encrypt -->
+            <div class="col-md-6">
+                <div class="panel panel-success">
+                    <div class="panel-heading">
+                        <h4 class="panel-title" style="margin:0">
+                            <span class="glyphicon glyphicon-globe"></span> Let's Encrypt (Free, Trusted)
+                        </h4>
+                    </div>
+                    <div class="panel-body">
+                        {% if not ssl.certbot_installed %}
+                        <div class="alert alert-info" style="padding:8px 12px">
+                            <span class="glyphicon glyphicon-info-sign"></span>
+                            Certbot will be auto-installed when you request a certificate.
+                        </div>
+                        {% endif %}
+                        <div class="form-group">
+                            <label>Domain Name</label>
+                            <input type="text" class="form-control" id="le-domain" placeholder="e.g. fw.example.com" value="{{ ssl.hostname }}">
+                            <small class="text-muted">Must point to this server's IP.</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Email (for expiry notifications)</label>
+                            <input type="text" class="form-control" id="le-email" placeholder="admin@example.com">
+                        </div>
+                        <div class="form-group">
+                            <label>Verification Method</label>
+                            <select class="form-control" id="le-method">
+                                <option value="webroot">Webroot (use existing nginx/apache/Dokploy on port 80)</option>
+                                <option value="redirect">Auto (temporarily stop port 80 service, get cert, restart)</option>
+                                <option value="standalone">Standalone (needs port 80 free)</option>
+                            </select>
+                            <small class="text-muted" id="le-method-help">Challenge files are served by your existing web server. No port conflict.</small>
+                        </div>
+                        <div class="form-group" id="le-webroot-group">
+                            <label>Webroot Path <small class="text-muted">(auto-detected if empty)</small></label>
+                            <input type="text" class="form-control" id="le-webroot" placeholder="/var/www/html">
+                            <small class="text-muted">Document root of your nginx/apache/Dokploy server.</small>
+                        </div>
+                        <div class="checkbox">
+                            <label><input type="checkbox" id="le-auto-renew" checked> Set up auto-renewal</label>
+                        </div>
+                        <button class="btn btn-success btn-block" id="btn-le-request">
+                            <span class="glyphicon glyphicon-certificate"></span> Request Certificate
+                        </button>
+
+                        {% if ssl.certbot_certs %}
+                        <hr>
+                        <h5>Existing Let's Encrypt Certificates</h5>
+                        {% for cert in ssl.certbot_certs %}
+                        <div class="well well-sm" style="font-size:12px">
+                            <strong>{{ cert.name }}</strong><br>
+                            Domains: {{ cert.domains }}<br>
+                            Expires: {{ cert.expiry }}<br>
+                            <button class="btn btn-xs btn-primary btn-apply-le"
+                                    data-cert="{{ cert.cert_path }}" data-key="{{ cert.key_path }}">
+                                <span class="glyphicon glyphicon-ok"></span> Use This
+                            </button>
+                        </div>
+                        {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- ZeroSSL -->
+            <div class="col-md-6">
+                <div class="panel panel-info">
+                    <div class="panel-heading">
+                        <h4 class="panel-title" style="margin:0">
+                            <span class="glyphicon glyphicon-cloud"></span> ZeroSSL (Free Backup Provider)
+                        </h4>
+                    </div>
+                    <div class="panel-body">
+                        <p class="text-muted">Alternative free SSL provider. Uses acme.sh (auto-installed). Good if Let's Encrypt has rate-limit issues.</p>
+                        <div class="form-group">
+                            <label>Domain Name</label>
+                            <input type="text" class="form-control" id="zs-domain" placeholder="e.g. fw.example.com" value="{{ ssl.hostname }}">
+                            <small class="text-muted">Must point to this server's IP.</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Email (required for ZeroSSL)</label>
+                            <input type="text" class="form-control" id="zs-email" placeholder="admin@example.com">
+                        </div>
+                        <div class="form-group">
+                            <label>Verification Method</label>
+                            <select class="form-control" id="zs-method">
+                                <option value="webroot">Webroot (use existing nginx/apache/Dokploy on port 80)</option>
+                                <option value="redirect">Auto (temporarily stop port 80 service, get cert, restart)</option>
+                                <option value="standalone">Standalone (needs port 80 free)</option>
+                            </select>
+                            <small class="text-muted" id="zs-method-help">Challenge files are served by your existing web server. No port conflict.</small>
+                        </div>
+                        <div class="form-group" id="zs-webroot-group">
+                            <label>Webroot Path <small class="text-muted">(auto-detected if empty)</small></label>
+                            <input type="text" class="form-control" id="zs-webroot" placeholder="/var/www/html">
+                            <small class="text-muted">Document root of your nginx/apache/Dokploy server.</small>
+                        </div>
+                        <button class="btn btn-info btn-block" id="btn-zs-request">
+                            <span class="glyphicon glyphicon-certificate"></span> Request ZeroSSL Certificate
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Self-Signed -->
+            <div class="col-md-6">
+                <div class="panel panel-warning">
+                    <div class="panel-heading">
+                        <h4 class="panel-title" style="margin:0">
+                            <span class="glyphicon glyphicon-file"></span> Self-Signed Certificate
+                        </h4>
+                    </div>
+                    <div class="panel-body">
+                        <p class="text-muted">Generate a self-signed certificate. Browsers will show a warning, but traffic will be encrypted.</p>
+                        <div class="form-group">
+                            <label>Common Name (hostname)</label>
+                            <input type="text" class="form-control" id="ss-domain" placeholder="e.g. fw.example.com" value="{{ ssl.hostname }}">
+                        </div>
+                        <button class="btn btn-warning btn-block" id="btn-ss-generate">
+                            <span class="glyphicon glyphicon-refresh"></span> Generate Self-Signed Certificate
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Auto-Renewal Status -->
+            <div class="col-md-6">
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        <h4 class="panel-title" style="margin:0">
+                            <span class="glyphicon glyphicon-repeat"></span> Auto-Renewal
+                        </h4>
+                    </div>
+                    <div class="panel-body">
+                        {% if ssl.renewal_timer %}
+                        <span class="label label-success"><span class="glyphicon glyphicon-ok"></span> Active</span>
+                        <span class="text-muted" style="margin-left:8px">Certbot timer is running</span>
+                        {% else %}
+                        <span class="label label-default"><span class="glyphicon glyphicon-remove"></span> Not Active</span>
+                        <span class="text-muted" style="margin-left:8px">Request a certificate to enable auto-renewal</span>
+                        {% endif %}
+                        {% if ssl.certbot_installed %}
+                        <div style="margin-top:10px">
+                            <button class="btn btn-default btn-sm" id="btn-test-renewal">
+                                <span class="glyphicon glyphicon-check"></span> Test Renewal (Dry Run)
+                            </button>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Upload Certificate -->
+            <div class="col-md-6">
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        <h4 class="panel-title" style="margin:0">
+                            <span class="glyphicon glyphicon-upload"></span> Upload Certificate
+                        </h4>
+                    </div>
+                    <div class="panel-body">
+                        <p class="text-muted">Upload an existing SSL certificate and private key (PEM format).</p>
+                        <form id="form-upload-cert" enctype="multipart/form-data">
+                            <div class="form-group">
+                                <label>Certificate File (.crt / .pem)</label>
+                                <input type="file" id="upload-cert" name="cert" accept=".crt,.pem,.cer">
+                            </div>
+                            <div class="form-group">
+                                <label>Private Key File (.key / .pem)</label>
+                                <input type="file" id="upload-key" name="key" accept=".key,.pem">
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-block" id="btn-upload-cert">
+                                <span class="glyphicon glyphicon-upload"></span> Upload & Apply
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- IP Protocol Preference -->
+            <div class="col-md-6">
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        <h4 class="panel-title" style="margin:0">
+                            <span class="glyphicon glyphicon-transfer"></span> IP Protocol Preference
+                        </h4>
+                    </div>
+                    <div class="panel-body">
+                        <p class="text-muted">Controls whether the server prefers IPv4 or IPv6 for outgoing connections (DNS, ACME, etc).</p>
+                        <div class="form-group">
+                            <select class="form-control" id="ip-pref">
+                                <option value="default">Default (OS decides, usually IPv6 first)</option>
+                                <option value="prefer_ipv4">Prefer IPv4 (recommended if IPv6 is unreliable)</option>
+                                <option value="ipv4_only">IPv4 Only (disable IPv6)</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-default btn-block" id="btn-ip-pref">
+                            <span class="glyphicon glyphicon-ok"></span> Save Preference
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- HTTP → HTTPS Redirect -->
+        <div class="panel panel-default" id="panel-redirect">
+            <div class="panel-heading">
+                <h4 class="panel-title" style="margin:0">
+                    <span class="glyphicon glyphicon-share-alt"></span> HTTP &rarr; HTTPS Redirect
+                </h4>
+            </div>
+            <div class="panel-body">
+                <p class="text-muted" style="margin-bottom:10px">
+                    Writes an nginx config (<code>/etc/nginx/conf.d/csfv2-redirect.conf</code>) that listens on
+                    <strong>port 80</strong> and redirects all traffic to <strong>https://&lt;host&gt;:8750</strong>.
+                    Certbot ACME challenges on <code>/.well-known/</code> are always allowed through.
+                </p>
+                <div class="alert alert-warning" style="padding:8px 12px; margin-bottom:12px">
+                    <span class="glyphicon glyphicon-exclamation-sign"></span>
+                    <strong>Prerequisites:</strong> nginx must be installed and running.
+                    Enable only after confirming https://{{ ssl.hostname }}:8750 works — if HTTPS is broken,
+                    you will be locked out via port 80 too.
+                </div>
+                <div style="display:flex; align-items:center; gap:12px">
+                    <span id="redirect-status-label" class="label label-default">Checking...</span>
+                    <button class="btn btn-success btn-sm" id="btn-redirect-enable" style="display:none">
+                        <span class="glyphicon glyphicon-ok"></span> Enable Redirect
+                    </button>
+                    <button class="btn btn-danger btn-sm" id="btn-redirect-disable" style="display:none">
+                        <span class="glyphicon glyphicon-remove"></span> Disable Redirect
+                    </button>
+                </div>
+            </div>
+        </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    function sslAction(url, data, btn, origHtml) {
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Working...');
+        $.ajax({
+            url: url,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(data),
+            success: function(r) {
+                if (r.success) {
+                    showToast(r.message, 'success');
+                    if (r.needs_restart) {
+                        showToast('Restart CSFv2 to apply the new certificate.', 'warning');
+                    }
+                    setTimeout(function(){ location.reload(); }, 2000);
+                } else {
+                    showToast(r.error || 'Failed', 'danger');
+                    btn.prop('disabled', false).html(origHtml);
+                }
+            },
+            error: function() {
+                showToast('Request failed', 'danger');
+                btn.prop('disabled', false).html(origHtml);
+            }
+        });
+    }
+
+    var methodHelp = {
+        webroot: 'Challenge files are served by your existing web server. No port conflict.',
+        redirect: 'Temporarily stops Docker/Traefik/nginx on port 80, gets the cert, then restarts it.',
+        standalone: 'Certbot binds port 80 directly. Fails if another service is using it.'
+    };
+
+    function updateMethodUI(prefix) {
+        var method = $('#' + prefix + '-method').val();
+        $('#' + prefix + '-method-help').text(methodHelp[method]);
+        if (method === 'webroot') {
+            $('#' + prefix + '-webroot-group').show();
+        } else {
+            $('#' + prefix + '-webroot-group').hide();
+        }
+    }
+
+    $('#le-method').on('change', function() { updateMethodUI('le'); });
+    $('#zs-method').on('change', function() { updateMethodUI('zs'); });
+    updateMethodUI('le');
+    updateMethodUI('zs');
+
+    $('#btn-le-request').on('click', function() {
+        var domain = $('#le-domain').val().trim();
+        var email = $('#le-email').val().trim();
+        var method = $('#le-method').val();
+        var webroot = $('#le-webroot').val().trim();
+        var autoRenew = $('#le-auto-renew').is(':checked');
+        if (!domain) { showToast('Enter a domain name', 'warning'); return; }
+        sslAction('/api/ssl/letsencrypt', {domain: domain, email: email, auto_renew: autoRenew, method: method, webroot_path: webroot}, $(this),
+            '<span class="glyphicon glyphicon-certificate"></span> Request Certificate');
+    });
+
+    $('#btn-zs-request').on('click', function() {
+        var domain = $('#zs-domain').val().trim();
+        var email = $('#zs-email').val().trim();
+        var method = $('#zs-method').val();
+        var webroot = $('#zs-webroot').val().trim();
+        if (!domain) { showToast('Enter a domain name', 'warning'); return; }
+        if (!email) { showToast('Email is required for ZeroSSL', 'warning'); return; }
+        sslAction('/api/ssl/zerossl', {domain: domain, email: email, method: method, webroot_path: webroot}, $(this),
+            '<span class="glyphicon glyphicon-certificate"></span> Request ZeroSSL Certificate');
+    });
+
+    $('#btn-ss-generate').on('click', function() {
+        var domain = $('#ss-domain').val().trim();
+        sslAction('/api/ssl/self-signed', {domain: domain}, $(this),
+            '<span class="glyphicon glyphicon-refresh"></span> Generate Self-Signed Certificate');
+    });
+
+    $('.btn-apply-le').on('click', function() {
+        var cert = $(this).data('cert');
+        var key = $(this).data('key');
+        sslAction('/api/ssl/apply', {cert_path: cert, key_path: key}, $(this),
+            '<span class="glyphicon glyphicon-ok"></span> Use This');
+    });
+
+    $('#btn-test-renewal').on('click', function() {
+        var btn = $(this);
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Testing...');
+        $.getJSON('/api/ssl/test-renewal', function(r) {
+            if (r.success) {
+                showToast(r.message, 'success');
+            } else {
+                showToast(r.error || 'Test failed', 'danger');
+            }
+            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-check"></span> Test Renewal (Dry Run)');
+        });
+    });
+
+    // Revoke certificate
+    $('#btn-revoke').on('click', function() {
+        if (!confirm('Are you sure you want to revoke this certificate? This cannot be undone.')) return;
+        var certPath = $(this).data('cert');
+        sslAction('/api/ssl/revoke', {cert_path: certPath}, $(this),
+            '<span class="glyphicon glyphicon-ban-circle"></span> Revoke');
+    });
+
+    // Upload certificate
+    $('#form-upload-cert').on('submit', function(e) {
+        e.preventDefault();
+        var formData = new FormData();
+        var cert = $('#upload-cert')[0].files[0];
+        var key = $('#upload-key')[0].files[0];
+        if (!cert || !key) { showToast('Select both certificate and key files', 'warning'); return; }
+        formData.append('cert', cert);
+        formData.append('key', key);
+        var btn = $('#btn-upload-cert');
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Uploading...');
+        $.ajax({
+            url: '/api/ssl/upload',
+            method: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(r) {
+                if (r.success) {
+                    showToast(r.message, 'success');
+                    if (r.needs_restart) showToast('Restart CSFv2 to apply.', 'warning');
+                    setTimeout(function(){ location.reload(); }, 2000);
+                } else {
+                    showToast(r.error || 'Upload failed', 'danger');
+                    btn.prop('disabled', false).html('<span class="glyphicon glyphicon-upload"></span> Upload & Apply');
+                }
+            },
+            error: function() {
+                showToast('Upload failed', 'danger');
+                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-upload"></span> Upload & Apply');
+            }
+        });
+    });
+
+    // IP preference - load current
+    $.getJSON('/api/network/ip-preference', function(r) {
+        $('#ip-pref').val(r.preference || 'default');
+    });
+
+    $('#btn-ip-pref').on('click', function() {
+        var pref = $('#ip-pref').val();
+        var btn = $(this);
+        btn.prop('disabled', true);
+        $.ajax({
+            url: '/api/network/ip-preference',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({preference: pref}),
+            success: function(r) {
+                if (r.success) showToast(r.message, 'success');
+                else showToast(r.error || 'Failed', 'danger');
+                btn.prop('disabled', false);
+            },
+            error: function() { showToast('Failed', 'danger'); btn.prop('disabled', false); }
+        });
+    });
+
+    // HTTP → HTTPS redirect toggle
+    function loadRedirectStatus() {
+        $.getJSON('/api/ssl/http-redirect', function(r) {
+            var label = $('#redirect-status-label');
+            if (r.enabled) {
+                label.removeClass('label-default label-danger').addClass('label-success').text('Enabled — HTTP redirects to HTTPS');
+                $('#btn-redirect-enable').hide();
+                $('#btn-redirect-disable').show();
+            } else {
+                label.removeClass('label-success label-danger').addClass('label-default').text('Disabled — HTTP requests pass through');
+                $('#btn-redirect-enable').show();
+                $('#btn-redirect-disable').hide();
+            }
+        });
+    }
+
+    function setRedirect(enabled) {
+        var btn = enabled ? $('#btn-redirect-enable') : $('#btn-redirect-disable');
+        btn.prop('disabled', true);
+        $.ajax({
+            url: '/api/ssl/http-redirect',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({enabled: enabled}),
+            success: function(r) {
+                if (r.success) {
+                    showToast(r.message, 'success');
+                    loadRedirectStatus();
+                } else {
+                    showToast(r.error || 'Failed', 'danger');
+                    btn.prop('disabled', false);
+                }
+            },
+            error: function() { showToast('Failed', 'danger'); btn.prop('disabled', false); }
+        });
+    }
+
+    $('#btn-redirect-enable').on('click', function() { setRedirect(true); });
+    $('#btn-redirect-disable').on('click', function() { setRedirect(false); });
+    loadRedirectStatus();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+{% block page_title %}WireGuard Interface{% endblock %}
+
+{% block content %}
+<div class="panel panel-info">
+    <div class="panel-heading">
+        <h4 style="margin:0">
+            <span class="glyphicon glyphicon-lock"></span> WireGuard: {{ iface }}
+            {% if wg_status %}
+            <span class="label label-success pull-right">UP</span>
+            {% else %}
+            <span class="label label-default pull-right">DOWN</span>
+            {% endif %}
+        </h4>
+    </div>
+</div>
+
+<!-- Interface Status -->
+{% if wg_status %}
+<div class="panel panel-default">
+    <div class="panel-heading"><h4>Interface Status</h4></div>
+    <div class="panel-body">
+        <table class="table table-bordered">
+            {% for key, val in wg_status.interface.items() %}
+            <tr><td><strong>{{ key }}</strong></td><td>{{ val }}</td></tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Peers -->
+<div class="panel panel-default">
+    <div class="panel-heading">
+        <h4>Peers
+            <span class="badge">{{ parsed.peers | length }}</span>
+        </h4>
+    </div>
+    <div class="panel-body">
+        {% if wg_status and wg_status.peers %}
+        <table class="table table-bordered table-striped">
+            <thead>
+                <tr>
+                    <th>Public Key</th>
+                    <th>Endpoint</th>
+                    <th>Allowed IPs</th>
+                    <th>Latest Handshake</th>
+                    <th>Transfer</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for peer in wg_status.peers %}
+                <tr>
+                    <td><code style="font-size:11px">{{ peer.public_key[:20] }}...</code></td>
+                    <td>{{ peer.get('endpoint', '-') }}</td>
+                    <td>{{ peer.get('allowed_ips', '-') }}</td>
+                    <td>{{ peer.get('latest_handshake', '-') }}</td>
+                    <td>
+                        {% if peer.public_key in transfer %}
+                        <span class="text-success">RX: {{ (transfer[peer.public_key].rx / 1024 / 1024) | round(2) }} MB</span><br>
+                        <span class="text-primary">TX: {{ (transfer[peer.public_key].tx / 1024 / 1024) | round(2) }} MB</span>
+                        {% else %}
+                        {{ peer.get('transfer', '-') }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="POST" action="/wireguard/{{ iface }}/removepeer" style="display:inline">
+                            <input type="hidden" name="public_key" value="{{ peer.public_key }}">
+                            <button type="submit" class="btn btn-xs btn-danger confirmButton"
+                                    data-query="Remove this peer?"
+                                    data-action="/wireguard/{{ iface }}/removepeer">
+                                <span class="glyphicon glyphicon-trash"></span> Remove
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% elif parsed.peers %}
+        <div class="bs-callout bs-callout-info">
+            <p>{{ parsed.peers | length }} peer(s) configured but interface is down. Bring it up to see live status.</p>
+        </div>
+        {% else %}
+        <div class="bs-callout bs-callout-info">No peers configured.</div>
+        {% endif %}
+
+        <!-- Add Peer -->
+        <h5 style="margin-top:20px">Add Peer</h5>
+        <form method="POST" action="/wireguard/{{ iface }}/addpeer">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label>Public Key</label>
+                        <input type="text" class="form-control" name="public_key" required placeholder="Peer public key">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Allowed IPs</label>
+                        <input type="text" class="form-control" name="allowed_ips" required placeholder="10.0.0.2/32">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Endpoint (optional)</label>
+                        <input type="text" class="form-control" name="endpoint" placeholder="host:port">
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label>Keepalive</label>
+                        <input type="number" class="form-control" name="persistent_keepalive" placeholder="25">
+                    </div>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-success">
+                <span class="glyphicon glyphicon-plus"></span> Add Peer
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Config Editor -->
+<div class="panel panel-default">
+    <div class="panel-heading"><h4>Configuration File</h4></div>
+    <div class="panel-body">
+        <form method="POST" action="/wireguard/{{ iface }}/save">
+            <textarea name="content" class="form-control textarea" rows="20"
+                      style="font-family:monospace; font-size:13px">{{ config_content }}</textarea>
+            <div style="margin-top:10px">
+                <button type="submit" class="btn btn-primary">
+                    <span class="glyphicon glyphicon-floppy-disk"></span> Save Config
+                </button>
+                <form method="POST" action="/wireguard/{{ iface }}/restart" style="display:inline; margin-left:10px">
+                    <button type="submit" class="btn btn-warning">
+                        <span class="glyphicon glyphicon-refresh"></span> Restart Interface
+                    </button>
+                </form>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Client Config Generator -->
+<div class="panel panel-default">
+    <div class="panel-heading"><h4>Generate Client Configuration</h4></div>
+    <div class="panel-body">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="form-group">
+                    <label>Client IP</label>
+                    <input type="text" class="form-control" id="clientIp" placeholder="10.0.0.2/32">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="form-group">
+                    <label>Server Endpoint</label>
+                    <input type="text" class="form-control" id="serverEndpoint" placeholder="your-server:51820">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="form-group">
+                    <label>Server Public Key</label>
+                    <input type="text" class="form-control" id="serverPubKey"
+                           value="{{ wg_status.interface.get('public_key', '') if wg_status else '' }}">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="form-group">
+                    <label>DNS</label>
+                    <input type="text" class="form-control" id="clientDns" value="1.1.1.1">
+                </div>
+            </div>
+        </div>
+        <button type="button" class="btn btn-primary" id="genClientBtn">
+            <span class="glyphicon glyphicon-random"></span> Generate Client Config
+        </button>
+        <div id="clientOutput" style="display:none; margin-top:15px">
+            <div class="row">
+                <div class="col-md-8">
+                    <h5>Client Configuration</h5>
+                    <pre class="comment" id="clientConfig" style="font-size:12px"></pre>
+                </div>
+                <div class="col-md-4 text-center">
+                    <h5>Scan with WireGuard App</h5>
+                    <div id="qrcode" class="qr-container"></div>
+                    <button class="btn btn-sm btn-default" id="downloadConfig" style="margin-top:10px">
+                        <span class="glyphicon glyphicon-download"></span> Download .conf
+                    </button>
+                </div>
+            </div>
+            <div class="form-group" style="margin-top:10px">
+                <label>Client Public Key (add as peer on server)</label>
+                <input type="text" class="form-control" id="clientPubKey" readonly>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+var qrInstance = null;
+
+$('#genClientBtn').on('click', function() {
+    var data = {
+        client_ip: $('#clientIp').val(),
+        server_endpoint: $('#serverEndpoint').val(),
+        server_public_key: $('#serverPubKey').val(),
+        dns: $('#clientDns').val()
+    };
+    if (!data.client_ip || !data.server_endpoint || !data.server_public_key) {
+        CSFv2.toast('All fields are required', 'warning');
+        return;
+    }
+    $.post('/wireguard/{{ iface }}/genclient', data, function(resp) {
+        if (resp.error) { CSFv2.toast(resp.error, 'danger'); return; }
+        $('#clientConfig').text(resp.config);
+        $('#clientPubKey').val(resp.public_key);
+        $('#clientOutput').show();
+
+        $('#qrcode').empty();
+        qrInstance = new QRCode(document.getElementById('qrcode'), {
+            text: resp.config,
+            width: 200,
+            height: 200,
+            correctLevel: QRCode.CorrectLevel.L
+        });
+    });
+});
+
+$('#downloadConfig').on('click', function() {
+    var config = $('#clientConfig').text();
+    if (!config) return;
+    var blob = new Blob([config], {type: 'text/plain'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = '{{ iface }}_client.conf';
+    a.click();
+    URL.revokeObjectURL(a.href);
+});
+</script>
+{% endblock %}

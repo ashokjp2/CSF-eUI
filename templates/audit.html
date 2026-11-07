@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block page_title %}Audit Log{% endblock %}
+
+{% block content %}
+<div class="btn-group" style="margin-bottom:10px">
+            <button class="btn btn-default audit-filter active" data-type="">All</button>
+            <button class="btn btn-default audit-filter" data-type="login">Logins</button>
+            <button class="btn btn-default audit-filter" data-type="login_fail">Failed Logins</button>
+            <button class="btn btn-default audit-filter" data-type="action">Actions</button>
+            <button class="btn btn-default audit-filter" data-type="config">Config Changes</button>
+        </div>
+
+        <div class="panel panel-default">
+            <div class="table-responsive">
+                <table class="table table-condensed table-hover" style="margin:0">
+                    <thead><tr><th style="width:160px">Time</th><th>Event</th><th>User</th><th>IP</th><th>Details</th></tr></thead>
+                    <tbody id="audit-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    function loadAudit(type) {
+        $.getJSON('/api/audit', {type: type}, function(data) {
+            var html = '';
+            data.events.forEach(function(e) {
+                var cls = '';
+                var icon = 'info-sign';
+                if (e.type === 'login') { cls = 'success'; icon = 'log-in'; }
+                else if (e.type === 'login_fail') { cls = 'danger'; icon = 'lock'; }
+                else if (e.type === 'action') { cls = 'warning'; icon = 'flash'; }
+                else if (e.type === 'config') { cls = 'info'; icon = 'cog'; }
+                else if (e.type === 'logout') { cls = ''; icon = 'log-out'; }
+
+                html += '<tr class="' + (cls ? 'bg-' + cls : '') + '" style="' + (cls ? 'background:rgba(0,0,0,0.03)' : '') + '">' +
+                    '<td style="font-size:12px">' + e.ts + '</td>' +
+                    '<td><span class="glyphicon glyphicon-' + icon + '"></span> <span class="label label-' + (cls || 'default') + '">' + e.type + '</span></td>' +
+                    '<td>' + (e.user || '-') + '</td>' +
+                    '<td><code>' + (e.ip || '-') + '</code></td>' +
+                    '<td style="font-size:12px">' + (e.detail || '-') + '</td>' +
+                    '</tr>';
+            });
+            $('#audit-tbody').html(html || '<tr><td colspan="5" class="text-center text-muted" style="padding:20px">No audit events yet</td></tr>');
+        });
+    }
+
+    $('.audit-filter').on('click', function() {
+        $('.audit-filter').removeClass('active');
+        $(this).addClass('active');
+        loadAudit($(this).data('type'));
+    });
+
+    loadAudit('');
+});
+</script>
+{% endblock %}

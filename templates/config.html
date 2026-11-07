@@ -1,0 +1,1569 @@
+{% extends "base.html" %}
+{% block page_title %}Configuration{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css">
+<style>
+.select2-container--default .select2-selection--multiple { border-color: #ccc; border-radius: 4px; min-height: 34px; }
+.select2-container--default .select2-selection--multiple .select2-selection__choice { background-color: #337ab7; border: 1px solid #2e6da4; color: #fff; padding: 1px 6px; font-size: 12px; }
+.select2-container--default .select2-selection--multiple .select2-selection__choice__remove { color: rgba(255,255,255,0.7); margin-right: 4px; }
+.select2-container--default .select2-results__option--highlighted { background-color: #337ab7; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="panel panel-default">
+    <div class="panel-heading">
+        <h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-cog"></span> Firewall Configuration - csf.conf</h4>
+    </div>
+    <div class="panel-body">
+        <div class="bs-callout bs-callout-warning">
+            <p>Changes require a CSF+LFD restart to take effect. Click <strong>Save Changes</strong> then <strong>Restart csf+lfd</strong>.</p>
+        </div>
+
+        <div class="alert alert-info alert-dismissible" style="font-size:13px">
+            <button type="button" class="close" data-dismiss="alert">&times;</button>
+            <span class="glyphicon glyphicon-info-sign"></span>
+            <strong>Tip:</strong> For common settings like ports, country blocking, and connection limits, use the
+            <a href="/qconfig"><strong>Quick Config</strong></a> page — it's easier and has visual controls.
+            This page is for advanced/full configuration.
+        </div>
+
+        <!-- Search/Filter -->
+        <div class="input-group" style="margin-bottom:15px">
+            <span class="input-group-addon"><span class="glyphicon glyphicon-search"></span></span>
+            <input type="text" class="form-control" id="configSearch" placeholder="Search settings (e.g. TCP_IN, TESTING, DOCKER)...">
+            <span class="input-group-btn">
+                <button class="btn btn-default" type="button" id="clearSearch"><span class="glyphicon glyphicon-remove"></span></button>
+            </span>
+        </div>
+
+        <form method="POST" action="/config/save" id="configForm">
+            <!-- Section navigation -->
+            <div id="paginatediv" class="text-center" style="margin-bottom:15px">
+                {% for section in sections %}
+                <button type="button" class="btn btn-default btn-csf-config section-btn"
+                        data-section="{{ loop.index0 }}">
+                    {{ section.name }}
+                </button>
+                {% endfor %}
+            </div>
+
+            {% for section in sections %}
+            <div class="virtualpage hidepiece" id="section-{{ loop.index0 }}"
+                 {% if loop.index0 != 0 %}style="display:none"{% endif %}>
+                <div class="section">
+                    <h4>{{ section.name }}</h4>
+                    <table class="table table-bordered table-striped">
+                        <thead>
+                            <tr>
+                                <th style="width:200px">Setting</th>
+                                <th>Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for setting in section.settings %}
+                            <tr data-key="{{ setting.key }}">
+                                <td>
+                                    <strong>{{ setting.key }}</strong>
+                                    <div class="setting-help text-muted" style="font-size:11px; margin-top:2px"></div>
+                                </td>
+                                <td>
+                                    {% if setting.value in ['0', '1'] %}
+                                    <div class="btn-group" data-toggle="buttons">
+                                        <label class="btn btn-default {% if setting.value == '1' %}active btn-success{% endif %}">
+                                            <input type="radio" name="cfg_{{ setting.key }}" value="1"
+                                                   {% if setting.value == '1' %}checked{% endif %}> On
+                                        </label>
+                                        <label class="btn btn-default {% if setting.value == '0' %}active btn-danger{% endif %}">
+                                            <input type="radio" name="cfg_{{ setting.key }}" value="0"
+                                                   {% if setting.value == '0' %}checked{% endif %}> Off
+                                        </label>
+                                    </div>
+                                    {% else %}
+                                    <input type="text" class="form-control" name="cfg_{{ setting.key }}"
+                                           value="{{ setting.value }}" onfocus="CSFexpand(this)">
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endfor %}
+
+            <div class="text-center" style="margin-top:15px">
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <span class="glyphicon glyphicon-floppy-disk"></span> Save Changes
+                </button>
+            </div>
+        </form>
+        <div class="text-center" style="margin-top:10px">
+            <form method="POST" action="/action/restartboth" style="display:inline">
+                <button type="submit" class="btn btn-warning btn-lg">
+                    <span class="glyphicon glyphicon-refresh"></span> Restart csf+lfd
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
+<script>
+/* ISO 3166-1 alpha-2 country codes */
+var COUNTRY_CODES = [
+    {id:'AF',text:'AF — Afghanistan'},{id:'AL',text:'AL — Albania'},{id:'DZ',text:'DZ — Algeria'},
+    {id:'AD',text:'AD — Andorra'},{id:'AO',text:'AO — Angola'},{id:'AG',text:'AG — Antigua & Barbuda'},
+    {id:'AR',text:'AR — Argentina'},{id:'AM',text:'AM — Armenia'},{id:'AU',text:'AU — Australia'},
+    {id:'AT',text:'AT — Austria'},{id:'AZ',text:'AZ — Azerbaijan'},{id:'BS',text:'BS — Bahamas'},
+    {id:'BH',text:'BH — Bahrain'},{id:'BD',text:'BD — Bangladesh'},{id:'BB',text:'BB — Barbados'},
+    {id:'BY',text:'BY — Belarus'},{id:'BE',text:'BE — Belgium'},{id:'BZ',text:'BZ — Belize'},
+    {id:'BJ',text:'BJ — Benin'},{id:'BT',text:'BT — Bhutan'},{id:'BO',text:'BO — Bolivia'},
+    {id:'BA',text:'BA — Bosnia & Herzegovina'},{id:'BW',text:'BW — Botswana'},
+    {id:'BR',text:'BR — Brazil'},{id:'BN',text:'BN — Brunei'},{id:'BG',text:'BG — Bulgaria'},
+    {id:'BF',text:'BF — Burkina Faso'},{id:'BI',text:'BI — Burundi'},{id:'CV',text:'CV — Cabo Verde'},
+    {id:'KH',text:'KH — Cambodia'},{id:'CM',text:'CM — Cameroon'},{id:'CA',text:'CA — Canada'},
+    {id:'CF',text:'CF — Central African Republic'},{id:'TD',text:'TD — Chad'},
+    {id:'CL',text:'CL — Chile'},{id:'CN',text:'CN — China'},{id:'CO',text:'CO — Colombia'},
+    {id:'KM',text:'KM — Comoros'},{id:'CD',text:'CD — Congo (DRC)'},{id:'CG',text:'CG — Congo (Rep.)'},
+    {id:'CR',text:'CR — Costa Rica'},{id:'HR',text:'HR — Croatia'},{id:'CU',text:'CU — Cuba'},
+    {id:'CY',text:'CY — Cyprus'},{id:'CZ',text:'CZ — Czech Republic'},
+    {id:'CI',text:'CI — Côte d\'Ivoire'},{id:'DK',text:'DK — Denmark'},{id:'DJ',text:'DJ — Djibouti'},
+    {id:'DM',text:'DM — Dominica'},{id:'DO',text:'DO — Dominican Republic'},
+    {id:'EC',text:'EC — Ecuador'},{id:'EG',text:'EG — Egypt'},{id:'SV',text:'SV — El Salvador'},
+    {id:'GQ',text:'GQ — Equatorial Guinea'},{id:'ER',text:'ER — Eritrea'},
+    {id:'EE',text:'EE — Estonia'},{id:'SZ',text:'SZ — Eswatini'},{id:'ET',text:'ET — Ethiopia'},
+    {id:'FJ',text:'FJ — Fiji'},{id:'FI',text:'FI — Finland'},{id:'FR',text:'FR — France'},
+    {id:'GA',text:'GA — Gabon'},{id:'GM',text:'GM — Gambia'},{id:'GE',text:'GE — Georgia'},
+    {id:'DE',text:'DE — Germany'},{id:'GH',text:'GH — Ghana'},{id:'GR',text:'GR — Greece'},
+    {id:'GD',text:'GD — Grenada'},{id:'GT',text:'GT — Guatemala'},{id:'GN',text:'GN — Guinea'},
+    {id:'GW',text:'GW — Guinea-Bissau'},{id:'GY',text:'GY — Guyana'},{id:'HT',text:'HT — Haiti'},
+    {id:'HN',text:'HN — Honduras'},{id:'HK',text:'HK — Hong Kong'},{id:'HU',text:'HU — Hungary'},
+    {id:'IS',text:'IS — Iceland'},{id:'IN',text:'IN — India'},{id:'ID',text:'ID — Indonesia'},
+    {id:'IR',text:'IR — Iran'},{id:'IQ',text:'IQ — Iraq'},{id:'IE',text:'IE — Ireland'},
+    {id:'IL',text:'IL — Israel'},{id:'IT',text:'IT — Italy'},{id:'JM',text:'JM — Jamaica'},
+    {id:'JP',text:'JP — Japan'},{id:'JO',text:'JO — Jordan'},{id:'KZ',text:'KZ — Kazakhstan'},
+    {id:'KE',text:'KE — Kenya'},{id:'KI',text:'KI — Kiribati'},{id:'KP',text:'KP — North Korea'},
+    {id:'KR',text:'KR — South Korea'},{id:'KW',text:'KW — Kuwait'},{id:'KG',text:'KG — Kyrgyzstan'},
+    {id:'LA',text:'LA — Laos'},{id:'LV',text:'LV — Latvia'},{id:'LB',text:'LB — Lebanon'},
+    {id:'LS',text:'LS — Lesotho'},{id:'LR',text:'LR — Liberia'},{id:'LY',text:'LY — Libya'},
+    {id:'LI',text:'LI — Liechtenstein'},{id:'LT',text:'LT — Lithuania'},{id:'LU',text:'LU — Luxembourg'},
+    {id:'MG',text:'MG — Madagascar'},{id:'MW',text:'MW — Malawi'},{id:'MY',text:'MY — Malaysia'},
+    {id:'MV',text:'MV — Maldives'},{id:'ML',text:'ML — Mali'},{id:'MT',text:'MT — Malta'},
+    {id:'MH',text:'MH — Marshall Islands'},{id:'MR',text:'MR — Mauritania'},
+    {id:'MU',text:'MU — Mauritius'},{id:'MX',text:'MX — Mexico'},
+    {id:'FM',text:'FM — Micronesia'},{id:'MD',text:'MD — Moldova'},{id:'MC',text:'MC — Monaco'},
+    {id:'MN',text:'MN — Mongolia'},{id:'ME',text:'ME — Montenegro'},{id:'MA',text:'MA — Morocco'},
+    {id:'MZ',text:'MZ — Mozambique'},{id:'MM',text:'MM — Myanmar'},{id:'NA',text:'NA — Namibia'},
+    {id:'NR',text:'NR — Nauru'},{id:'NP',text:'NP — Nepal'},{id:'NL',text:'NL — Netherlands'},
+    {id:'NZ',text:'NZ — New Zealand'},{id:'NI',text:'NI — Nicaragua'},{id:'NE',text:'NE — Niger'},
+    {id:'NG',text:'NG — Nigeria'},{id:'MK',text:'MK — North Macedonia'},{id:'NO',text:'NO — Norway'},
+    {id:'OM',text:'OM — Oman'},{id:'PK',text:'PK — Pakistan'},{id:'PW',text:'PW — Palau'},
+    {id:'PA',text:'PA — Panama'},{id:'PG',text:'PG — Papua New Guinea'},{id:'PY',text:'PY — Paraguay'},
+    {id:'PE',text:'PE — Peru'},{id:'PH',text:'PH — Philippines'},{id:'PL',text:'PL — Poland'},
+    {id:'PT',text:'PT — Portugal'},{id:'QA',text:'QA — Qatar'},{id:'RO',text:'RO — Romania'},
+    {id:'RU',text:'RU — Russia'},{id:'RW',text:'RW — Rwanda'},{id:'KN',text:'KN — Saint Kitts & Nevis'},
+    {id:'LC',text:'LC — Saint Lucia'},{id:'VC',text:'VC — Saint Vincent & Grenadines'},
+    {id:'WS',text:'WS — Samoa'},{id:'SM',text:'SM — San Marino'},{id:'ST',text:'ST — São Tomé & Príncipe'},
+    {id:'SA',text:'SA — Saudi Arabia'},{id:'SN',text:'SN — Senegal'},{id:'RS',text:'RS — Serbia'},
+    {id:'SC',text:'SC — Seychelles'},{id:'SL',text:'SL — Sierra Leone'},{id:'SG',text:'SG — Singapore'},
+    {id:'SK',text:'SK — Slovakia'},{id:'SI',text:'SI — Slovenia'},{id:'SB',text:'SB — Solomon Islands'},
+    {id:'SO',text:'SO — Somalia'},{id:'ZA',text:'ZA — South Africa'},{id:'SS',text:'SS — South Sudan'},
+    {id:'ES',text:'ES — Spain'},{id:'LK',text:'LK — Sri Lanka'},{id:'SD',text:'SD — Sudan'},
+    {id:'SR',text:'SR — Suriname'},{id:'SE',text:'SE — Sweden'},{id:'CH',text:'CH — Switzerland'},
+    {id:'SY',text:'SY — Syria'},{id:'TW',text:'TW — Taiwan'},{id:'TJ',text:'TJ — Tajikistan'},
+    {id:'TZ',text:'TZ — Tanzania'},{id:'TH',text:'TH — Thailand'},{id:'TL',text:'TL — Timor-Leste'},
+    {id:'TG',text:'TG — Togo'},{id:'TO',text:'TO — Tonga'},{id:'TT',text:'TT — Trinidad & Tobago'},
+    {id:'TN',text:'TN — Tunisia'},{id:'TR',text:'TR — Turkey'},{id:'TM',text:'TM — Turkmenistan'},
+    {id:'TV',text:'TV — Tuvalu'},{id:'UG',text:'UG — Uganda'},{id:'UA',text:'UA — Ukraine'},
+    {id:'AE',text:'AE — United Arab Emirates'},{id:'GB',text:'GB — United Kingdom'},
+    {id:'US',text:'US — United States'},{id:'UY',text:'UY — Uruguay'},
+    {id:'UZ',text:'UZ — Uzbekistan'},{id:'VU',text:'VU — Vanuatu'},{id:'VE',text:'VE — Venezuela'},
+    {id:'VN',text:'VN — Vietnam'},{id:'YE',text:'YE — Yemen'},{id:'ZM',text:'ZM — Zambia'},
+    {id:'ZW',text:'ZW — Zimbabwe'},
+];
+var COUNTRY_FIELDS = ['CC_ALLOW_PORTS','CC_DENY_PORTS','CC_ALLOW_FILTER','CC_ALLOW','CC_DENY','CC_IGNORE',
+    'CC_ALLOW_SMTPAUTH','CC_MESSENGER_ALLOW','CC_MESSENGER_DENY'];
+
+function CSFexpand(obj) {
+    obj.style.width = '100%';
+}
+
+/* Section descriptions — shown as a banner above each section's table */
+var SECTION_HELP = {
+    'General': 'Preamble section. No settings here — click a section tab above.',
+    'Initial Settings': 'Basic safety and startup settings. If you just installed CSF, leave TESTING=On until you confirm you can still log in.',
+    'IPv4 Port Settings': '<strong>Which ports are open on your server.</strong> Only listed ports accept connections. Common ports: 22=SSH, 80=HTTP, 443=HTTPS, 8750=CSFv2. <a href="/qconfig">Use Quick Config for easier port management →</a>',
+    'IPv6 Port Settings': 'Same as IPv4 ports but for IPv6 traffic. Only needed if your server uses IPv6.',
+    'General Settings': 'Core firewall behavior — network interfaces, IP limits, and daemon settings. Most defaults are fine.',
+    'SMTP Settings': 'Controls outgoing email. Enable SMTP_BLOCK to prevent compromised accounts from sending spam.',
+    'Port Flood Settings': '<strong>Rate limiting and flood protection.</strong> Blocks IPs that send too many connections too fast. <a href="/qconfig">Use Quick Config → Connection Limits for easier setup →</a>',
+    'Logging Settings': 'What the firewall logs and how. Controls which blocked packets appear in logs.',
+    'Reporting Settings': 'Email alerts when the firewall blocks an IP. Set LF_ALERT_TO to your email address to get notified.',
+    'Temp to Perm/Netblock Settings': 'Automatically escalate repeat offenders. Temp-blocked IPs that keep attacking get permanently banned.',
+    'Global Lists/DYNDNS/Blocklists': '<strong>Dynamic DNS and blocklist subscriptions.</strong> Add your home IP\'s dynamic DNS hostname so you never lock yourself out. <a href="/qconfig">Use Quick Config → Dynamic DNS for easier setup →</a>',
+    'Country Code Lists and Settings': '<strong>Block or allow traffic by country.</strong> Needs a MaxMind key for accurate lookups. ' +
+        '<strong>CC_ALLOW_PORTS</strong> and <strong>CC_DENY_PORTS</strong> take <em>country codes</em> — the actual ports go in the _TCP/_UDP sub-fields below them. ' +
+        '<strong>CC_ALLOW_PORTS</strong> workflow: remove port from TCP_IN → country code in CC_ALLOW_PORTS → port in CC_ALLOW_PORTS_TCP. ' +
+        '<a href="/qconfig">Use Quick Config → Country Block for easier setup →</a>',
+    'Login Failure Blocking and Alerts': '<strong>Brute-force protection.</strong> Blocks IPs after too many failed login attempts. Each service (SSH, FTP, etc.) has its own threshold.',
+    'CloudFlare': '<strong>CloudFlare integration</strong> — NOT CloudFlare CDN! This tells CSF to also add blocked IPs to your CloudFlare firewall, so they\'re blocked at the CDN level before reaching your server. Only enable if you use CloudFlare as a reverse proxy for your websites.',
+    'Directory Watching & Integrity': 'Monitors important system directories for unauthorized changes (like rootkit detection).',
+    'Distributed Attacks': 'Detects when multiple different IPs from the same network attack simultaneously (coordinated attacks).',
+    'Login Tracking': 'Tracks which IPs are logging in to POP3/IMAP email services and alerts on suspicious patterns.',
+    'Connection Tracking': '<strong>DDoS protection.</strong> Blocks IPs with too many simultaneous connections. <a href="/qconfig">Use Quick Config → Connection Limits for easier setup →</a>',
+    'Process Tracking': 'Monitors running processes for excessive resource usage (CPU, memory, runtime). Helps catch crypto miners or runaway scripts.',
+    'Port Scan Tracking': 'Detects and blocks port scanning — when someone probes multiple ports looking for vulnerabilities.',
+    'User ID Tracking': 'Monitors network connections by user ID to detect unauthorized outgoing connections.',
+    'Account Tracking': 'Alerts when system accounts are created, deleted, or modified. Good for detecting unauthorized access.',
+    'Integrated User Interface': 'CSF\'s built-in web UI settings. You\'re using CSFv2 instead, so leave these off.',
+    'Messenger service': 'Shows a "blocked" message to denied visitors instead of a timeout. Advanced feature — leave off unless you need it.',
+    'lfd Clustering': 'Share block lists across multiple servers. Only needed if you run a cluster of servers.',
+    'Port Knocking': 'Hide a port (like SSH) until a secret sequence of connection attempts "knocks" it open. Advanced security feature.',
+    'Log Scanner': 'Periodically scans logs and sends you a summary email. Good for daily security overviews.',
+    'Statistics Settings': 'Enable statistical tracking of firewall activity. Useful for monitoring trends.',
+    'Docker Settings': '<strong>Docker container support.</strong> DOCKER must be ON if you run Docker, Dokploy, Coolify, or any containers. <a href="/qconfig">Also configurable in Quick Config → General →</a>',
+    'OS Specific Settings': 'Paths to system commands and log files. <strong>Do not change these</strong> unless you know your system uses non-standard locations.',
+};
+
+/* Setting descriptions — shown as help text under each key */
+var HELP = {
+    /* Initial */
+    TESTING: 'Safety mode — auto-clears firewall rules every few minutes. Turn OFF once you confirm you can still access your server.',
+    TESTING_INTERVAL: 'Minutes between auto-clear in testing mode (default: 5).',
+    RESTRICT_SYSLOG: 'Restrict syslog/rsyslog access to prevent log spoofing. 0=off, 1=basic, 2=moderate, 3=strict.',
+    RESTRICT_SYSLOG_GROUP: 'Group name for syslog restriction (only used with RESTRICT_SYSLOG=3).',
+    RESTRICT_UI: 'Restrict the built-in CSF UI to specific IPs. Not needed since you use CSFv2.',
+    AUTO_UPDATES: 'Automatically update CSF when new versions are available.',
+
+    /* IPv4 Ports */
+    LF_SPI: 'Stateful Packet Inspection — tracks connection state. Keep ON for security.',
+    TCP_IN: 'Incoming TCP ports to allow (comma-separated). Common: 22=SSH, 80=HTTP, 443=HTTPS, 3000=Dokploy, 8750=CSFv2, 51821=WG-UI.',
+    TCP_OUT: 'Outgoing TCP ports. Usually more open than incoming. Add ports your server needs to connect to.',
+    UDP_IN: 'Incoming UDP ports. Common: 53=DNS, 51820=WireGuard.',
+    UDP_OUT: 'Outgoing UDP ports. Common: 53=DNS, 123=NTP (time sync), 33434:33534=traceroute.',
+    ICMP_IN: 'Allow incoming ping. ON = monitoring services can check if your server is alive.',
+    ICMP_IN_RATE: 'Max pings per second before rate-limiting. Prevents ping flood.',
+    ICMP_OUT: 'Allow your server to ping other servers. Usually keep ON.',
+    ICMP_OUT_RATE: 'Max outgoing pings per second.',
+    ICMP_TIMESTAMPDROP: 'Drop ICMP timestamp requests (minor privacy improvement).',
+
+    /* IPv6 Ports */
+    IPV6: 'Enable IPv6 firewall rules. Turn ON if your server has IPv6 connectivity.',
+    IPV6_ICMP_STRICT: 'Strictly filter IPv6 ICMP. Some IPv6 features need ICMP, so only enable if you know what you\'re doing.',
+    IPV6_SPI: 'Stateful Packet Inspection for IPv6. Keep ON.',
+    TCP6_IN: 'Same as TCP_IN but for IPv6.',
+    TCP6_OUT: 'Same as TCP_OUT but for IPv6.',
+    UDP6_IN: 'Same as UDP_IN but for IPv6.',
+    UDP6_OUT: 'Same as UDP_OUT but for IPv6.',
+
+    /* General Settings */
+    ETH_DEVICE: 'Network interface (leave empty = auto-detect). Usually eth0 or ens3.',
+    ETH6_DEVICE: 'IPv6 network interface (leave empty = auto-detect).',
+    ETH_DEVICE_SKIP: 'Network interfaces to SKIP (not firewall). E.g. docker0 if Docker mode is off.',
+    USE_CONNTRACK: 'Use conntrack for connection tracking. Recommended ON.',
+    USE_FTPHELPER: 'Load FTP connection tracking module. ON if you run an FTP server.',
+    SYSLOG_CHECK: 'Check syslog is running. If it stops, LFD can\'t detect attacks. Recommended ON.',
+    IGNORE_ALLOW: 'If ON, csf.allow entries are also ignored by LFD (won\'t be blocked for login failures).',
+    DNS_STRICT: 'Only allow DNS responses from your configured nameservers.',
+    DNS_STRICT_NS: 'Nameserver IPs for DNS_STRICT (empty = use /etc/resolv.conf).',
+    DENY_IP_LIMIT: 'Max permanent blocks. When full, oldest blocks are removed. Default 200.',
+    DENY_TEMP_IP_LIMIT: 'Max temporary blocks. Default 100.',
+    LF_DAEMON: 'Login Failure Daemon — watches logs for brute-force attacks. <strong>Keep ON</strong> for security.',
+    LF_CSF: 'LFD checks if CSF is running and restarts it if stopped. Keep ON.',
+    FASTSTART: 'Uses ipset for faster firewall startup when you have many blocked IPs.',
+    LF_IPSET: 'Use ipset for IP lists (faster than iptables rules). Recommended ON.',
+    WAITLOCK: 'Wait for iptables lock instead of failing. Helps when Docker also modifies iptables.',
+    WAITLOCK_TIMEOUT: 'Max seconds to wait for iptables lock.',
+    LF_IPSET_HASHSIZE: 'Hash table size for ipset (advanced, leave default).',
+    LF_IPSET_MAXELEM: 'Max elements in ipset (advanced, leave default).',
+    LFDSTART: 'Automatically start LFD when CSF starts.',
+    VERBOSE: 'Show detailed output during CSF restart. OFF for production, ON for debugging.',
+    PACKET_FILTER: 'Enable the packet filter firewall. <strong>Keep ON</strong> — this is the core firewall.',
+    LF_LOOKUPS: 'Reverse DNS lookup blocked IPs in alert emails. Makes emails more readable.',
+    STYLE_CUSTOM: 'Custom CSS file for CSF\'s built-in UI (not CSFv2).',
+    STYLE_MOBILE: 'Enable mobile-friendly theme for CSF\'s built-in UI (not CSFv2).',
+
+    /* SMTP */
+    SMTP_BLOCK: 'Block outgoing email from non-root users. Prevents spam if an account is hacked.',
+    SMTP_ALLOWLOCAL: 'Allow localhost to send email when SMTP_BLOCK is on. Usually ON for web apps.',
+    SMTP_REDIRECT: 'Redirect blocked SMTP to an alert instead of silently dropping.',
+    SMTP_PORTS: 'Which SMTP ports to block (default: 25,465,587).',
+    SMTP_ALLOWUSER: 'Usernames allowed to send email despite SMTP_BLOCK (comma-separated).',
+    SMTP_ALLOWGROUP: 'Groups allowed to send email despite SMTP_BLOCK.',
+    SMTPAUTH_RESTRICT: 'Block users listed in /etc/csf/csf.smtpauth from SMTP auth.',
+
+    /* Port Flood */
+    SYNFLOOD: 'Enable SYN flood protection. Blocks IPs sending rapid connection requests (DDoS defense).',
+    SYNFLOOD_RATE: 'SYN packets/second threshold before blocking. Default: 100/s.',
+    SYNFLOOD_BURST: 'SYN burst threshold. Default: 150.',
+    CONNLIMIT: 'Max concurrent connections per IP per port. Format: port;limit,port;limit. E.g. <code>22;5,80;50,443;50</code> = max 5 SSH + 50 HTTP + 50 HTTPS per IP.',
+    PORTFLOOD: 'Rate limit new connections per port. Format: port;count;interval;protocol. E.g. <code>80;20;5;tcp</code> = block if >20 connections to port 80 in 5 seconds.',
+    UDPFLOOD: 'Enable UDP flood protection.',
+    UDPFLOOD_LIMIT: 'UDP packets/second threshold.',
+    UDPFLOOD_BURST: 'UDP burst threshold.',
+    UDPFLOOD_ALLOWUSER: 'Users exempt from UDP flood protection.',
+
+    /* Logging */
+    SYSLOG: 'Send CSF messages to syslog.',
+    DROP: 'Log dropped incoming packets. Useful for debugging, but can fill logs quickly.',
+    DROP_OUT: 'Log dropped outgoing packets.',
+    DROP_LOGGING: 'Enable logging of dropped packets.',
+    DROP_IP_LOGGING: 'Log the IP address of dropped packets.',
+    DROP_OUT_LOGGING: 'Log dropped outgoing packets.',
+    DROP_UID_LOGGING: 'Log the user ID of dropped outgoing packets.',
+    DROP_ONLYRES: 'Only log drops from IPs that resolve to a hostname.',
+    DROP_NOLOG: 'Ports to NOT log drops for (reduces noise). E.g. 67,68 for DHCP.',
+    DROP_PF_LOGGING: 'Log packet filter drops.',
+    CONNLIMIT_LOGGING: 'Log when CONNLIMIT is triggered.',
+    UDPFLOOD_LOGGING: 'Log when UDP flood protection is triggered.',
+    LOGFLOOD_ALERT: 'Alert when excessive logging is detected (possible log flood attack).',
+
+    /* Reporting */
+    LF_ALERT_TO: 'Your email to receive block alerts. E.g. <code>admin@yourdomain.com</code>. Leave empty = no emails.',
+    LF_ALERT_FROM: 'From address for alert emails. E.g. <code>csf@yourdomain.com</code>.',
+    LF_ALERT_SMTP: 'SMTP server for sending alerts. Default: localhost (your server sends the email).',
+    BLOCK_REPORT: 'Send email when an IP is blocked.',
+    UNBLOCK_REPORT: 'Send email when an IP is unblocked.',
+    X_ARF: 'Send abuse reports in X-ARF format (for automated abuse handling).',
+    X_ARF_FROM: 'From address for X-ARF reports.',
+    X_ARF_TO: 'Override: send all X-ARF reports to this address instead of the abuse contact.',
+    X_ARF_ABUSE: 'Lookup abuse contact for the IP\'s network and send report there.',
+
+    /* Temp to Perm */
+    LF_PERMBLOCK: 'Auto-permanently block IPs that get temp-blocked repeatedly. Good for persistent attackers.',
+    LF_PERMBLOCK_INTERVAL: 'How far back to look for repeat offenses (seconds). Default: 86400 = 24 hours.',
+    LF_PERMBLOCK_COUNT: 'How many temp blocks = permanent ban. E.g. 4 = if blocked 4 times in the interval, permban.',
+    LF_PERMBLOCK_ALERT: 'Email alert when an IP is permanently blocked.',
+    LF_NETBLOCK: 'Block entire IP range (/24 = 256 IPs) if too many from the same range attack. Use carefully.',
+    LF_NETBLOCK_INTERVAL: 'Lookback period for netblock detection (seconds).',
+    LF_NETBLOCK_COUNT: 'How many different IPs from the same /24 needed to trigger netblock.',
+    LF_NETBLOCK_CLASS: 'Network size to block. A=/8 (huge), B=/16, C=/24 (recommended).',
+    LF_NETBLOCK_ALERT: 'Email alert when a network range is blocked.',
+    LF_NETBLOCK_IPV6: 'Enable netblock for IPv6 addresses.',
+
+    /* Global/DYNDNS/Blocklists */
+    SAFECHAINUPDATE: 'Update firewall rules without dropping existing connections. Recommended ON.',
+    DYNDNS: 'How often (seconds) to re-check dynamic DNS hostnames. 0=disabled, 300=every 5 min.',
+    DYNDNS_IGNORE: 'Add dynamic DNS resolved IPs to csf.ignore (LFD won\'t block them).',
+    LF_GLOBAL: 'Minutes before a temporary block expires. 0 = blocks are permanent. Default: 3600 = 1 hour.',
+    GLOBAL_ALLOW: 'URL of a remote allow list to import.',
+    GLOBAL_DENY: 'URL of a remote deny list to import.',
+    GLOBAL_IGNORE: 'URL of a remote ignore list to import.',
+    GLOBAL_DYNDNS: 'URL of a remote dynamic DNS list to import.',
+    GLOBAL_DYNDNS_INTERVAL: 'How often to re-check global dynamic DNS (seconds).',
+    GLOBAL_DYNDNS_IGNORE: 'Add global DYNDNS IPs to csf.ignore.',
+    LF_BOGON_SKIP: 'Skip bogon (private/reserved IP) checks. Usually OFF.',
+    URLGET: 'Download method for blocklists. 1=LWP (Perl library), 2=curl (recommended).',
+    URLPROXY: 'HTTP proxy for downloading blocklists.',
+
+    /* Country Codes */
+    MM_LICENSE_KEY: '<span class="text-info"><span class="glyphicon glyphicon-question-sign"></span> <strong>MaxMind GeoLite2 license key</strong> — needed for accurate country-based blocking.</span><br>Free: <a href="https://www.maxmind.com/en/geolite2/signup" target="_blank">maxmind.com/en/geolite2/signup</a> → create account → My Account → Manage License Keys → Generate New License Key → copy and paste here.',
+    IPINFO_TOKEN: '<span class="text-info"><span class="glyphicon glyphicon-question-sign"></span> <strong>IPinfo.io API token</strong> — alternative geolocation provider.</span><br>Free (50K lookups/month): <a href="https://ipinfo.io/signup" target="_blank">ipinfo.io/signup</a> → create account → copy token from your dashboard.',
+    CC_SRC: 'Source for country code data. 1=MaxMind GeoLite2, 2=ipinfo.io.',
+    CC_DENY: 'Block ALL traffic from these countries. 2-letter codes, comma-separated. E.g. <code>CN,RU,KP</code>. <a href="/qconfig">Easier in Quick Config →</a>',
+    CC_ALLOW: 'Allow ONLY these countries (blocks all others). Use very carefully! <a href="/qconfig">Easier in Quick Config →</a>',
+    CC_ALLOW_FILTER: 'Country codes that bypass CC_DENY but still respect TCP_IN port rules. Safer than CC_ALLOW (which opens ALL ports). E.g. <code>IN,US,UK,SG</code>',
+    CC_ALLOW_PORTS: '<strong style="color:#d9534f">Enter COUNTRY CODES here</strong> (e.g. <code>IN,DE</code>), not port numbers. These countries get access to the otherwise-closed ports you list in <strong>CC_ALLOW_PORTS_TCP / CC_ALLOW_PORTS_UDP</strong> below. The port must be <strong>removed from TCP_IN</strong> first.',
+    CC_ALLOW_PORTS_TCP: 'TCP <strong>port numbers</strong> to open for the countries in CC_ALLOW_PORTS. Remove these ports from TCP_IN first.',
+    CC_ALLOW_PORTS_UDP: 'UDP <strong>port numbers</strong> to open for the countries in CC_ALLOW_PORTS. Remove these ports from UDP_IN first.',
+    CC_DENY_PORTS: '<strong style="color:#d9534f">Enter COUNTRY CODES here</strong> (e.g. <code>RU,CN</code>), not port numbers. These countries are blocked on the ports you list in <strong>CC_DENY_PORTS_TCP / CC_DENY_PORTS_UDP</strong> below. The port stays in TCP_IN (open for everyone else).',
+    CC_DENY_PORTS_TCP: 'TCP <strong>port numbers</strong> to block for the countries in CC_DENY_PORTS. Keep these ports in TCP_IN.',
+    CC_DENY_PORTS_UDP: 'UDP <strong>port numbers</strong> to block for the countries in CC_DENY_PORTS. Keep these ports in UDP_IN.',
+    CC_IGNORE: 'Countries to completely ignore in all CC processing.',
+    CC_ALLOW_SMTPAUTH: 'Countries allowed to use SMTP authentication.',
+    CC_MESSENGER_ALLOW: 'Countries that see the messenger page instead of timeout.',
+    CC_MESSENGER_DENY: 'Countries blocked from the messenger page.',
+    CC_DROP_CIDR: 'Drop by CIDR range instead of individual IPs. More efficient for large country blocks.',
+    CC_LOOKUPS: 'How to resolve country codes. 1=MaxMind DB (needs MM_LICENSE_KEY), 2=ipdeny.com (free).',
+    CC6_LOOKUPS: 'Same as CC_LOOKUPS but for IPv6.',
+    CC_INTERVAL: 'Days between country database updates. 0=never auto-update.',
+
+    /* Login Failure */
+    LF_TRIGGER: 'Global failure limit across ALL services. 0=use per-service limits below (recommended).',
+    LF_TRIGGER_PERM: 'Make LF_TRIGGER blocks permanent (1) or temporary (0).',
+    LF_SELECT: 'Block only on the port that was attacked (1) or all ports (0). 1=less disruptive.',
+    LF_EMAIL_ALERT: 'Send email when an IP is blocked for login failures.',
+    LF_TEMP_EMAIL_ALERT: 'Send email for temporary blocks too (can be noisy).',
+    LF_SSHD: 'SSH login failures before blocking. <strong>Recommended: 5.</strong> Set to 0 to disable.',
+    LF_SSHD_PERM: 'Make SSH blocks permanent (1) or temporary (0). 1=permanent, 0=temp for LF_GLOBAL minutes.',
+    LF_FTPD: 'FTP login failures before blocking. Recommended: 10.',
+    LF_FTPD_PERM: 'Make FTP blocks permanent or temporary.',
+    LF_SMTPAUTH: 'SMTP auth failures before blocking. Recommended: 5.',
+    LF_SMTPAUTH_PERM: 'Make SMTP auth blocks permanent or temporary.',
+    LF_EXIMSYNTAX: 'Exim syntax error triggers before blocking.',
+    LF_EXIMSYNTAX_PERM: 'Make Exim syntax blocks permanent or temporary.',
+    LF_POP3D: 'POP3 login failures before blocking. Recommended: 10.',
+    LF_POP3D_PERM: 'Make POP3 blocks permanent or temporary.',
+    LF_IMAPD: 'IMAP login failures before blocking. Recommended: 10.',
+    LF_IMAPD_PERM: 'Make IMAP blocks permanent or temporary.',
+    LF_HTACCESS: '.htaccess password failures before blocking.',
+    LF_HTACCESS_PERM: 'Make htaccess blocks permanent or temporary.',
+    LF_MODSEC: 'ModSecurity rule triggers before blocking.',
+    LF_MODSEC_PERM: 'Make ModSecurity blocks permanent or temporary.',
+    LF_BIND: 'DNS BIND failures before blocking.',
+    LF_BIND_PERM: 'Make BIND blocks permanent or temporary.',
+    LF_SUHOSIN: 'Suhosin (PHP security) triggers before blocking.',
+    LF_SUHOSIN_PERM: 'Make Suhosin blocks permanent or temporary.',
+    LF_CXS: 'CXS (ConfigServer eXploit Scanner) triggers.',
+    LF_CXS_PERM: 'Make CXS blocks permanent or temporary.',
+    LF_QOS: 'QoS violations before blocking.',
+    LF_QOS_PERM: 'Make QoS blocks permanent or temporary.',
+    LF_SYMLINK: 'Symlink attack triggers before blocking.',
+    LF_SYMLINK_PERM: 'Make symlink blocks permanent or temporary.',
+    LF_WEBMIN: 'Webmin login failures before blocking.',
+    LF_WEBMIN_PERM: 'Make Webmin blocks permanent or temporary.',
+    LF_SSH_EMAIL_ALERT: 'Email alert on successful SSH login (good for knowing who logs in).',
+    LF_SU_EMAIL_ALERT: 'Email alert when someone uses "su" to switch users.',
+    LF_SUDO_EMAIL_ALERT: 'Email alert when someone uses "sudo".',
+    LF_WEBMIN_EMAIL_ALERT: 'Email alert on successful Webmin login.',
+    LF_CONSOLE_EMAIL_ALERT: 'Email alert on console (physical/KVM) login.',
+    LF_APACHE_404: 'Block IPs generating too many 404 errors (looking for vulnerabilities).',
+    LF_APACHE_404_PERM: 'Make Apache 404 blocks permanent or temporary.',
+    LF_APACHE_403: 'Block IPs generating too many 403 forbidden errors.',
+    LF_APACHE_403_PERM: 'Make Apache 403 blocks permanent or temporary.',
+    LF_APACHE_401: 'Block IPs generating too many 401 unauthorized errors.',
+    LF_APACHE_ERRPORT: 'Only count Apache errors on these ports.',
+    LF_APACHE_401_PERM: 'Make Apache 401 blocks permanent or temporary.',
+    LF_MODSECIPDB_ALERT: 'Alert on ModSecurity IP reputation database matches.',
+    LF_MODSECIPDB_FILE: 'Path to ModSecurity IP database file.',
+    LF_EXPLOIT: 'Scan for exploit scripts in /tmp and other writable dirs.',
+    LF_EXPLOIT_IGNORE: 'Files to ignore in exploit scanning.',
+    LF_INTERVAL: 'Seconds to track login failures within. Default: 3600 = 1 hour window.',
+    LF_PARSE: 'How many log lines to parse per check. Higher = catches more but uses more CPU.',
+    LF_FLUSH: 'Clear LFD tracking data after this many seconds.',
+    LF_REPEATBLOCK: 'Re-block IPs that were previously blocked and attack again.',
+    LF_BLOCKINONLY: 'Only block incoming traffic (not outgoing) for blocked IPs.',
+
+    /* CloudFlare */
+    CF_ENABLE: '<strong>CloudFlare API integration</strong> — when CSF blocks an IP, also block it in CloudFlare\'s firewall. Only useful if your websites are behind CloudFlare CDN. This is NOT the CloudFlare CDN itself.',
+    CF_BLOCK: 'Action to take in CloudFlare when blocking: "block" = hard block, "challenge" = show CAPTCHA.',
+    CF_TEMP: 'Seconds for temporary CloudFlare blocks. 0 = permanent until CSF unblocks.',
+
+    /* Directory Watching */
+    LF_DIRWATCH: 'Check interval (seconds) for changes in watched directories. 0=disabled.',
+    LF_DIRWATCH_DISABLE: 'Disable directory watching entirely.',
+    LF_DIRWATCH_FILE: 'Path to a file listing directories to watch.',
+    LF_INTEGRITY: 'System integrity check interval (seconds). Compares file checksums to detect tampering. 0=disabled.',
+
+    /* Distributed Attacks */
+    LF_DISTATTACK: 'Detect distributed SSH brute-force (multiple IPs, same target). Failures per IP to trigger.',
+    LF_DISTATTACK_UNIQ: 'Minimum unique attacking IPs needed to trigger distributed attack detection.',
+    LF_DISTFTP: 'Same as LF_DISTATTACK but for FTP.',
+    LF_DISTFTP_UNIQ: 'Unique IPs for distributed FTP attack detection.',
+    LF_DISTFTP_PERM: 'Make distributed FTP blocks permanent or temporary.',
+    LF_DISTFTP_ALERT: 'Email alert for distributed FTP attacks.',
+    LF_DISTSMTP: 'Same for SMTP authentication.',
+    LF_DISTSMTP_UNIQ: 'Unique IPs for distributed SMTP attack detection.',
+    LF_DISTSMTP_PERM: 'Make distributed SMTP blocks permanent or temporary.',
+    LF_DISTSMTP_ALERT: 'Email alert for distributed SMTP attacks.',
+    LF_DIST_INTERVAL: 'Lookback period (seconds) for distributed attack detection.',
+    LF_DIST_ACTION: 'Action on distributed attack: empty=block IPs, path=run a script.',
+
+    /* Login Tracking */
+    LT_POP3D: 'Track number of different IPs each POP3 account logs in from. Alert if exceeds this.',
+    LT_IMAPD: 'Track number of different IPs each IMAP account logs in from.',
+    LT_EMAIL_ALERT: 'Email alert when login tracking threshold is exceeded.',
+    LT_SKIPPERMBLOCK: 'Don\'t permanently block IPs flagged by login tracking.',
+
+    /* Connection Tracking */
+    CT_LIMIT: 'Max connections per IP before temp-blocking. 0=disabled. Good value: 100-300. <a href="/qconfig">Quick Config →</a>',
+    CT_INTERVAL: 'Seconds between connection checks. Default: 30.',
+    CT_EMAIL_ALERT: 'Email alert when an IP is blocked for too many connections.',
+    CT_PERMANENT: 'Make connection limit blocks permanent instead of temporary.',
+    CT_BLOCK_TIME: 'Temporary block duration (seconds) for connection limit. Default: 1800 = 30 min.',
+    CT_SKIP_TIME_WAIT: 'Don\'t count TIME_WAIT connections (already closing). Recommended: ON.',
+    CT_STATES: 'Connection states to count. Default: all established connections.',
+    CT_PORTS: 'Only count connections on these ports (empty=all). E.g. <code>80,443</code>.',
+    CT_SUBNET_LIMIT: 'Track by subnet (/24) instead of individual IPs.',
+
+    /* Process Tracking */
+    PT_LIMIT: 'Alert if a process runs longer than this (seconds). 0=disabled. 1800=30 min.',
+    PT_INTERVAL: 'Seconds between process checks.',
+    PT_SKIP_HTTP: 'Skip web server processes (Apache/Nginx). ON if you run web servers — they legitimately run long.',
+    PT_DELETED: 'Alert on processes running from deleted files (possible rootkit sign).',
+    PT_DELETED_ACTION: 'Action on deleted file processes: empty=alert, path=run script.',
+    PT_USERPROC: 'Max processes per user before alerting. 0=disabled.',
+    PT_USERMEM: 'Max memory (MB) per user. 0=disabled.',
+    PT_USERRSS: 'Max RSS memory (MB) per user. 0=disabled.',
+    PT_USERTIME: 'Max CPU seconds per user process. 0=disabled.',
+    PT_USERKILL: 'Kill processes exceeding limits instead of just alerting.',
+    PT_USERKILL_ALERT: 'Email alert when a process is killed.',
+    PT_USER_ACTION: 'Script to run instead of killing (path to script).',
+    PT_LOAD: 'Alert when server load average exceeds threshold. 0=disabled.',
+    PT_LOAD_AVG: 'Which load average to check: 1=1min, 5=5min, 15=15min.',
+    PT_LOAD_LEVEL: 'Load average threshold to trigger alert.',
+    PT_LOAD_SKIP: 'Number of checks to skip after alert (prevents alert flood).',
+    PT_APACHESTATUS: 'Include Apache status in load alerts (useful for debugging).',
+    PT_LOAD_ACTION: 'Script to run on high load (path to script).',
+    PT_FORKBOMB: 'Detect fork bomb attacks (processes multiplying rapidly).',
+    PT_SSHDKILL: 'Kill orphaned SSHD processes.',
+    PT_SSHDHUNG: 'Kill hung SSHD sessions after this many seconds.',
+
+    /* Port Scan */
+    PS_INTERVAL: 'Seconds to track port scan activity. Default: 300 = 5 min.',
+    PS_LIMIT: 'Ports hit in PS_INTERVAL before blocking. Default: 10.',
+    PS_PORTS: 'Ports to monitor for scanning (empty=all).',
+    PS_DIVERSITY: 'Minimum port diversity to trigger (prevents false positives).',
+    PS_PERMANENT: 'Make port scan blocks permanent.',
+    PS_BLOCK_TIME: 'Temporary block duration for port scanners.',
+    PS_EMAIL_ALERT: 'Email alert on port scan detection.',
+
+    /* User ID Tracking */
+    UID_INTERVAL: 'Seconds between UID connection checks.',
+    UID_LIMIT: 'Max connections per UID before alerting.',
+    UID_PORTS: 'Ports to monitor for UID tracking.',
+
+    /* Account Tracking */
+    AT_ALERT: 'Email alert on account changes.',
+    AT_INTERVAL: 'Seconds between account checks.',
+    AT_NEW: 'Alert on new accounts.',
+    AT_OLD: 'Alert on deleted accounts.',
+    AT_PASSWD: 'Alert on password changes.',
+    AT_UID: 'Alert on UID changes.',
+    AT_GID: 'Alert on GID changes.',
+    AT_DIR: 'Alert on home directory changes.',
+    AT_SHELL: 'Alert on shell changes.',
+
+    /* UI (built-in, not CSFv2) */
+    UI: 'CSF\'s own built-in web UI. Leave OFF — you\'re using CSFv2 instead.',
+    UI_PORT: 'Port for CSF\'s built-in UI (not CSFv2).',
+    UI_IP: 'IP to bind CSF\'s built-in UI to.',
+    UI_USER: 'Username for CSF\'s built-in UI.',
+    UI_PASS: 'Password for CSF\'s built-in UI.',
+    UI_TIMEOUT: 'Session timeout for CSF\'s built-in UI.',
+    UI_CHILDREN: 'Max concurrent connections to CSF\'s built-in UI.',
+    UI_RETRY: 'Login retry limit for CSF\'s built-in UI.',
+    UI_BAN: 'Ban time (seconds) after too many login failures on CSF\'s built-in UI.',
+    UI_ALLOW: 'IPs allowed to access CSF\'s built-in UI.',
+    UI_BLOCK: 'Block login failures through LFD.',
+    UI_ALERT: 'Email alert on CSF UI login.',
+    UI_CIPHER: 'SSL cipher for CSF\'s built-in UI.',
+    UI_SSL_VERSION: 'SSL/TLS version for CSF\'s built-in UI.',
+    UI_CXS: 'Show CXS integration in CSF\'s built-in UI.',
+    UI_CSE: 'Show CSE integration in CSF\'s built-in UI.',
+
+    /* Messenger */
+    MESSENGER: 'Show a custom page to blocked visitors instead of connection timeout. Usually leave OFF.',
+    MESSENGER_TEMP: 'Show messenger page for temporarily blocked IPs.',
+    MESSENGER_PERM: 'Show messenger page for permanently blocked IPs.',
+    MESSENGER_USER: 'System user to run the messenger service as.',
+    MESSENGER_HTML: 'Path to the HTML file shown to blocked visitors.',
+    MESSENGER_HTML_IN: 'Use a separate HTML for incoming blocks.',
+    MESSENGER_TEXT: 'Path to plain text version shown to blocked visitors.',
+    MESSENGER_TEXT_IN: 'Use a separate text file for incoming blocks.',
+    MESSENGER_RATE: 'Rate limit for messenger page requests.',
+    MESSENGER_BURST: 'Burst limit for messenger page requests.',
+    MESSENGER_CHILDREN: 'Max concurrent messenger connections.',
+
+    /* Clustering */
+    CLUSTER_SENDTO: 'Send blocks/allows to these server IPs (comma-separated). All servers share the same blocklist.',
+    CLUSTER_RECVFROM: 'Accept blocks/allows from these server IPs.',
+    CLUSTER_MASTER: 'IP of the master server in the cluster.',
+    CLUSTER_NAT: 'Cluster uses NAT networking.',
+    CLUSTER_LOCALADDR: 'This server\'s address in the cluster.',
+    CLUSTER_PORT: 'Port for cluster communication. Default: 7777.',
+    CLUSTER_KEY: 'Shared secret key for cluster authentication. Must be the same on all servers.',
+    CLUSTER_BLOCK: 'Accept block commands from cluster. 1=temp only, 2=temp+perm.',
+    CLUSTER_CONFIG: 'Accept config changes from master.',
+    CLUSTER_CHILDREN: 'Max concurrent cluster connections.',
+
+    /* Port Knocking */
+    PORTKNOCKING: 'Port knocking sequence. Format: openport;proto;timeout;port1;port2;port3. Advanced.',
+    PORTKNOCKING_LOG: 'Log port knocking attempts.',
+    PORTKNOCKING_ALERT: 'Email alert on successful port knock.',
+
+    /* Log Scanner */
+    LOGSCANNER: 'Periodically scan logs and email a summary. Good for daily security reports.',
+    LOGSCANNER_INTERVAL: '"hourly" or "daily" summary emails.',
+    LOGSCANNER_STYLE: 'Summary style: 0=plain, 1=with line counts, 2=with sample lines.',
+    LOGSCANNER_EMPTY: 'Send the summary even if nothing was found.',
+    LOGSCANNER_LINES: 'Max log lines to include in the summary.',
+
+    /* Statistics */
+    ST_ENABLE: 'Enable CSF statistics tracking.',
+    ST_IPTABLES: 'Include iptables statistics.',
+    ST_LOOKUP: 'Reverse DNS lookup for statistics entries.',
+    ST_SYSTEM: 'Track system resource usage.',
+    ST_SYSTEM_MAXDAYS: 'Days of system stats to keep.',
+    ST_MYSQL: 'Track MySQL stats.',
+    ST_MYSQL_USER: 'MySQL username for stats.',
+    ST_MYSQL_PASS: 'MySQL password for stats.',
+    ST_MYSQL_HOST: 'MySQL host for stats.',
+    ST_APACHE: 'Track Apache stats.',
+    ST_DISKW: 'Monitor disk write activity.',
+    ST_DISKW_FREQ: 'Disk monitoring interval (seconds).',
+    ST_DISKW_DD: 'Path to dd command for disk testing.',
+
+    /* Docker */
+    DOCKER: '<strong>MUST be ON if you run Docker, Dokploy, Coolify, or any containers.</strong> Prevents CSF from breaking Docker networking.',
+    DOCKER_DEVICE: 'Docker network interface. Usually docker0 (auto-detected).',
+    DOCKER_NETWORK4: 'Docker IPv4 network range (auto-detected from docker0).',
+    DOCKER_NETWORK6: 'Docker IPv6 network range.',
+
+    /* OS Specific — just a generic note */
+    IPTABLES: 'Path to iptables binary. <strong>Don\'t change unless you know your system uses a non-standard path.</strong>',
+    GENERIC: 'Custom regex pattern file for LFD.',
+    DEBUG: 'Enable debug mode for troubleshooting. Keep OFF in production.',
+};
+
+var RELATED = {
+    'CC_DENY': { group: 'country-deny', color: '#d9534f', label: 'Country Block group — these settings work together' },
+    'CC_DENY_PORTS': { group: 'country-deny', color: '#d9534f' },
+    'CC_DENY_PORTS_TCP': { group: 'country-deny', color: '#d9534f' },
+    'CC_DENY_PORTS_UDP': { group: 'country-deny', color: '#d9534f' },
+    'CC_ALLOW': { group: 'country-allow', color: '#5cb85c', label: 'Country Allow group — these settings work together' },
+    'CC_ALLOW_FILTER': { group: 'country-allow', color: '#5cb85c' },
+    'CC_ALLOW_PORTS': { group: 'country-allow', color: '#5cb85c' },
+    'CC_ALLOW_PORTS_TCP': { group: 'country-allow', color: '#5cb85c' },
+    'CC_ALLOW_PORTS_UDP': { group: 'country-allow', color: '#5cb85c' },
+    'CC_ALLOW_SMTPAUTH': { group: 'country-allow', color: '#5cb85c' },
+    'TCP_IN': { group: 'ipv4-ports', color: '#337ab7', label: 'IPv4 port rules — incoming and outgoing must match' },
+    'TCP_OUT': { group: 'ipv4-ports', color: '#337ab7' },
+    'UDP_IN': { group: 'ipv4-ports', color: '#337ab7' },
+    'UDP_OUT': { group: 'ipv4-ports', color: '#337ab7' },
+    'TCP6_IN': { group: 'ipv6-ports', color: '#5bc0de', label: 'IPv6 port rules — mirror your IPv4 ports above' },
+    'TCP6_OUT': { group: 'ipv6-ports', color: '#5bc0de' },
+    'UDP6_IN': { group: 'ipv6-ports', color: '#5bc0de' },
+    'UDP6_OUT': { group: 'ipv6-ports', color: '#5bc0de' },
+    'SYNFLOOD': { group: 'synflood', color: '#f0ad4e', label: 'SYN flood protection — enable + set thresholds' },
+    'SYNFLOOD_RATE': { group: 'synflood', color: '#f0ad4e' },
+    'SYNFLOOD_BURST': { group: 'synflood', color: '#f0ad4e' },
+    'CONNLIMIT': { group: 'connlimit', color: '#f0ad4e', label: 'Connection limits — per-IP concurrent connection caps' },
+    'PORTFLOOD': { group: 'portflood', color: '#f0ad4e', label: 'Port flood — rate-limit new connections per port' },
+    'LF_ALERT_TO': { group: 'alertemail', color: '#5bc0de', label: 'Alert email settings — configure sender and recipient' },
+    'LF_ALERT_FROM': { group: 'alertemail', color: '#5bc0de' },
+    'LF_ALERT_SMTP': { group: 'alertemail', color: '#5bc0de' },
+    'LF_PERMBLOCK': { group: 'permblock', color: '#d9534f', label: 'Auto-permanent block — escalate repeat temp blocks' },
+    'LF_PERMBLOCK_INTERVAL': { group: 'permblock', color: '#d9534f' },
+    'LF_PERMBLOCK_COUNT': { group: 'permblock', color: '#d9534f' },
+    'LF_PERMBLOCK_ALERT': { group: 'permblock', color: '#d9534f' },
+    'CT_LIMIT': { group: 'ct', color: '#f0ad4e', label: 'Connection tracking — detect and block DDoS/flooding' },
+    'CT_INTERVAL': { group: 'ct', color: '#f0ad4e' },
+    'CT_EMAIL_ALERT': { group: 'ct', color: '#f0ad4e' },
+    'CT_PERMANENT': { group: 'ct', color: '#f0ad4e' },
+    'CT_BLOCK_TIME': { group: 'ct', color: '#f0ad4e' },
+    'CT_SKIP_TIME_WAIT': { group: 'ct', color: '#f0ad4e' },
+    'CT_STATES': { group: 'ct', color: '#f0ad4e' },
+    'CT_PORTS': { group: 'ct', color: '#f0ad4e' },
+    'LF_SSHD': { group: 'lf-ssh', color: '#d9534f', label: 'SSH brute-force protection — failures before block' },
+    'LF_SSHD_PERM': { group: 'lf-ssh', color: '#d9534f' },
+    'DOCKER': { group: 'docker', color: '#5bc0de', label: 'Docker integration — all settings must align' },
+    'DOCKER_DEVICE': { group: 'docker', color: '#5bc0de' },
+    'DOCKER_NETWORK4': { group: 'docker', color: '#5bc0de' },
+    'DOCKER_NETWORK6': { group: 'docker', color: '#5bc0de' },
+};
+
+$(function() {
+    /* Inject section banners */
+    $('.virtualpage .section h4').each(function() {
+        var sectionName = $(this).text().trim();
+        var desc = SECTION_HELP[sectionName];
+        if (desc) {
+            $(this).after('<div class="alert alert-info" style="font-size:12px; margin-top:5px; margin-bottom:10px"><span class="glyphicon glyphicon-info-sign"></span> ' + desc + '</div>');
+        }
+    });
+
+    /* Inject help text */
+    $('tr[data-key]').each(function() {
+        var key = $(this).data('key');
+        var help = HELP[key];
+        if (help) {
+            $(this).find('.setting-help').html(help);
+        }
+    });
+
+    /* Visual grouping of related settings */
+    var seenGroups = {};
+    $('tr[data-key]').each(function() {
+        var key = $(this).data('key');
+        var rel = RELATED[key];
+        if (!rel) return;
+        $(this).css('border-left', '4px solid ' + rel.color);
+        if (rel.label && !seenGroups[rel.group]) {
+            seenGroups[rel.group] = true;
+            $(this).before('<tr class="related-group-label"><td colspan="2" style="background:' +
+                rel.color + '15; border-left:4px solid ' + rel.color +
+                '; padding:6px 12px; font-size:12px"><span class="glyphicon glyphicon-link" style="color:' +
+                rel.color + '"></span> <strong style="color:' + rel.color + '">' + rel.label + '</strong></td></tr>');
+        }
+    });
+
+    $('.section-btn').on('click', function() {
+        var idx = $(this).data('section');
+        $('.virtualpage').hide();
+        $('#section-' + idx).show();
+        $('.section-btn').removeClass('btn-primary').addClass('btn-default');
+        $(this).removeClass('btn-default').addClass('btn-primary');
+        $('#configSearch').val('');
+    });
+    /* Hide empty sections (like General preamble) */
+    $('.section-btn').each(function() {
+        var idx = $(this).data('section');
+        if ($('#section-' + idx).find('tr[data-key]').length === 0) {
+            $(this).hide();
+        }
+    });
+    var firstWithSettings = $('.section-btn:visible').first();
+    (firstWithSettings.length ? firstWithSettings : $('.section-btn').first()).trigger('click');
+
+    var searchTimeout;
+    $('#configSearch').on('input', function() {
+        clearTimeout(searchTimeout);
+        var q = $(this).val().toLowerCase().trim();
+        searchTimeout = setTimeout(function() {
+            if (!q) {
+                (firstWithSettings.length ? firstWithSettings : $('.section-btn').first()).trigger('click');
+                $('tr[data-key]').show();
+                return;
+            }
+            $('.virtualpage').show();
+            $('#paginatediv').find('.section-btn').removeClass('btn-primary').addClass('btn-default');
+            $('tr[data-key]').each(function() {
+                var key = $(this).data('key').toLowerCase();
+                var val = $(this).find('input').val() || '';
+                var helpText = $(this).find('.setting-help').text().toLowerCase();
+                $(this).toggle(key.indexOf(q) !== -1 || val.toLowerCase().indexOf(q) !== -1 || helpText.indexOf(q) !== -1);
+            });
+            $('.virtualpage').each(function() {
+                var visible = $(this).find('tr[data-key]:visible').length;
+                $(this).toggle(visible > 0);
+            });
+        }, 150);
+    });
+
+    $('#clearSearch').on('click', function() {
+        $('#configSearch').val('').trigger('input');
+    });
+
+    /* AJAX save with feedback */
+    $('#configForm').on('submit', function(e) {
+        e.preventDefault();
+        var btn = $(this).find('button[type=submit]');
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh spinning"></span> Saving...');
+        $.ajax({
+            url: '/config/save',
+            method: 'POST',
+            data: $(this).serialize(),
+            headers: {'X-Requested-With': 'XMLHttpRequest'},
+            success: function(data) {
+                if (data.success) {
+                    var toast = $('<div class="alert alert-warning alert-dismissible" style="position:fixed;top:70px;right:20px;z-index:9999;min-width:350px">' +
+                        '<button type="button" class="close" data-dismiss="alert">&times;</button>' +
+                        '<span class="glyphicon glyphicon-ok-sign"></span> <strong>Configuration saved!</strong><br>' +
+                        'Click <strong>Restart csf+lfd</strong> to apply changes.</div>');
+                    $('body').append(toast);
+                    setTimeout(function(){ toast.fadeOut(500, function(){ toast.remove(); }); }, 6000);
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            },
+            error: function() {
+                alert('Failed to save. Check server connection.');
+            },
+            complete: function() {
+                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-floppy-disk"></span> Save Changes');
+            }
+        });
+    });
+    /* ===== SELECT DROPDOWNS for fixed-option fields ===== */
+    var SELECT_FIELDS = {
+        CC_SRC:              [{v:'1',l:'1 — MaxMind GeoLite2 (recommended)'},{v:'2',l:'2 — ipinfo.io'}],
+        CC_LOOKUPS:          [{v:'1',l:'1 — MaxMind DB (requires MM_LICENSE_KEY)'},{v:'2',l:'2 — ipdeny.com (free, less accurate)'}],
+        CC6_LOOKUPS:         [{v:'1',l:'1 — MaxMind DB'},{v:'2',l:'2 — ipdeny.com'}],
+        URLGET:              [{v:'1',l:'1 — LWP (Perl library)'},{v:'2',l:'2 — curl (recommended)'}],
+        RESTRICT_SYSLOG:     [{v:'0',l:'0 — Off'},{v:'1',l:'1 — Basic restriction'},{v:'2',l:'2 — Moderate'},{v:'3',l:'3 — Strict (recommended)'}],
+        LF_NETBLOCK_CLASS:   [{v:'A',l:'A — Block /8  (16 million IPs — use with extreme caution)'},{v:'B',l:'B — Block /16 (65,000 IPs)'},{v:'C',l:'C — Block /24 (256 IPs, recommended)'}],
+        PT_LOAD_AVG:         [{v:'1',l:'1 — 1-minute average'},{v:'5',l:'5 — 5-minute average (recommended)'},{v:'15',l:'15 — 15-minute average'}],
+        CF_BLOCK:            [{v:'block',l:'block — Hard block at CloudFlare'},{v:'challenge',l:'challenge — Show CAPTCHA'},{v:'whitelist',l:'whitelist — Allow through'}],
+        LOGSCANNER_INTERVAL: [{v:'hourly',l:'hourly'},{v:'daily',l:'daily (recommended)'}],
+        LOGSCANNER_STYLE:    [{v:'0',l:'0 — Plain text'},{v:'1',l:'1 — With line counts'},{v:'2',l:'2 — With sample lines'}],
+        LF_SELECT:           [{v:'0',l:'0 — Block all ports for attacking IP'},{v:'1',l:'1 — Block only the attacked port (less disruptive)'}],
+        LF_BOGON_SKIP:       [{v:'0',l:'0 — Enforce bogon IP check (default)'},{v:'1',l:'1 — Skip bogon check'}],
+        DROP:                [{v:'DROP',  l:'DROP — Silently discard (frustrates port scanners)'},{v:'REJECT',l:'REJECT — Send rejection immediately (reveals firewall)'}],
+        DROP_OUT:            [{v:'DROP',  l:'DROP — Silently discard'},{v:'REJECT',l:'REJECT — Immediate rejection (recommended for outbound — frees resources faster)'}],
+        CLUSTER_BLOCK:       [{v:'0',l:'0 — Disabled (no cluster blocking)'},{v:'1',l:'1 — Accept temp blocks from cluster peers'},{v:'2',l:'2 — Accept temp + permanent blocks from cluster'}],
+        LF_NETBLOCK_IPV6:    [{v:'',l:'— Disabled (no IPv6 netblocking)'},{v:'/64',l:'/64 — smallest safe range (billions of IPs)'},{v:'/56',l:'/56'},{v:'/48',l:'/48'},{v:'/32',l:'/32'},{v:'/24',l:'/24 — massive; use with extreme caution'}],
+    };
+
+    function convertToSelects() {
+        $('tr[data-key]').each(function() {
+            var key = $(this).data('key');
+            var opts = SELECT_FIELDS[key];
+            if (!opts) return;
+            var td = $(this).find('td').eq(1);
+            var currentVal = '';
+            var txt = td.find('input[type=text]');
+            var radio = td.find('input[type=radio]:checked');
+            if (txt.length) currentVal = txt.val();
+            else if (radio.length) currentVal = radio.val();
+            var sel = $('<select class="form-control" style="max-width:420px">').attr('name', 'cfg_' + key);
+            var matched = false;
+            opts.forEach(function(o) {
+                var opt = $('<option>').val(o.v).text(o.l);
+                if (o.v === currentVal) { opt.prop('selected', true); matched = true; }
+                sel.append(opt);
+            });
+            if (!matched && currentVal) {
+                sel.prepend($('<option>').val(currentVal).text(currentVal + ' (current)').prop('selected', true));
+            }
+            td.html('').append(sel);
+        });
+    }
+
+    /* ===== INLINE PER-FIELD VALIDATION ===== */
+    function _fv(key) {
+        var row = $('tr[data-key="' + key + '"]');
+        if (!row.length) return '';
+        var sel = row.find('select[name="cfg_' + key + '"]');
+        if (sel.length) return sel.val() || '';
+        var txt = row.find('input[type=text][name="cfg_' + key + '"]');
+        if (txt.length) return txt.val() || '';
+        var hidden = row.find('input[type=hidden][name="cfg_' + key + '"]');
+        if (hidden.length) return hidden.val() || '';
+        var radio = row.find('input[type=radio]:checked[name="cfg_' + key + '"]');
+        return radio.length ? (radio.val() || '') : '';
+    }
+
+    /* ===== COUNTRY CODE MULTI-SELECT (Select2) ===== */
+    function convertToCountryMultiSelect() {
+        COUNTRY_FIELDS.forEach(function(key) {
+            var row = $('tr[data-key="' + key + '"]');
+            if (!row.length) return;
+            var td = row.find('td').eq(1);
+            var txt = td.find('input[type=text]');
+            if (!txt.length) return;
+            var currentVal = txt.val().trim();
+            var currentCodes = currentVal ? currentVal.split(',').map(function(c){return c.trim().toUpperCase();}).filter(Boolean) : [];
+
+            /* Hidden input carries the name so the form submits correctly */
+            var hidden = $('<input type="hidden">').attr('name', 'cfg_' + key).val(currentCodes.join(','));
+            var sel = $('<select multiple style="width:100%">');
+
+            /* Pre-load current codes that might not be in COUNTRY_CODES list */
+            currentCodes.forEach(function(code) {
+                var known = COUNTRY_CODES.filter(function(c){return c.id===code;})[0];
+                sel.append($('<option>').val(code).text(known ? known.text : code).prop('selected', true));
+            });
+            COUNTRY_CODES.forEach(function(c) {
+                if (currentCodes.indexOf(c.id) === -1) {
+                    sel.append($('<option>').val(c.id).text(c.text));
+                }
+            });
+
+            td.html('').append(hidden).append(sel);
+
+            sel.select2({
+                placeholder: 'Search or type a 2-letter country code…',
+                tags: true,
+                tokenSeparators: [',', ' '],
+                createTag: function(params) {
+                    var term = params.term.trim().toUpperCase();
+                    if (!/^[A-Z]{2}$/.test(term)) return null;
+                    return {id: term, text: term + ' (custom)', newTag: true};
+                },
+                width: '100%',
+            });
+
+            sel.on('change', function() {
+                hidden.val((sel.val() || []).join(','));
+                runInlineValidation();
+            });
+        });
+    }
+
+    /* ===== DESCRIPTIVE TOGGLE BUTTON LABELS ===== */
+    function updateToggleLabels() {
+        var DEFAULT = {'1': 'On', '0': 'Off'};
+        var OVERRIDES = {
+            /* Core */
+            TESTING:              {'1':'Test mode — blocks suppressed','0':'Live — blocks active'},
+            AUTO_UPDATES:         {'1':'Auto-update CSF/LFD','0':'Manual updates only'},
+            FASTSTART:            {'1':'Fast startup (cached rules)','0':'Full iptables rebuild on start'},
+            VERBOSE:              {'1':'Verbose logging','0':'Quiet mode'},
+            WAITLOCK:             {'1':'Wait for lock file','0':'Skip if already locked'},
+            LFDSTART:             {'1':'Start lfd with csf','0':'Start lfd separately'},
+            PACKET_FILTER:        {'1':'Deep packet filtering on','0':'Basic filtering only'},
+            SAFECHAINUPDATE:      {'1':'Safe chain update (no firewall gap)','0':'Direct update (brief gap)'},
+            LF_LOOKUPS:           {'1':'Reverse-DNS on blocked IPs','0':'No IP lookups'},
+            LF_DAEMON:            {'1':'lfd daemon on','0':'lfd disabled (no auto-blocking)'},
+            LF_CSF:               {'1':'lfd manages CSF rules','0':'No lfd/CSF management'},
+            LF_IPSET:             {'1':'Use ipset (faster for large block lists)','0':'Use iptables lists (default)'},
+            LF_SPI:               {'1':'Stateful packet inspection on','0':'No SPI'},
+            /* Network */
+            IPV6:                 {'1':'IPv6 enabled','0':'IPv4 only'},
+            ICMP_IN:              {'1':'Allow inbound ping (ICMP)','0':'Block all inbound ICMP/ping'},
+            ICMP_OUT:             {'1':'Allow outbound ping (ICMP)','0':'Block all outbound ICMP/ping'},
+            ICMP_TIMESTAMPDROP:   {'1':'Drop ICMP timestamp requests (more secure)','0':'Allow ICMP timestamps'},
+            USE_CONNTRACK:        {'1':'Connection state tracking on','0':'No conntrack (stateless mode)'},
+            USE_FTPHELPER:        {'1':'FTP connection tracking helper on','0':'No FTP helper'},
+            /* Logging */
+            SYSLOG:               {'1':'Also log to syslog','0':'Log to CSF files only'},
+            DROP_LOGGING:         {'1':'Log all dropped inbound packets','0':'Silent drops — nothing logged'},
+            DROP_IP_LOGGING:      {'1':'Log each blocked IP separately','0':'No per-IP log'},
+            DROP_OUT_LOGGING:     {'1':'Log outbound drops','0':'No outbound drop logging'},
+            DROP_UID_LOGGING:     {'1':'Log process UID on outbound block','0':'No UID in drop logs'},
+            DROP_ONLYRES:         {'1':'Only filter reserved port range','0':'Filter all blocked ports'},
+            DROP_PF_LOGGING:      {'1':'Log port flood blocks','0':'No port flood logging'},
+            CONNLIMIT_LOGGING:    {'1':'Log connection limit blocks','0':'No connection limit logging'},
+            UDPFLOOD_LOGGING:     {'1':'Log UDP flood blocks','0':'No UDP flood logging'},
+            LOGFLOOD_ALERT:       {'1':'Alert when log is flooded','0':'No log flood alert'},
+            SYSLOG_CHECK:         {'1':'Monitor syslog for tampering','0':'No syslog integrity check'},
+            /* SMTP/Email */
+            SMTP_BLOCK:           {'1':'Block outbound SMTP (all users)','0':'Allow outbound SMTP'},
+            SMTP_ALLOWLOCAL:      {'1':'Allow local processes to send SMTP','0':'Block local SMTP too'},
+            SMTP_REDIRECT:        {'1':'Route SMTP through sendmail','0':'Direct SMTP'},
+            SMTPAUTH_RESTRICT:    {'1':'Restrict SMTP AUTH by country (CC_ALLOW_SMTPAUTH)','0':'SMTP AUTH open to all'},
+            /* Flood protection */
+            SYNFLOOD:             {'1':'SYN flood protection on','0':'No SYN flood protection'},
+            UDPFLOOD:             {'1':'UDP flood protection on','0':'No UDP flood protection'},
+            /* Country/IP */
+            CC_ENABLE:            {'1':'Country blocking on','0':'No country blocking'},
+            LF_BOGON_SKIP:        {'1':'Skip bogon IP check','0':'Enforce bogon check (default)'},
+            IGNORE_ALLOW:         {'1':'Deny rules apply even to allowed IPs','0':'Allow list overrides deny'},
+            DNS_STRICT:           {'1':'Strict reverse DNS on blocked IPs','0':'Lenient DNS (default)'},
+            DNS_STRICT_NS:        {'1':'Check nameservers on blocked IPs','0':'No NS check'},
+            /* DynDNS / global lists */
+            DYNDNS:               {'1':'Allow dynamic DNS IPs through firewall','0':'No DynDNS'},
+            DYNDNS_IGNORE:        {'1':'LFD ignores dynamic DNS IPs','0':'LFD can block DynDNS IPs'},
+            LF_GLOBAL:            {'1':'Use global block/allow lists','0':'Local lists only'},
+            GLOBAL_DYNDNS_IGNORE: {'1':'Skip DynDNS in global lists','0':'DynDNS in global lists'},
+            /* Email alerts */
+            LF_EMAIL_ALERT:       {'1':'Email on permanent block','0':'No block emails'},
+            LF_TEMP_EMAIL_ALERT:  {'1':'Email on temp block too','0':'No temp-block emails'},
+            LF_SSH_EMAIL_ALERT:   {'1':'Email on successful SSH login','0':'No SSH login alerts'},
+            LF_SU_EMAIL_ALERT:    {'1':'Email on su usage','0':'No su usage alerts'},
+            LF_SUDO_EMAIL_ALERT:  {'1':'Email on sudo usage','0':'No sudo alerts'},
+            LF_WEBMIN_EMAIL_ALERT:{'1':'Email on Webmin login','0':'No Webmin login alerts'},
+            LF_CONSOLE_EMAIL_ALERT:{'1':'Email on console root login','0':'No console login alerts'},
+            LF_APACHE_ERRPORT:    {'1':'Log Apache connection errors by port','0':'No Apache error-port log'},
+            LF_MODSECIPDB_ALERT:  {'1':'Alert when ModSec IP DB grows large','0':'No ModSec DB alert'},
+            /* Perm block escalation */
+            LF_PERMBLOCK:         {'1':'Escalate repeat offenders to permanent','0':'Temp bans only'},
+            LF_PERMBLOCK_ALERT:   {'1':'Email when IP permanently blocked','0':'No permanent block email'},
+            LF_NETBLOCK:          {'1':'Auto-block IP ranges with repeat attackers','0':'Block individual IPs only'},
+            LF_NETBLOCK_ALERT:    {'1':'Email on netblock','0':'No netblock email'},
+            /* All _PERM fields: 0=temp block, 1=permanent block */
+            LF_TRIGGER_PERM:      {'1':'Permanent block','0':'Temp block (seconds set by LF_TEMP)'},
+            LF_SSHD_PERM:         {'1':'Permanent block','0':'Temp block'},
+            LF_FTPD_PERM:         {'1':'Permanent block','0':'Temp block'},
+            LF_SMTPAUTH_PERM:     {'1':'Permanent block','0':'Temp block'},
+            LF_EXIMSYNTAX_PERM:   {'1':'Permanent block','0':'Temp block'},
+            LF_POP3D_PERM:        {'1':'Permanent block','0':'Temp block'},
+            LF_IMAPD_PERM:        {'1':'Permanent block','0':'Temp block'},
+            LF_HTACCESS_PERM:     {'1':'Permanent block','0':'Temp block'},
+            LF_MODSEC_PERM:       {'1':'Permanent block','0':'Temp block'},
+            LF_BIND_PERM:         {'1':'Permanent block','0':'Temp block'},
+            LF_SUHOSIN_PERM:      {'1':'Permanent block','0':'Temp block'},
+            LF_CXS_PERM:          {'1':'Permanent block','0':'Temp block'},
+            LF_QOS_PERM:          {'1':'Permanent block','0':'Temp block'},
+            LF_SYMLINK_PERM:      {'1':'Permanent block','0':'Temp block'},
+            LF_WEBMIN_PERM:       {'1':'Permanent block','0':'Temp block'},
+            LF_DISTFTP_PERM:      {'1':'Permanent block','0':'Temp block'},
+            LF_DISTSMTP_PERM:     {'1':'Permanent block','0':'Temp block'},
+            /* Distributed attack */
+            LF_REPEATBLOCK:       {'1':'Re-block returning attackers','0':'No repeat-offender check'},
+            LF_BLOCKINONLY:       {'1':'Block inbound traffic only','0':'Block both inbound and outbound'},
+            LF_DISTATTACK:        {'1':'Detect distributed attacks','0':'No distributed attack detection'},
+            LF_DISTFTP:           {'1':'Detect distributed FTP brute-force','0':'No dist FTP detection'},
+            LF_DISTFTP_ALERT:     {'1':'Email on distributed FTP attack','0':'No dist FTP alert'},
+            LF_DISTSMTP:          {'1':'Detect distributed SMTP brute-force','0':'No dist SMTP detection'},
+            LF_DISTSMTP_ALERT:    {'1':'Email on distributed SMTP attack','0':'No dist SMTP alert'},
+            /* Login tracking */
+            LT_IMAPD:             {'1':'Track excessive IMAP logins','0':'No IMAP login tracking'},
+            LT_EMAIL_ALERT:       {'1':'Email when login tracking triggers','0':'No login tracking alerts'},
+            LT_SKIPPERMBLOCK:     {'1':'Skip permanent blocks for login tracking','0':'Apply perm blocks'},
+            /* Connection tracking */
+            CT_EMAIL_ALERT:       {'1':'Email on connection limit block','0':'No connection limit alerts'},
+            CT_PERMANENT:         {'1':'Permanent block when over limit','0':'Temp block when over limit'},
+            CT_SKIP_TIME_WAIT:    {'1':'Skip TIME_WAIT connections','0':'Count TIME_WAIT connections'},
+            /* Process tracking */
+            PT_SKIP_HTTP:         {'1':'Exclude HTTP processes from tracking','0':'Track all processes including HTTP'},
+            PT_DELETED:           {'1':'Alert if running executable is deleted','0':'No deleted-file monitoring'},
+            PT_USERKILL:          {'1':'Kill processes that exceed resource limits','0':'Log only — do not kill'},
+            PT_USERKILL_ALERT:    {'1':'Email when processes are killed','0':'No kill alert'},
+            PT_FORKBOMB:          {'1':'Detect fork bombs','0':'No fork bomb detection'},
+            PT_SSHDKILL:          {'1':'Kill dead SSH sessions','0':'Leave dead SSH sessions alone'},
+            PT_SSHDHUNG:          {'1':'Detect and kill hung SSH sessions','0':'No hung SSH detection'},
+            /* Port scan */
+            PS_PERMANENT:         {'1':'Permanent block for port scanners','0':'Temp block for port scanners'},
+            PS_EMAIL_ALERT:       {'1':'Email when port scanner detected','0':'No port scan alert'},
+            /* Directory/file watch */
+            LF_DIRWATCH_DISABLE:  {'1':'Directory watch disabled','0':'Directory watch enabled'},
+            LF_DIRWATCH_FILE:     {'1':'Watch individual file changes too','0':'Watch directory changes only'},
+            /* Messenger */
+            MESSENGER:            {'1':'Show messenger page to blocked IPs','0':'Blocked IPs see nothing'},
+            MESSENGER_TEMP:       {'1':'Messenger for temp-blocked IPs','0':'No messenger for temp blocks'},
+            MESSENGER_PERM:       {'1':'Messenger for permanently-blocked IPs','0':'No messenger for perm blocks'},
+            MESSENGER_HTTPS_SKIPMAIL:{'1':'Skip SMTP for HTTPS messenger','0':'Include SMTP in HTTPS messenger'},
+            RECAPTCHA_ALERT:      {'1':'Email when CAPTCHA is solved','0':'No CAPTCHA alert'},
+            /* Cluster */
+            CLUSTER_CONFIG:       {'1':'Sync csf.conf to cluster peers','0':'No cluster config sync'},
+            /* Port knocking */
+            PORTKNOCKING_LOG:     {'1':'Log port knocking events','0':'No port knocking log'},
+            PORTKNOCKING_ALERT:   {'1':'Email on port knocking','0':'No port knocking alert'},
+            /* Log scanner */
+            LOGSCANNER:           {'1':'Log scanner on','0':'Log scanner off'},
+            LOGSCANNER_EMPTY:     {'1':'Include sections with no hits','0':'Skip empty sections in report'},
+            /* Stats */
+            ST_ENABLE:            {'1':'Stats tracking on','0':'No stats'},
+            ST_LOOKUP:            {'1':'Reverse-lookup IPs in stats','0':'No IP lookup in stats'},
+            ST_SYSTEM:            {'1':'Track system stats (CPU/memory)','0':'No system stats'},
+            ST_MYSQL:             {'1':'Track MySQL query stats','0':'No MySQL stats'},
+            /* Built-in UI (not CSFv2 — the old CSF web UI on port 6666) */
+            UI:                   {'1':'Legacy CSF UI on port 6666 — INSECURE','0':'Legacy UI disabled (use CSF-eUI instead)'},
+            UI_BAN:               {'1':'Ban feature in legacy UI','0':'No banning via legacy UI'},
+            UI_ALLOW:             {'1':'Allow feature in legacy UI','0':'No allow via legacy UI'},
+            UI_BLOCK:             {'1':'Block feature in legacy UI','0':'No block via legacy UI'},
+            UI_CXS:               {'1':'CXS integration in UI','0':'No CXS in UI'},
+            UI_CSE:               {'1':'CSE integration in UI','0':'No CSE in UI'},
+            /* Style */
+            STYLE_CUSTOM:         {'1':'Custom CSS styles','0':'Default styles'},
+            STYLE_MOBILE:         {'1':'Mobile-friendly interface','0':'Full desktop interface'},
+            /* Docker */
+            DOCKER:               {'1':'CSF manages Docker iptables','0':'Docker iptables unmanaged'},
+            /* X-ARF abuse reporting */
+            X_ARF:                {'1':'Send X-ARF abuse reports to ISPs','0':'No abuse reporting'},
+            X_ARF_ABUSE:          {'1':'Auto-report abuse to contact addresses','0':'No auto abuse reports'},
+        };
+        $('tr[data-key]').each(function() {
+            var key = $(this).data('key');
+            if (SELECT_FIELDS[key]) return; /* will be a dropdown, skip */
+            var labels = OVERRIDES[key] || DEFAULT;
+            $(this).find('label.btn').each(function() {
+                var radio = $(this).find('input[type=radio]');
+                if (!radio.length) return;
+                var val = radio.val();
+                var desc = labels[val];
+                if (!desc) return;
+                /* Replace plain text node with descriptive label */
+                $(this).contents().filter(function(){return this.nodeType===3;}).remove();
+                $(this).append('<span> ' + val + ' <small style="opacity:0.75">— ' + desc + '</small></span>');
+            });
+        });
+    }
+    function _hasDigits(val) {
+        if (!val || !val.trim()) return false;
+        return val.split(',').some(function(p) { return /^\d+$/.test(p.trim()); });
+    }
+    function _empty(val) { return !val || !val.trim() || val === '0'; }
+
+    /* Rules: fields[] triggers re-check; target is the row that gets the inline warning */
+    var INLINE_RULES = [
+        { fields: ['CC_ALLOW_PORTS','CC_ALLOW_PORTS_TCP','CC_ALLOW_PORTS_UDP'], target: 'CC_ALLOW_PORTS',
+          check: function() {
+              var v = _fv('CC_ALLOW_PORTS');
+              if (_hasDigits(v)) return 'danger:This field takes <strong>country codes</strong> (e.g. <code>IN,DE</code>), not port numbers. Put port numbers in <strong>CC_ALLOW_PORTS_TCP</strong> or <strong>CC_ALLOW_PORTS_UDP</strong>.';
+              if (v.trim() && _fv('CC_ALLOW_PORTS_TCP') === '' && _fv('CC_ALLOW_PORTS_UDP') === '') return 'warning:Country codes are set but no ports are defined in <strong>CC_ALLOW_PORTS_TCP</strong> or <strong>CC_ALLOW_PORTS_UDP</strong> — this rule has no effect until you add port numbers.';
+              return null;
+        }},
+        { fields: ['CC_ALLOW_PORTS_TCP','CC_ALLOW_PORTS','TCP_IN'], target: 'CC_ALLOW_PORTS_TCP',
+          check: function() {
+              var portsCsv = _fv('CC_ALLOW_PORTS_TCP'); var tcpIn = _fv('TCP_IN');
+              var ports = portsCsv.split(',').map(function(p){return p.trim();}).filter(Boolean);
+              var tcpInList = tcpIn.split(',').map(function(p){return p.trim();}).filter(Boolean);
+              var overlap = ports.filter(function(p){return tcpInList.indexOf(p) !== -1;});
+              if (overlap.length) return 'danger:Port(s) <code>' + overlap.join(', ') + '</code> are still in <strong>TCP_IN</strong>. Remove them from TCP_IN first — CC_ALLOW_PORTS_TCP only grants access to ports that are <em>not</em> already open to everyone.';
+              if (portsCsv.trim() && _fv('CC_ALLOW_PORTS') === '') return 'warning:Port numbers are set but <strong>CC_ALLOW_PORTS</strong> (country codes) is empty — no countries will be granted this access.';
+              return null;
+        }},
+        { fields: ['CC_ALLOW_PORTS_UDP','CC_ALLOW_PORTS'], target: 'CC_ALLOW_PORTS_UDP',
+          check: function() {
+              if (_fv('CC_ALLOW_PORTS_UDP').trim() && _fv('CC_ALLOW_PORTS') === '') return 'warning:Port numbers are set but <strong>CC_ALLOW_PORTS</strong> (country codes) is empty — no countries will be granted this access.';
+              return null;
+        }},
+        { fields: ['CC_DENY_PORTS','CC_DENY_PORTS_TCP','CC_DENY_PORTS_UDP'], target: 'CC_DENY_PORTS',
+          check: function() {
+              var v = _fv('CC_DENY_PORTS');
+              if (_hasDigits(v)) return 'danger:This field takes <strong>country codes</strong> (e.g. <code>RU,CN</code>), not port numbers. Put port numbers in <strong>CC_DENY_PORTS_TCP</strong> or <strong>CC_DENY_PORTS_UDP</strong>.';
+              if (v.trim() && _fv('CC_DENY_PORTS_TCP') === '' && _fv('CC_DENY_PORTS_UDP') === '') return 'warning:Country codes are set but no ports are specified in <strong>CC_DENY_PORTS_TCP</strong> or <strong>CC_DENY_PORTS_UDP</strong> — these countries won\'t be blocked on any ports.';
+              return null;
+        }},
+        { fields: ['CC_DENY_PORTS_TCP','CC_DENY_PORTS'], target: 'CC_DENY_PORTS_TCP',
+          check: function() {
+              if (_fv('CC_DENY_PORTS_TCP').trim() && _fv('CC_DENY_PORTS') === '') return 'warning:Port numbers are set but <strong>CC_DENY_PORTS</strong> (country codes) is empty — no countries are being blocked on these ports.';
+              return null;
+        }},
+        { fields: ['CC_DENY_PORTS_UDP','CC_DENY_PORTS'], target: 'CC_DENY_PORTS_UDP',
+          check: function() {
+              if (_fv('CC_DENY_PORTS_UDP').trim() && _fv('CC_DENY_PORTS') === '') return 'warning:Port numbers are set but <strong>CC_DENY_PORTS</strong> (country codes) is empty — no countries are being blocked on these ports.';
+              return null;
+        }},
+        { fields: ['CC_ALLOW_FILTER'], target: 'CC_ALLOW_FILTER',
+          check: function() {
+              if (_hasDigits(_fv('CC_ALLOW_FILTER'))) return 'danger:This field takes <strong>country codes</strong> only (e.g. <code>IN,US,SG</code>), not port numbers.';
+              return null;
+        }},
+        { fields: ['CC_ALLOW'], target: 'CC_ALLOW',
+          check: function() {
+              var v = _fv('CC_ALLOW');
+              if (_hasDigits(v)) return 'danger:This field takes <strong>country codes</strong> (e.g. <code>IN,US</code>), not port numbers.';
+              if (v.trim() && _fv('CC_DENY').trim()) return 'warning:Both <strong>CC_ALLOW</strong> and <strong>CC_DENY</strong> are set. CC_ALLOW already blocks everything not on the list — CC_DENY is redundant.';
+              return null;
+        }},
+        { fields: ['CC_DENY'], target: 'CC_DENY',
+          check: function() {
+              if (_hasDigits(_fv('CC_DENY'))) return 'danger:This field takes <strong>country codes</strong> (e.g. <code>RU,CN,KP</code>), not port numbers.';
+              return null;
+        }},
+        { fields: ['CC_IGNORE'], target: 'CC_IGNORE',
+          check: function() {
+              if (_hasDigits(_fv('CC_IGNORE'))) return 'danger:This field takes <strong>country codes</strong> only, not port numbers.';
+              return null;
+        }},
+        { fields: ['MM_LICENSE_KEY','CC_SRC'], target: 'MM_LICENSE_KEY',
+          check: function() {
+              if (_fv('CC_SRC') === '1' && _fv('MM_LICENSE_KEY') === '') return 'warning:<strong>CC_SRC</strong> is MaxMind but no license key is provided — country blocking will not work. <a href="https://www.maxmind.com/en/geolite2/signup" target="_blank">Get a free key →</a>';
+              return null;
+        }},
+        { fields: ['LF_PERMBLOCK','LF_PERMBLOCK_COUNT'], target: 'LF_PERMBLOCK_COUNT',
+          check: function() {
+              if (_fv('LF_PERMBLOCK') === '1' && (_fv('LF_PERMBLOCK_COUNT') === '' || _fv('LF_PERMBLOCK_COUNT') === '0')) return 'warning:<strong>LF_PERMBLOCK</strong> is ON but this count is 0 — no IPs will ever be escalated to a permanent block.';
+              return null;
+        }},
+        { fields: ['SYNFLOOD','SYNFLOOD_RATE'], target: 'SYNFLOOD_RATE',
+          check: function() {
+              if (_fv('SYNFLOOD') === '1' && (_fv('SYNFLOOD_RATE') === '' || _fv('SYNFLOOD_RATE') === '0')) return 'warning:<strong>SYNFLOOD</strong> is ON but rate limit is 0 — set a threshold like <code>100/s</code>.';
+              return null;
+        }},
+        { fields: ['CF_ENABLE','CF_BLOCK'], target: 'CF_BLOCK',
+          check: function() {
+              if (_fv('CF_ENABLE') === '1' && _fv('CF_BLOCK') === '') return 'warning:<strong>CF_ENABLE</strong> is ON but no block action is selected — CloudFlare won\'t block anything.';
+              return null;
+        }},
+    ];
+
+    function runInlineValidation() {
+        $('.inline-field-warning').remove();
+        INLINE_RULES.forEach(function(rule) {
+            var result = rule.check();
+            if (!result) return;
+            var colonIdx = result.indexOf(':');
+            var level = result.substring(0, colonIdx);
+            var msg   = result.substring(colonIdx + 1);
+            var targetRow = $('tr[data-key="' + rule.target + '"]');
+            if (!targetRow.length) return;
+            var td = targetRow.find('td').eq(1);
+            var icon  = level === 'danger' ? 'glyphicon-remove-sign' : 'glyphicon-warning-sign';
+            var color = level === 'danger' ? '#c0392b' : '#8a6d3b';
+            var bg    = level === 'danger' ? '#fdf2f2' : '#fcf8e3';
+            var border= level === 'danger' ? '#e3baba' : '#faebcc';
+            td.append('<div class="inline-field-warning" style="margin-top:6px;padding:5px 8px;border-radius:3px;font-size:12px;color:' + color + ';background:' + bg + ';border:1px solid ' + border + '"><span class="glyphicon ' + icon + '" style="margin-right:5px"></span>' + msg + '</div>');
+        });
+    }
+
+    function bindInlineValidation() {
+        var watchedKeys = {};
+        INLINE_RULES.forEach(function(r) { r.fields.forEach(function(f) { watchedKeys[f] = true; }); });
+        Object.keys(watchedKeys).forEach(function(key) {
+            $(document).on('input change', '[name="cfg_' + key + '"]', runInlineValidation);
+        });
+    }
+
+    /* Input placeholders — show expected format for every plain-text field */
+    var PLACEHOLDERS = {
+        /* ── Port lists ──────────────────────────────────────────────── */
+        TCP_IN:              'Comma-separated ports, e.g. 22,80,443,8750',
+        TCP_OUT:             'Comma-separated ports, e.g. 22,25,53,80,443',
+        UDP_IN:              'Comma-separated ports, e.g. 53,51820',
+        UDP_OUT:             'Comma-separated ports, e.g. 53,123',
+        TCP6_IN:             'Comma-separated ports, e.g. 22,80,443',
+        TCP6_OUT:            'Comma-separated ports, e.g. 22,25,80,443',
+        UDP6_IN:             'Comma-separated ports, e.g. 53',
+        UDP6_OUT:            'Comma-separated ports, e.g. 53,123',
+        CC_ALLOW_PORTS_TCP:  'Port numbers only, e.g. 8750,22',
+        CC_ALLOW_PORTS_UDP:  'Port numbers only, e.g. 51820',
+        CC_DENY_PORTS_TCP:   'Port numbers only, e.g. 21,25',
+        CC_DENY_PORTS_UDP:   'Port numbers only, e.g. 53',
+        SMTP_PORTS:          'SMTP port numbers, e.g. 25,465,587',
+        /* ── Country code fields (shown before Select2 replaces them) ─ */
+        CC_ALLOW_PORTS:      'ISO country codes, e.g. IN,DE,US',
+        CC_DENY_PORTS:       'ISO country codes, e.g. RU,CN,KP',
+        CC_ALLOW_FILTER:     'ISO country codes, e.g. IN,US,SG',
+        CC_ALLOW:            'ISO country codes, e.g. IN,US',
+        CC_DENY:             'ISO country codes, e.g. RU,CN,KP,TR',
+        CC_IGNORE:           'ISO country codes, e.g. US,UK',
+        CC_ALLOW_SMTPAUTH:   'ISO country codes, e.g. IN,US',
+        CC_MESSENGER_ALLOW:  'ISO country codes, e.g. IN,US',
+        CC_MESSENGER_DENY:   'ISO country codes, e.g. RU,CN',
+        /* ── CIDR / subnet fields ─────────────────────────────────────── */
+        CC_DROP_CIDR:        'CIDR prefix lengths, e.g. 24,32 (no slash)',
+        CUSTOM_LOGLEVEL:     'e.g. /24',
+        /* ── LF_ failure thresholds (number of login failures) ─────── */
+        LF_TRIGGER:          'Number of failures to trigger block, e.g. 20',
+        LF_SSHD:             'SSH failures before block, e.g. 20 (0 = disabled)',
+        LF_FTPD:             'FTP failures before block, e.g. 20 (0 = disabled)',
+        LF_SMTPAUTH:         'SMTP AUTH failures before block, e.g. 20 (0 = disabled)',
+        LF_EXIMSYNTAX:       'Exim syntax errors before block, e.g. 10 (0 = disabled)',
+        LF_POP3D:            'POP3 failures before block, e.g. 20 (0 = disabled)',
+        LF_IMAPD:            'IMAP failures before block, e.g. 20 (0 = disabled)',
+        LF_HTACCESS:         '.htaccess failures before block, e.g. 20 (0 = disabled)',
+        LF_MODSEC:           'ModSecurity hits before block, e.g. 20 (0 = disabled)',
+        LF_CPANEL_MODSEC:    'cPanel ModSec hits before block, e.g. 20 (0 = disabled)',
+        LF_BIND:             'BIND DNS failures before block, e.g. 10 (0 = disabled)',
+        LF_SUHOSIN:          'Suhosin failures before block, e.g. 20 (0 = disabled)',
+        LF_CXS:              'CXS failures before block, e.g. 20 (0 = disabled)',
+        LF_QOS:              'QoS violations before block, e.g. 20 (0 = disabled)',
+        LF_SYMLINK:          'Symlink attacks before block, e.g. 10 (0 = disabled)',
+        LF_WEBMIN:           'Webmin failures before block, e.g. 10 (0 = disabled)',
+        LF_DIRECTADMIN:      'DirectAdmin failures before block, e.g. 20 (0 = disabled)',
+        LF_DISTFTP_TRIGGER:  'Distributed FTP failures to trigger block, e.g. 20',
+        LF_DISTSMTP_TRIGGER: 'Distributed SMTP failures to trigger block, e.g. 20',
+        /* ── Temp block duration ─────────────────────────────────────── */
+        LF_TEMP:             'Temp block duration in seconds, e.g. 3600 (1 hour)',
+        /* ── Perm block / escalation ─────────────────────────────────── */
+        LF_PERMBLOCK_COUNT:    'How many temp blocks before making permanent, e.g. 4',
+        LF_PERMBLOCK_INTERVAL: 'Time window to count temp blocks (seconds), e.g. 86400',
+        LF_PERMBLOCK_OVERKILL: 'Extra temp blocks that skip to immediate perm, e.g. 10',
+        /* ── Netblock (range blocking) ───────────────────────────────── */
+        LF_NETBLOCK_COUNT:    'Distinct IPs in same CIDR to trigger range block, e.g. 4',
+        LF_NETBLOCK_INTERVAL: 'Time window for CIDR count (seconds), e.g. 86400',
+        /* ── Connection tracking ─────────────────────────────────────── */
+        CT_LIMIT:            'Max connections per IP, e.g. 300 (0 = disabled)',
+        CT_INTERVAL:         'Connection count interval (seconds), e.g. 300',
+        CT_PORTS:            'Ports to track, e.g. 80,443 (blank = all ports)',
+        CT_SKIP_PORTS:       'Ports to exclude from connection tracking, e.g. 53',
+        /* ── Login tracking ──────────────────────────────────────────── */
+        LT_POP3D:            'Max POP3 logins per IP per interval, e.g. 60 (0 = disabled)',
+        LT_IMAPD:            'Max IMAP logins per IP per interval, e.g. 60 (0 = disabled)',
+        LT_INTERVAL:         'Login tracking time window (seconds), e.g. 3600',
+        /* ── Port flood ──────────────────────────────────────────────── */
+        PORTFLOOD:           'port;protocol;hitcount;interval, e.g. 22;tcp;5;300',
+        /* ── Connection limits ───────────────────────────────────────── */
+        CONNLIMIT:           'port;limit pairs, e.g. 22;3,80;100,443;100,8750;10',
+        /* ── SYN / UDP flood rates ───────────────────────────────────── */
+        SYNFLOOD_RATE:       'iptables rate, e.g. 100/s',
+        SYNFLOOD_BURST:      'Burst allowance, e.g. 150',
+        UDPFLOOD_LIMIT:      'UDP packets per second limit, e.g. 50',
+        UDPFLOOD_BURST:      'UDP burst allowance, e.g. 500',
+        /* ── Process tracking ────────────────────────────────────────── */
+        PT_LOAD_LEVEL:       'CPU load average to alert on, e.g. 20.0',
+        PT_LOAD_INTERVAL:    'How long load must stay high before alert (seconds), e.g. 300',
+        PT_USERPROC:         'Max concurrent processes per user, e.g. 60 (0 = disabled)',
+        PT_USERPROC_ALERT:   'Alert after this many excess processes, e.g. 60',
+        PT_USERMEM:          'Max RSS memory per user (MB), e.g. 512 (0 = disabled)',
+        PT_USERRSS:          'Max RSS memory per user (MB), e.g. 512',
+        PT_USERTIME:         'Max process CPU time (seconds), e.g. 1800 (0 = disabled)',
+        PT_FORKBOMB_ALERT:   'Process count threshold for fork bomb detection, e.g. 250',
+        /* ── Port scan ───────────────────────────────────────────────── */
+        PS_LIMIT:            'Port scan hit count to trigger block, e.g. 15',
+        PS_INTERVAL:         'Port scan detection window (seconds), e.g. 300',
+        PS_PORTS:            'Port range to scan for, e.g. 0:65535 or 0:1023',
+        /* ── Email alerts ────────────────────────────────────────────── */
+        LF_ALERT_TO:         'Alert recipient, e.g. admin@example.com',
+        LF_ALERT_FROM:       'Sender address, e.g. csf@yourserver.com',
+        LF_ALERT_SUBJECTPREFIX: 'Subject prefix, e.g. [CSF]',
+        /* ── Log flood / rate ────────────────────────────────────────── */
+        LOGFLOOD_LIMIT:      'Log lines per second threshold, e.g. 100',
+        LOGFLOOD_INTERVAL:   'Log flood detection interval (seconds), e.g. 10',
+        /* ── Syslog check interval ───────────────────────────────────── */
+        SYSLOG_CHECK_INTERVAL: 'Seconds between syslog checks, e.g. 300',
+        /* ── API keys / credentials ──────────────────────────────────── */
+        MM_LICENSE_KEY:      'Your MaxMind license key (from maxmind.com/en/my_license_key)',
+        CF_KEY:              'CloudFlare Global API key or API Token',
+        CF_EMAIL:            'CloudFlare account email, e.g. you@example.com',
+        CF_ZONE:             'CloudFlare zone ID (from CF dashboard → Overview)',
+        X_ARF_TO:            'Abuse report recipient, e.g. abuse@isp.com',
+        RECAPTCHA_SECRET_KEY:'Google reCAPTCHA v2 secret key',
+        RECAPTCHA_SITE_KEY:  'Google reCAPTCHA v2 site key',
+        /* ── Hostnames / URLs ────────────────────────────────────────── */
+        DYNDNS_CHECKURL:     'URL that returns your current IP, e.g. https://checkip.amazonaws.com',
+        MESSENGER_URL:       'Hostname or IP shown in messenger page, e.g. fw.example.com',
+        MESSENGER_CSS_URL:   'URL to custom CSS for messenger page (blank = default)',
+        UI_IP:               'IP or hostname to bind the legacy CSF UI to, e.g. 0.0.0.0',
+        UI_PORT:             'Port for the legacy CSF UI, e.g. 6666',
+        UI_USER:             'Username for legacy CSF UI login',
+        UI_PASS:             'Password for legacy CSF UI login',
+        /* ── Cluster ─────────────────────────────────────────────────── */
+        CLUSTER_MASTER:      'Master node IP or hostname, e.g. 10.0.0.1 (blank if this is the master)',
+        CLUSTER_SENDTO:      'Space-separated peer IPs/hostnames, e.g. 10.0.0.2 10.0.0.3',
+        CLUSTER_RECVFROM:    'Space-separated peer IPs that may send us commands',
+        CLUSTER_PORT:        'Cluster communication port, e.g. 7777',
+        CLUSTER_KEY:         'Shared secret for cluster auth (use a long random string)',
+        CLUSTER_TIMEOUT:     'Cluster command timeout (seconds), e.g. 10',
+        /* ── Port knocking ───────────────────────────────────────────── */
+        PORTKNOCKING:        'interface;timeout;port1:proto1,port2:proto2,…;openport;openproto',
+        /* ── Log scanner ─────────────────────────────────────────────── */
+        LOGSCANNER_FILES:    'Comma-separated log paths, e.g. /var/log/syslog,/var/log/auth.log',
+        /* ── Stats ───────────────────────────────────────────────────── */
+        ST_MYSQL_HOST:       'MySQL host, e.g. localhost',
+        ST_MYSQL_DB:         'MySQL database name, e.g. stats',
+        ST_MYSQL_USER:       'MySQL username, e.g. csf',
+        ST_MYSQL_PASS:       'MySQL password',
+        /* ── DynDNS hosts ────────────────────────────────────────────── */
+        DYNDNS:              'DynDNS hostnames, one per line or comma-separated',
+        /* ── Misc paths ──────────────────────────────────────────────── */
+        URLGET_PROXY:        'HTTP proxy for URL fetching, e.g. http://proxy:3128',
+        IGNORE_ALLOW_FILTER: 'Comma-separated IPs or CIDRs to never ignore, e.g. 1.2.3.4,10.0.0.0/8',
+        DROP_IP_LOGGING_LEVEL: 'Logging level number, e.g. 4',
+        CC_DENY_FILTER:      'ISO country codes to filter at FILTER step, e.g. RU,CN',
+    };
+    $('tr[data-key]').each(function() {
+        var key = $(this).data('key');
+        var ph = PLACEHOLDERS[key];
+        if (ph) {
+            $(this).find('input[type=text]').attr('placeholder', ph);
+        }
+    });
+
+    /* ===== FIELD-LEVEL VALIDATION ===== */
+    /* Rule types:
+       int      — non-negative integer, optional {min,max}
+       float    — non-negative number
+       ports    — comma-separated port numbers 0-65535
+       email    — basic email
+       emails   — comma/space-separated emails
+       rate     — iptables rate  N/s  or  N/m
+       connlimit — port;limit[,port;limit,...]
+       portflood — port;proto;hitcount;interval[,...]
+       portrange — N:N
+       cidr_int  — comma-separated integers 1-128 (no slash)
+       enum      — value must be one of list
+       nonempty  — must not be blank
+       hostname  — basic hostname/IP
+    */
+    var FIELD_VALIDATORS = {
+        /* ── Port lists ──────────────────────────── */
+        TCP_IN:  {type:'ports'}, TCP_OUT: {type:'ports'},
+        UDP_IN:  {type:'ports'}, UDP_OUT: {type:'ports'},
+        TCP6_IN: {type:'ports'}, TCP6_OUT:{type:'ports'},
+        UDP6_IN: {type:'ports'}, UDP6_OUT:{type:'ports'},
+        CC_ALLOW_PORTS_TCP: {type:'ports'}, CC_ALLOW_PORTS_UDP: {type:'ports'},
+        CC_DENY_PORTS_TCP:  {type:'ports'}, CC_DENY_PORTS_UDP:  {type:'ports'},
+        SMTP_PORTS: {type:'ports'},
+        /* ── Thresholds (non-neg int) ─────────────── */
+        LF_TRIGGER:         {type:'int', min:0},
+        LF_SSHD:            {type:'int', min:0},
+        LF_FTPD:            {type:'int', min:0},
+        LF_SMTPAUTH:        {type:'int', min:0},
+        LF_EXIMSYNTAX:      {type:'int', min:0},
+        LF_POP3D:           {type:'int', min:0},
+        LF_IMAPD:           {type:'int', min:0},
+        LF_HTACCESS:        {type:'int', min:0},
+        LF_MODSEC:          {type:'int', min:0},
+        LF_CPANEL_MODSEC:   {type:'int', min:0},
+        LF_BIND:            {type:'int', min:0},
+        LF_SUHOSIN:         {type:'int', min:0},
+        LF_CXS:             {type:'int', min:0},
+        LF_QOS:             {type:'int', min:0},
+        LF_SYMLINK:         {type:'int', min:0},
+        LF_WEBMIN:          {type:'int', min:0},
+        LF_DIRECTADMIN:     {type:'int', min:0},
+        LF_DISTFTP_TRIGGER: {type:'int', min:0},
+        LF_DISTSMTP_TRIGGER:{type:'int', min:0},
+        LF_PERMBLOCK_COUNT: {type:'int', min:0},
+        LF_NETBLOCK_COUNT:  {type:'int', min:0},
+        /* ── Time intervals (seconds) ─────────────── */
+        LF_TEMP:                {type:'int', min:0},
+        LF_PERMBLOCK_INTERVAL:  {type:'int', min:0},
+        LF_PERMBLOCK_OVERKILL:  {type:'int', min:0},
+        LF_NETBLOCK_INTERVAL:   {type:'int', min:0},
+        CT_LIMIT:               {type:'int', min:0},
+        CT_INTERVAL:            {type:'int', min:1},
+        LT_POP3D:               {type:'int', min:0},
+        LT_IMAPD:               {type:'int', min:0},
+        LT_INTERVAL:            {type:'int', min:1},
+        PT_LOAD_INTERVAL:       {type:'int', min:0},
+        PT_USERPROC:            {type:'int', min:0},
+        PT_USERPROC_ALERT:      {type:'int', min:0},
+        PT_USERMEM:             {type:'int', min:0},
+        PT_USERRSS:             {type:'int', min:0},
+        PT_USERTIME:            {type:'int', min:0},
+        PT_FORKBOMB_ALERT:      {type:'int', min:0},
+        PS_LIMIT:               {type:'int', min:0},
+        PS_INTERVAL:            {type:'int', min:1},
+        SYNFLOOD_BURST:         {type:'int', min:1},
+        UDPFLOOD_LIMIT:         {type:'int', min:0},
+        UDPFLOOD_BURST:         {type:'int', min:0},
+        LOGFLOOD_LIMIT:         {type:'int', min:0},
+        LOGFLOOD_INTERVAL:      {type:'int', min:1},
+        SYSLOG_CHECK_INTERVAL:  {type:'int', min:0},
+        PORTKNOCKING_TIMEOUT:   {type:'int', min:0},
+        CLUSTER_PORT:           {type:'int', min:1, max:65535},
+        CLUSTER_TIMEOUT:        {type:'int', min:1},
+        UI_PORT:                {type:'int', min:1, max:65535},
+        /* ── Float fields ─────────────────────────── */
+        PT_LOAD_LEVEL: {type:'float', min:0},
+        /* ── Composite formats ────────────────────── */
+        CONNLIMIT:   {type:'connlimit'},
+        PORTFLOOD:   {type:'portflood'},
+        PS_PORTS:    {type:'portrange'},
+        SYNFLOOD_RATE:{type:'rate'},
+        /* ── Email fields ─────────────────────────── */
+        LF_ALERT_TO:   {type:'emails'},
+        LF_ALERT_FROM: {type:'email'},
+        /* ── CIDR integer list ────────────────────── */
+        CC_DROP_CIDR: {type:'cidr_int'},
+        /* ── CT tracked ports ─────────────────────── */
+        CT_PORTS:      {type:'ports', allowEmpty:true},
+        CT_SKIP_PORTS: {type:'ports', allowEmpty:true},
+    };
+
+    function _validateValue(key, val) {
+        var rule = FIELD_VALIDATORS[key];
+        if (!rule) return null;             // no rule → no error
+        if (!val || !val.trim()) {
+            return (rule.allowEmpty === false) ? 'Required — cannot be empty.' : null;
+        }
+        var v = val.trim();
+        if (rule.type === 'int') {
+            if (!/^\d+$/.test(v)) return 'Must be a whole number (e.g. 20). Got: ' + v;
+            var n = parseInt(v, 10);
+            if (rule.min !== undefined && n < rule.min) return 'Must be ≥ ' + rule.min + '.';
+            if (rule.max !== undefined && n > rule.max) return 'Must be ≤ ' + rule.max + '.';
+            return null;
+        }
+        if (rule.type === 'float') {
+            if (!/^\d+(\.\d+)?$/.test(v)) return 'Must be a number (e.g. 20.0). Got: ' + v;
+            var f = parseFloat(v);
+            if (rule.min !== undefined && f < rule.min) return 'Must be ≥ ' + rule.min + '.';
+            return null;
+        }
+        if (rule.type === 'ports') {
+            var parts = v.split(',');
+            for (var i = 0; i < parts.length; i++) {
+                var p = parts[i].trim();
+                if (!p) continue;
+                // Allow port ranges like 1024:65535
+                if (/^\d+:\d+$/.test(p)) continue;
+                if (!/^\d+$/.test(p)) return 'Invalid port "' + p + '". Use comma-separated numbers, e.g. 22,80,443.';
+                var pn = parseInt(p, 10);
+                if (pn < 0 || pn > 65535) return 'Port ' + p + ' is out of range (0–65535).';
+            }
+            return null;
+        }
+        if (rule.type === 'email') {
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return 'Enter a valid email address, e.g. admin@example.com.';
+            return null;
+        }
+        if (rule.type === 'emails') {
+            var addrs = v.split(/[,\s]+/).filter(Boolean);
+            for (var j = 0; j < addrs.length; j++) {
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addrs[j])) return 'Invalid email: ' + addrs[j];
+            }
+            return null;
+        }
+        if (rule.type === 'rate') {
+            if (!/^\d+\/(s|m|sec|min)$/.test(v)) return 'Use format N/s or N/m (e.g. 100/s). Got: ' + v;
+            return null;
+        }
+        if (rule.type === 'connlimit') {
+            var pairs = v.split(',');
+            for (var k = 0; k < pairs.length; k++) {
+                var pair = pairs[k].trim();
+                if (!pair) continue;
+                if (!/^\d+;\d+$/.test(pair)) return 'Each entry must be port;limit (e.g. 22;3,80;100). Problem: "' + pair + '"';
+            }
+            return null;
+        }
+        if (rule.type === 'portflood') {
+            var pf_entries = v.split(',');
+            for (var m = 0; m < pf_entries.length; m++) {
+                var pf = pf_entries[m].trim();
+                if (!pf) continue;
+                var pf_parts = pf.split(';');
+                if (pf_parts.length < 4) return 'Format: port;protocol;hitcount;interval (e.g. 22;tcp;5;300). Problem: "' + pf + '"';
+                if (!/^(tcp|udp)$/i.test(pf_parts[1])) return 'Protocol must be tcp or udp. Got: "' + pf_parts[1] + '"';
+            }
+            return null;
+        }
+        if (rule.type === 'portrange') {
+            if (!/^\d+:\d+$/.test(v)) return 'Format: start:end (e.g. 0:65535). Got: ' + v;
+            var range = v.split(':');
+            if (parseInt(range[0], 10) > parseInt(range[1], 10)) return 'Start port must be ≤ end port.';
+            return null;
+        }
+        if (rule.type === 'cidr_int') {
+            var cidrs = v.split(',');
+            for (var c = 0; c < cidrs.length; c++) {
+                var ci = cidrs[c].trim();
+                if (!ci) continue;
+                if (!/^\d+$/.test(ci)) return 'Enter numbers only, no slashes (e.g. 24,32). Got: "' + ci + '"';
+                var cn = parseInt(ci, 10);
+                if (cn < 1 || cn > 128) return 'CIDR prefix must be 1–128. Got: ' + ci;
+            }
+            return null;
+        }
+        return null;
+    }
+
+    function _showFieldError(input, msg) {
+        var row = input.closest('tr');
+        row.find('.field-val-error').remove();
+        if (msg) {
+            var el = $('<div class="field-val-error" style="color:#c0392b; font-size:11px; margin-top:3px">' +
+                '<span class="glyphicon glyphicon-exclamation-sign"></span> ' + msg + '</div>');
+            input.after(el);
+            input.closest('td').css('background', '#fff5f5');
+        } else {
+            input.closest('td').css('background', '');
+        }
+    }
+
+    // Validate on blur (when user leaves a field)
+    $(document).on('blur', '#configForm input[type=text]', function() {
+        var input = $(this);
+        var name = input.attr('name') || '';
+        var key = name.replace(/^cfg_/, '');
+        var val = input.val();
+        var err = _validateValue(key, val);
+        _showFieldError(input, err);
+    });
+
+    // Block save if any field has an error
+    $('#configForm').on('submit', function(e) {
+        var errors = [];
+        $(this).find('input[type=text]').each(function() {
+            var input = $(this);
+            var key = (input.attr('name') || '').replace(/^cfg_/, '');
+            var val = input.val();
+            var err = _validateValue(key, val);
+            _showFieldError(input, err);
+            if (err) errors.push(key + ': ' + err);
+        });
+        if (errors.length) {
+            e.preventDefault();
+            showToast('Fix ' + errors.length + ' validation error(s) before saving.', 'danger');
+            // Scroll to first error
+            var first = $('#configForm .field-val-error').first();
+            if (first.length) {
+                $('html,body').animate({scrollTop: first.offset().top - 120}, 300);
+            }
+            return false;
+        }
+    });
+
+    // Load contextual help tooltips
+    $.getJSON('/api/setting-help', function(helpData) {
+        $('tr[data-key]').each(function() {
+            var key = $(this).data('key');
+            var help = helpData[key];
+            if (help) {
+                var riskColor = help.risk === 'high' ? '#d9534f' : help.risk === 'medium' ? '#f0ad4e' : '#5cb85c';
+                var riskLabel = help.risk === 'high' ? 'High Impact' : help.risk === 'medium' ? 'Medium' : 'Low';
+                var tipHtml = '<span class="glyphicon glyphicon-question-sign setting-help-icon" style="cursor:help; margin-left:6px; color:#999; font-size:12px" '
+                    + 'data-toggle="popover" data-trigger="hover" data-html="true" data-placement="top" '
+                    + 'data-content="<div style=\'font-size:12px\'>' + help.plain.replace(/"/g, '&quot;');
+                if (help.tip) tipHtml += '<br><br><strong>Tip:</strong> ' + help.tip.replace(/"/g, '&quot;');
+                tipHtml += '<br><span style=\'color:' + riskColor + '\'><strong>' + riskLabel + '</strong></span>';
+                tipHtml += '</div>"></span>';
+                $(this).find('td:first strong, td:first label').first().after(tipHtml);
+            }
+        });
+        $('[data-toggle="popover"]').popover({container: 'body'});
+    });
+
+    /* 1. Label toggle buttons before convertToSelects() removes some of them */
+    updateToggleLabels();
+    /* 2. Convert fixed-option fields to <select> dropdowns */
+    convertToSelects();
+    /* 3. Convert country code fields to Select2 multi-selects */
+    convertToCountryMultiSelect();
+    /* 4. Run validation and bind live re-check */
+    runInlineValidation();
+    bindInlineValidation();
+});
+</script>
+{% endblock %}

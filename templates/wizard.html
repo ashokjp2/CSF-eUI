@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block page_title %}Setup Wizard{% endblock %}
+
+{% block content %}
+<!-- Progress -->
+        <div class="panel panel-default">
+            <div class="panel-body">
+                <div class="row">
+                    <div class="col-xs-4 text-center">
+                        <h1 id="wiz-progress" style="margin:0; color:#337ab7">{{ wizard.progress }}%</h1>
+                        <small class="text-muted">Complete</small>
+                    </div>
+                    <div class="col-xs-8">
+                        <div class="progress" style="margin-top:12px; height:24px">
+                            <div class="progress-bar progress-bar-{{ 'success' if wizard.progress >= 80 else 'warning' if wizard.progress >= 50 else 'danger' }}"
+                                 style="width: {{ wizard.progress }}%; line-height:24px; font-size:13px">
+                                {{ wizard.done }} / {{ wizard.total }} steps done
+                            </div>
+                        </div>
+                        <div>
+                            <span class="label label-success"><span class="glyphicon glyphicon-ok"></span> {{ wizard.done }} Done</span>
+                            <span class="label label-default" style="margin-left:4px"><span class="glyphicon glyphicon-unchecked"></span> {{ wizard.total - wizard.done }} Remaining</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Steps -->
+        {% for step in wizard.steps %}
+        <div class="panel panel-{{ 'success' if step.status == 'done' else 'danger' if step.risk == 'high' else 'warning' if step.risk == 'medium' else 'default' }}" id="step-{{ step.id }}">
+            <div class="panel-heading" style="cursor:pointer" data-toggle="collapse" data-target="#body-{{ step.id }}">
+                <h4 class="panel-title" style="margin:0">
+                    {% if step.status == 'done' %}
+                    <span class="glyphicon glyphicon-ok-circle text-success"></span>
+                    {% else %}
+                    <span class="glyphicon glyphicon-unchecked"></span>
+                    {% endif %}
+                    {{ step.title }}
+                    <span class="pull-right">
+                        {% if step.risk == 'high' %}
+                        <span class="label label-danger">High Priority</span>
+                        {% elif step.risk == 'medium' %}
+                        <span class="label label-warning">Medium</span>
+                        {% else %}
+                        <span class="label label-info">Low</span>
+                        {% endif %}
+                        <span class="glyphicon glyphicon-chevron-down" style="margin-left:8px"></span>
+                    </span>
+                </h4>
+            </div>
+            <div id="body-{{ step.id }}" class="panel-collapse collapse {{ 'in' if step.status != 'done' and loop.index <= 3 }}">
+                <div class="panel-body">
+                    <p>{{ step.description }}</p>
+                    <div class="alert alert-info" style="margin-bottom:10px">
+                        <span class="glyphicon glyphicon-info-sign"></span> {{ step.help }}
+                    </div>
+                    <table class="table table-condensed" style="margin-bottom:10px">
+                        <tr>
+                            <td style="width:140px"><strong>Current Value</strong></td>
+                            <td><code>{{ step.current }}</code></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Recommended</strong></td>
+                            <td><span class="text-success">{{ step.recommended }}</span></td>
+                        </tr>
+                    </table>
+
+                    {% if step.status != 'done' %}
+                    {% if step.setting is defined %}
+                    <!-- CSF setting — can be applied directly -->
+                    <div class="form-inline" style="margin-top:10px">
+                        <div class="form-group">
+                            <label>Set {{ step.setting }} to:</label>
+                            <input type="text" class="form-control wiz-val" id="val-{{ step.id }}"
+                                   placeholder="{{ step.recommended }}" style="width:200px; margin-left:8px">
+                        </div>
+                        <button class="btn btn-primary wiz-apply" data-step="{{ step.id }}" data-setting="{{ step.setting }}" style="margin-left:8px">
+                            <span class="glyphicon glyphicon-ok"></span> Apply
+                        </button>
+                    </div>
+                    {% elif step.category == 'ssh' %}
+                    <div class="alert alert-warning" style="margin-bottom:0">
+                        <span class="glyphicon glyphicon-warning-sign"></span>
+                        <strong>Manual Step:</strong> SSH settings must be changed in <code>/etc/ssh/sshd_config</code> and SSHD restarted.
+                        Make sure you have an active SSH session before changing these, or you could lose access!
+                    </div>
+                    {% endif %}
+                    {% else %}
+                    <span class="text-success"><span class="glyphicon glyphicon-ok"></span> This step is already configured correctly.</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        <div class="text-center" style="margin:20px 0">
+            <button class="btn btn-info" onclick="location.reload()"><span class="glyphicon glyphicon-refresh"></span> Refresh Status</button>
+        </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    $('.wiz-apply').on('click', function() {
+        var btn = $(this);
+        var setting = btn.data('setting');
+        var stepId = btn.data('step');
+        var val = $('#val-' + stepId).val().trim();
+        if (!val) { showToast('Enter a value', 'warning'); return; }
+
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Applying...');
+        $.ajax({
+            url: '/api/wizard/apply',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({setting: setting, value: val}),
+            success: function(r) {
+                if (r.success) {
+                    showToast(r.message || 'Setting applied! Restart CSF to take effect.', 'success');
+                    var panel = $('#step-' + stepId);
+                    panel.removeClass('panel-danger panel-warning panel-default').addClass('panel-success');
+                    panel.find('.panel-title .glyphicon:first').removeClass('glyphicon-unchecked').addClass('glyphicon-ok-circle text-success');
+                    btn.html('<span class="glyphicon glyphicon-ok"></span> Applied');
+                } else {
+                    showToast(r.error || 'Failed to apply', 'danger');
+                    btn.prop('disabled', false).html('<span class="glyphicon glyphicon-ok"></span> Apply');
+                }
+            },
+            error: function() {
+                showToast('Request failed', 'danger');
+                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-ok"></span> Apply');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block page_title %}Port Scanner{% endblock %}
+
+{% block content %}
+<button class="btn btn-primary btn-lg" id="ps-scan" style="margin-bottom:15px">
+            <span class="glyphicon glyphicon-play"></span> Scan My Server
+        </button>
+
+        <div id="ps-loading" style="display:none; text-align:center; padding:30px">
+            <span class="glyphicon glyphicon-hourglass" style="font-size:24px"></span>
+            <p>Scanning ports...</p>
+        </div>
+
+        <!-- Warnings -->
+        <div id="ps-warnings" style="display:none; margin-bottom:15px"></div>
+
+        <!-- Summary -->
+        <div class="row" id="ps-summary" style="display:none">
+            <div class="col-md-4 col-xs-4">
+                <div class="panel panel-success"><div class="panel-body text-center"><h2 id="ps-open" style="margin:0">-</h2><small>Open Ports</small></div></div>
+            </div>
+            <div class="col-md-4 col-xs-4">
+                <div class="panel panel-warning"><div class="panel-body text-center"><h2 id="ps-filtered" style="margin:0">-</h2><small>Filtered (listening but blocked)</small></div></div>
+            </div>
+            <div class="col-md-4 col-xs-4">
+                <div class="panel panel-default"><div class="panel-body text-center"><h2 id="ps-total" style="margin:0">-</h2><small>Total Scanned</small></div></div>
+            </div>
+        </div>
+
+        <!-- Results table -->
+        <div class="panel panel-default" id="ps-results" style="display:none">
+            <div class="table-responsive">
+                <table class="table table-condensed table-hover" style="margin:0">
+                    <thead><tr><th>Port</th><th>Service</th><th>Listening</th><th>Firewall</th><th>Status</th><th>Notes</th></tr></thead>
+                    <tbody id="ps-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TCP_IN info -->
+        <div class="panel panel-info" id="ps-tcpin" style="display:none">
+            <div class="panel-heading"><h4 class="panel-title" style="margin:0">Current TCP_IN Ports</h4></div>
+            <div class="panel-body" id="ps-tcpin-body"></div>
+        </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    $('#ps-scan').on('click', function() {
+        var btn = $(this);
+        btn.prop('disabled', true);
+        $('#ps-loading').show();
+        $('#ps-results, #ps-summary, #ps-warnings, #ps-tcpin').hide();
+
+        $.getJSON('/api/port-scan', function(d) {
+            $('#ps-loading').hide();
+            btn.prop('disabled', false);
+
+            // Summary
+            $('#ps-open').text(d.open_count);
+            $('#ps-filtered').text(d.filtered_count);
+            $('#ps-total').text(d.total_scanned);
+            $('#ps-summary').show();
+
+            // Warnings
+            if (d.warnings.length > 0) {
+                var whtml = '';
+                d.warnings.forEach(function(w) {
+                    whtml += '<div class="alert alert-warning" style="padding:8px 12px; margin-bottom:4px"><span class="glyphicon glyphicon-warning-sign"></span> ' + w + '</div>';
+                });
+                $('#ps-warnings').html(whtml).show();
+            }
+
+            // Table
+            var html = '';
+            d.results.forEach(function(r) {
+                var rowCls = '';
+                if (r.status === 'open') rowCls = 'success';
+                else if (r.status === 'filtered') rowCls = 'warning';
+                else if (r.status === 'allowed_unused') rowCls = 'info';
+
+                html += '<tr class="' + rowCls + '">' +
+                    '<td><strong>' + r.port + '</strong></td>' +
+                    '<td>' + r.service + '</td>' +
+                    '<td>' + (r.listening ? '<span class="glyphicon glyphicon-ok text-success"></span> Yes' : '<span class="glyphicon glyphicon-remove text-muted"></span> No') + '</td>' +
+                    '<td>' + (r.firewall_allowed ? '<span class="label label-success">Allowed</span>' : '<span class="label label-default">Blocked</span>') + '</td>' +
+                    '<td><span class="label label-' + r.severity + '">' + r.status.replace('_', ' ') + '</span></td>' +
+                    '<td style="font-size:11px">' + r.note + '</td>' +
+                    '</tr>';
+            });
+            $('#ps-tbody').html(html);
+            $('#ps-results').show();
+
+            // TCP_IN
+            var ports = d.tcp_in_ports.map(function(p) { return '<code>' + p + '</code>'; }).join(', ');
+            $('#ps-tcpin-body').html(ports || 'None');
+            $('#ps-tcpin').show();
+        }).fail(function() {
+            $('#ps-loading').hide();
+            btn.prop('disabled', false);
+            showToast('Scan failed', 'danger');
+        });
+    });
+});
+</script>
+{% endblock %}

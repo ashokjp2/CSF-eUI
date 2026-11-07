@@ -1,0 +1,6 @@
+flask>=3.0
+flask-login>=0.6
+flask-wtf>=1.2
+gunicorn>=21.2
+psutil>=5.9
+pyotp>=2.9

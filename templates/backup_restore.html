@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block page_title %}Backup &amp; Restore{% endblock %}
+
+{% block content %}
+<p class="text-muted" style="margin-bottom:15px">Backup and restore CSF configuration files</p>
+
+        <div class="panel panel-success">
+            <div class="panel-heading"><h4 class="panel-title" style="margin:0">Create Backup</h4></div>
+            <div class="panel-body">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="backup-label" placeholder="Optional label (e.g. before-upgrade)">
+                    <span class="input-group-btn">
+                        <button class="btn btn-success" id="btn-create-backup">
+                            <span class="glyphicon glyphicon-floppy-save"></span> Create Backup
+                        </button>
+                    </span>
+                </div>
+                <p class="help-block">Backs up all CSF config files from /etc/csf/</p>
+            </div>
+        </div>
+
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <div class="pull-right">
+                    <button class="btn btn-xs btn-default" id="btn-refresh">
+                        <span class="glyphicon glyphicon-refresh"></span> Refresh
+                    </button>
+                </div>
+                <h4 class="panel-title" style="margin:0">Existing Backups</h4>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-condensed table-hover" style="font-size:12px">
+                    <thead><tr><th>Filename</th><th>Created</th><th>Size</th><th>Actions</th></tr></thead>
+                    <tbody id="backup-table"></tbody>
+                </table>
+            </div>
+        </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    function load() {
+        $.getJSON('/api/backups', function(data) {
+            var html = '';
+            data.forEach(function(b) {
+                html += '<tr>' +
+                    '<td><code>' + b.filename + '</code></td>' +
+                    '<td>' + b.created + '</td>' +
+                    '<td>' + b.size_human + '</td>' +
+                    '<td>' +
+                    '<a href="/api/backups/download/' + encodeURIComponent(b.filename) + '" class="btn btn-xs btn-default"><span class="glyphicon glyphicon-download"></span></a> ' +
+                    '<button class="btn btn-xs btn-warning btn-restore" data-file="' + b.filename + '"><span class="glyphicon glyphicon-open"></span> Restore</button> ' +
+                    '<button class="btn btn-xs btn-danger btn-delete" data-file="' + b.filename + '"><span class="glyphicon glyphicon-trash"></span></button>' +
+                    '</td></tr>';
+            });
+            $('#backup-table').html(html || '<tr><td colspan="4" class="text-muted">No backups yet</td></tr>');
+        });
+    }
+    load();
+    $('#btn-refresh').on('click', load);
+
+    $('#btn-create-backup').on('click', function() {
+        var btn = $(this);
+        btn.prop('disabled', true);
+        $.post('/api/backups', JSON.stringify({label: $('#backup-label').val().trim()}), function(r) {
+            showToast(r.message || 'Done', r.success ? 'success' : 'danger');
+            if (r.success) { $('#backup-label').val(''); load(); }
+            btn.prop('disabled', false);
+        }, 'json').fail(function() { showToast('Failed', 'danger'); btn.prop('disabled', false); });
+    });
+
+    $(document).on('click', '.btn-restore', function() {
+        var file = $(this).data('file');
+        if (!confirm('Restore from ' + file + '?\n\nA pre-restore backup will be created automatically.\nCSF will restart after restore.')) return;
+        $.post('/api/backups/restore', JSON.stringify({filename: file}), function(r) {
+            showToast(r.message || 'Done', r.success ? 'success' : 'danger');
+            load();
+        }, 'json').fail(function() { showToast('Restore failed', 'danger'); });
+    });
+
+    $(document).on('click', '.btn-delete', function() {
+        var file = $(this).data('file');
+        if (!confirm('Delete backup ' + file + '?')) return;
+        $.ajax({url: '/api/backups/' + encodeURIComponent(file), type: 'DELETE', success: function(r) {
+            showToast(r.message || 'Deleted', r.success ? 'success' : 'danger');
+            load();
+        }});
+    });
+});
+</script>
+{% endblock %}

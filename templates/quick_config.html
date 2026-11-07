@@ -1,0 +1,1738 @@
+{% extends "base.html" %}
+{% block page_title %}Quick Config{% endblock %}
+
+{% block content %}
+<p class="text-muted" style="margin-bottom:15px">Friendly settings for your firewall. Changes require a CSF restart to take effect.</p>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs" id="configTabs">
+    <li class="active"><a data-toggle="tab" href="#ports"><span class="glyphicon glyphicon-transfer"></span> Ports</a></li>
+    <li><a data-toggle="tab" href="#countries"><span class="glyphicon glyphicon-globe"></span> Country Block</a></li>
+    <li><a data-toggle="tab" href="#connections"><span class="glyphicon glyphicon-random"></span> Connection Limits</a></li>
+    <li><a data-toggle="tab" href="#alerts"><span class="glyphicon glyphicon-envelope"></span> Email Alerts</a></li>
+    <li><a data-toggle="tab" href="#cloudflare"><span class="glyphicon glyphicon-cloud"></span> CloudFlare</a></li>
+    <li><a data-toggle="tab" href="#security"><span class="glyphicon glyphicon-lock"></span> Security</a></li>
+    <li><a data-toggle="tab" href="#dyndns"><span class="glyphicon glyphicon-globe"></span> Dynamic DNS</a></li>
+    <li><a data-toggle="tab" href="#services"><span class="glyphicon glyphicon-link"></span> Service Integration</a></li>
+    <li><a data-toggle="tab" href="#monitors"><span class="glyphicon glyphicon-eye-open"></span> Docker Monitors</a></li>
+    <li><a data-toggle="tab" href="#misc"><span class="glyphicon glyphicon-cog"></span> General</a></li>
+</ul>
+
+<div class="tab-content" style="margin-top:15px">
+
+<!-- ==================== PORT CONFIG ==================== -->
+<div class="tab-pane active" id="ports">
+    <div class="panel panel-default">
+        <div class="panel-heading"><h4><span class="glyphicon glyphicon-transfer"></span> Port Configuration</h4></div>
+        <div class="panel-body">
+            <div class="alert alert-info"><span class="glyphicon glyphicon-info-sign"></span> <strong>How it works:</strong> Only ports listed here can receive incoming connections. Click &times; to close a port, or type a number and click Add to open one. Common ports: 22=SSH, 80=HTTP, 443=HTTPS, 3000=Dokploy, 8750=CSFv2 UI, 51820=WireGuard.</div>
+            <!-- Port Recommendations Panel -->
+            <div class="panel panel-default" id="port-recommendations-panel">
+                <div class="panel-heading" style="cursor:pointer" onclick="togglePortRec()">
+                    <h4 style="margin:0">
+                        <span class="glyphicon glyphicon-flash"></span> Port Recommendations
+                        <small class="text-muted" style="font-weight:normal"> — which ports each detected service needs</small>
+                        <span class="pull-right">
+                            <span id="port-rec-badge" class="badge" style="display:none"></span>
+                            <span class="glyphicon glyphicon-chevron-down" id="port-rec-chevron" style="margin-left:8px; font-size:12px"></span>
+                        </span>
+                    </h4>
+                </div>
+                <div id="port-rec-body" class="panel-body" style="display:none">
+                    <div id="port-rec-loading" class="text-center text-muted" style="padding:10px">
+                        <span class="glyphicon glyphicon-refresh spin"></span> Scanning for services...
+                    </div>
+                    <div id="port-rec-content" style="display:none"></div>
+                </div>
+            </div>
+
+            <div style="margin-bottom:15px">
+                <button class="btn btn-warning" id="btn-smart-defaults" onclick="loadSmartDefaults()">
+                    <span class="glyphicon glyphicon-refresh"></span> Reset Ports to Smart Defaults
+                </button>
+                <small class="text-muted" style="margin-left:8px">Scans your server for running services and suggests matching port settings</small>
+            </div>
+            {% for key in ["TCP_IN","TCP_OUT","UDP_IN","UDP_OUT"] %}
+            <div class="panel panel-{{ 'success' if 'IN' in key else 'info' }}">
+                <div class="panel-heading">
+                    <strong>{{ key }}</strong>
+                    <small class="text-muted">— {{ 'Incoming' if 'IN' in key else 'Outgoing' }} {{ 'TCP' if 'TCP' in key else 'UDP' }} ports</small>
+                    <span class="badge pull-right">{{ ports[key].ports|length }} ports</span>
+                </div>
+                <div class="panel-body">
+                    <div class="port-tags" id="tags-{{ key }}">
+                        {% for p in ports[key].ports %}
+                        <span class="label label-default port-tag" style="font-size:13px; margin:2px; display:inline-block; padding:5px 10px">
+                            {{ p.port }}{% if p.label %} <small class="text-muted">({{ p.label }})</small>{% endif %}
+                            <a href="#" class="remove-port text-danger" data-key="{{ key }}" data-port="{{ p.port }}" style="margin-left:5px">&times;</a>
+                        </span>
+                        {% endfor %}
+                    </div>
+                    <div class="input-group" style="margin-top:10px; max-width:400px">
+                        <input type="text" class="form-control add-port-input" data-key="{{ key }}" placeholder="Add port (e.g. 8080)">
+                        <span class="input-group-btn">
+                            <button class="btn btn-default add-port-btn" data-key="{{ key }}">
+                                <span class="glyphicon glyphicon-plus"></span> Add
+                            </button>
+                        </span>
+                    </div>
+                    <input type="hidden" id="raw-{{ key }}" value="{{ ports[key].raw }}">
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- ==================== COUNTRY BLOCKING ==================== -->
+<div class="tab-pane" id="countries">
+    <div class="panel panel-default">
+        <div class="panel-heading"><h4><span class="glyphicon glyphicon-globe"></span> Country Blocking</h4></div>
+        <div class="panel-body">
+            <div class="alert alert-info"><span class="glyphicon glyphicon-info-sign"></span> <strong>How it works:</strong> Block entire countries from accessing your server, or allow only specific countries. Select a country from the dropdown and click Add. Uses MaxMind GeoIP database for accuracy.</div>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="panel panel-danger">
+                        <div class="panel-heading"><strong><span class="glyphicon glyphicon-ban-circle"></span> Blocked Countries</strong> <small>— All traffic from these countries is denied</small></div>
+                        <div class="panel-body">
+                            <div id="cc-deny-tags" class="cc-tags">
+                                {% for cc in country.CC_DENY.split(',') if cc.strip() %}
+                                <span class="label label-danger cc-tag" style="font-size:13px; margin:2px; display:inline-block; padding:5px 10px">
+                                    <img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/7.2.3/flags/4x3/{{ cc.strip()|lower }}.svg" style="height:12px;margin-right:4px" onerror="this.style.display='none'">
+                                    {{ cc.strip() }}
+                                    <a href="#" class="remove-cc text-white" data-target="CC_DENY" data-cc="{{ cc.strip() }}" style="margin-left:5px">&times;</a>
+                                </span>
+                                {% endfor %}
+                            </div>
+                            <div class="input-group" style="margin-top:10px">
+                                <select class="form-control add-cc-select" data-target="CC_DENY">
+                                    <option value="">Select country to block...</option>
+                                    {% for code, name in country_codes|dictsort(by='value') %}
+                                    <option value="{{ code }}">{{ name }} ({{ code }})</option>
+                                    {% endfor %}
+                                </select>
+                                <span class="input-group-btn">
+                                    <button class="btn btn-danger add-cc-btn" data-target="CC_DENY">
+                                        <span class="glyphicon glyphicon-plus"></span> Block
+                                    </button>
+                                </span>
+                            </div>
+                            <input type="hidden" id="raw-CC_DENY" value="{{ country.CC_DENY }}">
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="panel panel-success">
+                        <div class="panel-heading"><strong><span class="glyphicon glyphicon-ok-circle"></span> Allowed Countries Only</strong> <small>— If set, ONLY these countries can connect</small></div>
+                        <div class="panel-body">
+                            <div id="cc-allow-tags" class="cc-tags">
+                                {% for cc in country.CC_ALLOW.split(',') if cc.strip() %}
+                                <span class="label label-success cc-tag" style="font-size:13px; margin:2px; display:inline-block; padding:5px 10px">
+                                    <img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/7.2.3/flags/4x3/{{ cc.strip()|lower }}.svg" style="height:12px;margin-right:4px" onerror="this.style.display='none'">
+                                    {{ cc.strip() }}
+                                    <a href="#" class="remove-cc" data-target="CC_ALLOW" data-cc="{{ cc.strip() }}" style="margin-left:5px">&times;</a>
+                                </span>
+                                {% endfor %}
+                            </div>
+                            <div class="input-group" style="margin-top:10px">
+                                <select class="form-control add-cc-select" data-target="CC_ALLOW">
+                                    <option value="">Select country to allow...</option>
+                                    {% for code, name in country_codes|dictsort(by='value') %}
+                                    <option value="{{ code }}">{{ name }} ({{ code }})</option>
+                                    {% endfor %}
+                                </select>
+                                <span class="input-group-btn">
+                                    <button class="btn btn-success add-cc-btn" data-target="CC_ALLOW">
+                                        <span class="glyphicon glyphicon-plus"></span> Allow
+                                    </button>
+                                </span>
+                            </div>
+                            <input type="hidden" id="raw-CC_ALLOW" value="{{ country.CC_ALLOW }}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button class="btn btn-primary save-country-btn">
+                <span class="glyphicon glyphicon-floppy-disk"></span> Save Country Settings
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== CONNECTION LIMITS ==================== -->
+<div class="tab-pane" id="connections">
+    <div class="panel panel-default">
+        <div class="panel-heading"><h4><span class="glyphicon glyphicon-random"></span> Connection &amp; Rate Limits</h4></div>
+        <div class="panel-body">
+            <div class="alert alert-info"><span class="glyphicon glyphicon-info-sign"></span> <strong>How it works:</strong> These settings limit how many connections a single IP can make. This protects against DDoS attacks and brute-force attempts. The visual builders below let you add rules without remembering any syntax.</div>
+            <form id="connForm">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5><span class="glyphicon glyphicon-link"></span> Connection Tracking (DDoS Protection)</h5>
+                        <p class="text-muted" style="font-size:12px">Block IPs that open too many connections at once</p>
+                        <div class="form-group">
+                            <label>Max connections per IP <small class="text-muted">— 0 = disabled, good value: 100-300</small></label>
+                            <input type="number" class="form-control" name="CT_LIMIT" value="{{ conn.CT_LIMIT }}" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Check every <small class="text-muted">seconds</small></label>
+                            <input type="number" class="form-control" name="CT_INTERVAL" value="{{ conn.CT_INTERVAL }}" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label>Block offenders for <small class="text-muted">seconds (1800 = 30 min)</small></label>
+                            <input type="number" class="form-control" name="CT_BLOCK_TIME" value="{{ conn.CT_BLOCK_TIME }}" min="0">
+                        </div>
+
+                        <hr>
+                        <h5><span class="glyphicon glyphicon-flash"></span> SYN Flood Protection</h5>
+                        <p class="text-muted" style="font-size:12px">Protects against SYN flood DDoS attacks</p>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="SYNFLOOD" value="1" {{ 'checked' if conn.SYNFLOOD == '1' }}>
+                                Enable SYN Flood Protection
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>Rate limit <small class="text-muted">(packets/sec before blocking)</small></label>
+                            <input type="text" class="form-control" name="SYNFLOOD_RATE" value="{{ conn.SYNFLOOD_RATE }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Burst limit</label>
+                            <input type="text" class="form-control" name="SYNFLOOD_BURST" value="{{ conn.SYNFLOOD_BURST }}">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h5><span class="glyphicon glyphicon-warning-sign"></span> Login Failure Limits</h5>
+                        <p class="text-muted" style="font-size:12px">Block IPs after too many failed login attempts</p>
+
+                        <div class="form-group">
+                            <label><span class="glyphicon glyphicon-console"></span> SSH failures before block</label>
+                            <input type="number" class="form-control" name="LF_SSHD" value="{{ conn.LF_SSHD }}" min="0">
+                            <p class="help-block" style="font-size:11px">Recommended: 5. Blocks brute-force SSH attacks.</p>
+                        </div>
+                        <div class="form-group">
+                            <label><span class="glyphicon glyphicon-folder-open"></span> FTP failures before block</label>
+                            <input type="number" class="form-control" name="LF_FTPD" value="{{ conn.LF_FTPD }}" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label><span class="glyphicon glyphicon-envelope"></span> SMTP auth failures</label>
+                            <input type="number" class="form-control" name="LF_SMTPAUTH" value="{{ conn.LF_SMTPAUTH }}" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label><span class="glyphicon glyphicon-envelope"></span> POP3 failures</label>
+                            <input type="number" class="form-control" name="LF_POP3D" value="{{ conn.LF_POP3D }}" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label><span class="glyphicon glyphicon-envelope"></span> IMAP failures</label>
+                            <input type="number" class="form-control" name="LF_IMAPD" value="{{ conn.LF_IMAPD }}" min="0">
+                        </div>
+                    </div>
+                </div>
+
+                <hr>
+                <!-- CONNLIMIT visual builder -->
+                <h5><span class="glyphicon glyphicon-resize-full"></span> Per-Port Connection Limits</h5>
+                <p class="text-muted" style="font-size:12px">Limit how many simultaneous connections one IP can have to each port. Example: max 5 SSH connections + max 50 HTTP connections per IP.</p>
+                <div id="connlimit-builder">
+                    <table class="table table-condensed table-bordered" style="max-width:600px">
+                        <thead><tr><th style="width:40%">Port</th><th style="width:35%">Max Connections</th><th style="width:25%"></th></tr></thead>
+                        <tbody id="connlimit-rows"></tbody>
+                    </table>
+                    <button type="button" class="btn btn-sm btn-success" id="add-connlimit-row"><span class="glyphicon glyphicon-plus"></span> Add Port Limit</button>
+                </div>
+                <input type="hidden" name="CONNLIMIT" id="connlimit-hidden" value="{{ conn.CONNLIMIT }}">
+
+                <hr>
+                <!-- PORTFLOOD visual builder -->
+                <h5><span class="glyphicon glyphicon-fire"></span> Port Rate Limiting</h5>
+                <p class="text-muted" style="font-size:12px">Block an IP if it makes too many NEW connections to a port in a short time. Example: block if more than 20 new HTTP connections in 5 seconds.</p>
+                <div id="portflood-builder">
+                    <table class="table table-condensed table-bordered" style="max-width:700px">
+                        <thead><tr><th>Port</th><th>Max Connections</th><th>Within (seconds)</th><th>Protocol</th><th></th></tr></thead>
+                        <tbody id="portflood-rows"></tbody>
+                    </table>
+                    <button type="button" class="btn btn-sm btn-success" id="add-portflood-row"><span class="glyphicon glyphicon-plus"></span> Add Rate Limit</button>
+                </div>
+                <input type="hidden" name="PORTFLOOD" id="portflood-hidden" value="{{ conn.PORTFLOOD }}">
+
+                <hr>
+                <button type="submit" class="btn btn-primary">
+                    <span class="glyphicon glyphicon-floppy-disk"></span> Save Connection Settings
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== EMAIL ALERTS ==================== -->
+<div class="tab-pane" id="alerts">
+    <div class="panel panel-default">
+        <div class="panel-heading"><h4><span class="glyphicon glyphicon-envelope"></span> Email Alerts &amp; Notifications</h4></div>
+        <div class="panel-body">
+            <div class="alert alert-info"><span class="glyphicon glyphicon-info-sign"></span> <strong>How it works:</strong> CSF can email you when it blocks an IP, when someone logs in via SSH, or when suspicious activity is detected. Set your email below and pick which alerts you want.</div>
+            <form id="alertsForm">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5><span class="glyphicon glyphicon-envelope"></span> Email Address</h5>
+                        <div class="form-group">
+                            <label>Send alerts to</label>
+                            <input type="email" class="form-control" name="LF_ALERT_TO" value="{{ alerts.LF_ALERT_TO }}" placeholder="admin@yourdomain.com">
+                            <p class="help-block" style="font-size:11px">Leave empty to disable all email alerts.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>From address</label>
+                            <input type="email" class="form-control" name="LF_ALERT_FROM" value="{{ alerts.LF_ALERT_FROM }}" placeholder="csf@yourdomain.com">
+                        </div>
+
+                        <hr>
+                        <h5><span class="glyphicon glyphicon-list-alt"></span> Daily Log Summary</h5>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="LOGSCANNER" value="1" {{ 'checked' if alerts.LOGSCANNER == '1' }}>
+                                Send periodic log summary email
+                            </label>
+                            <p class="help-block" style="font-size:11px">Get a summary of all firewall activity sent to your email.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>How often?</label>
+                            <select class="form-control" name="LOGSCANNER_INTERVAL" style="max-width:200px">
+                                <option value="hourly" {{ 'selected' if alerts.LOGSCANNER_INTERVAL == 'hourly' }}>Every hour</option>
+                                <option value="daily" {{ 'selected' if alerts.LOGSCANNER_INTERVAL == 'daily' }}>Once a day</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h5><span class="glyphicon glyphicon-bell"></span> Which alerts do you want?</h5>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="LF_EMAIL_ALERT" value="1" {{ 'checked' if alerts.LF_EMAIL_ALERT == '1' }}>
+                                <strong>IP blocked</strong> for login failures
+                            </label>
+                            <p class="help-block" style="font-size:11px">Email when someone fails too many logins and gets blocked.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="LF_TEMP_EMAIL_ALERT" value="1" {{ 'checked' if alerts.LF_TEMP_EMAIL_ALERT == '1' }}>
+                                Temporary blocks too <small class="text-muted">(can be noisy)</small>
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="BLOCK_REPORT" value="1" {{ 'checked' if alerts.BLOCK_REPORT == '1' }}>
+                                <strong>Block reports</strong> — any IP block event
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="UNBLOCK_REPORT" value="1" {{ 'checked' if alerts.UNBLOCK_REPORT == '1' }}>
+                                Unblock reports — when blocks expire
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="LF_PERMBLOCK_ALERT" value="1" {{ 'checked' if alerts.LF_PERMBLOCK_ALERT == '1' }}>
+                                <strong>Permanent ban</strong> alerts
+                            </label>
+                            <p class="help-block" style="font-size:11px">When a repeat offender gets permanently banned.</p>
+                        </div>
+                        <hr>
+                        <h5><span class="glyphicon glyphicon-log-in"></span> Login Alerts</h5>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="LF_SSH_EMAIL_ALERT" value="1" {{ 'checked' if alerts.LF_SSH_EMAIL_ALERT == '1' }}>
+                                <strong>SSH login</strong> — someone logged in via SSH
+                            </label>
+                            <p class="help-block" style="font-size:11px">Know when anyone SSHs into your server.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="LF_SU_EMAIL_ALERT" value="1" {{ 'checked' if alerts.LF_SU_EMAIL_ALERT == '1' }}>
+                                <strong>su command</strong> — someone switched to another user
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="LF_CONSOLE_EMAIL_ALERT" value="1" {{ 'checked' if alerts.LF_CONSOLE_EMAIL_ALERT == '1' }}>
+                                Console login — physical/KVM access
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <hr>
+                <button type="submit" class="btn btn-primary">
+                    <span class="glyphicon glyphicon-floppy-disk"></span> Save Alert Settings
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== CLOUDFLARE ==================== -->
+<div class="tab-pane" id="cloudflare">
+    <div class="panel panel-default">
+        <div class="panel-heading"><h4><span class="glyphicon glyphicon-cloud"></span> CloudFlare Integration</h4></div>
+        <div class="panel-body">
+            <div class="alert alert-warning">
+                <span class="glyphicon glyphicon-exclamation-sign"></span>
+                <strong>What this is NOT:</strong> This does NOT add CloudFlare to your server. This does NOT enable CDN functionality.
+            </div>
+            <div class="alert alert-info">
+                <span class="glyphicon glyphicon-info-sign"></span>
+                <strong>What this IS:</strong> If your websites <em>already</em> use CloudFlare as a reverse proxy/CDN, enabling this tells CSF to <em>also</em> add blocked IPs to your CloudFlare firewall. This means attackers get blocked at CloudFlare's edge (before they even reach your server), which is more effective.
+                <br><br>
+                <strong>Don't use CloudFlare?</strong> Leave everything OFF. These settings do nothing without an existing CloudFlare setup.
+            </div>
+            <form id="cloudflareForm">
+                <div class="form-group" style="max-width:500px">
+                    <label style="font-size:15px">
+                        <input type="checkbox" name="CF_ENABLE" value="1" {{ 'checked' if cloudflare.CF_ENABLE == '1' }}>
+                        <strong>Enable CloudFlare API integration</strong>
+                    </label>
+                    <p class="help-block">When CSF blocks an IP, also block it in your CloudFlare account's firewall.</p>
+                </div>
+                <div class="form-group" style="max-width:400px">
+                    <label>What should CloudFlare do with blocked IPs?</label>
+                    <select class="form-control" name="CF_BLOCK">
+                        <option value="0" {{ 'selected' if cloudflare.CF_BLOCK == '0' }}>Disabled</option>
+                        <option value="block" {{ 'selected' if cloudflare.CF_BLOCK == 'block' }}>Block — hard deny, no access</option>
+                        <option value="challenge" {{ 'selected' if cloudflare.CF_BLOCK == 'challenge' }}>Challenge — show CAPTCHA first</option>
+                    </select>
+                    <p class="help-block" style="font-size:11px">"Challenge" is softer — lets real users through if they pass the CAPTCHA.</p>
+                </div>
+                <div class="form-group" style="max-width:400px">
+                    <label>Temporary block duration <small class="text-muted">(seconds, 0 = until CSF unblocks)</small></label>
+                    <input type="number" class="form-control" name="CF_TEMP" value="{{ cloudflare.CF_TEMP }}" min="0">
+                </div>
+                <hr>
+                <button type="submit" class="btn btn-primary">
+                    <span class="glyphicon glyphicon-floppy-disk"></span> Save CloudFlare Settings
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== SECURITY ==================== -->
+<div class="tab-pane" id="security">
+    <div class="panel panel-default">
+        <div class="panel-heading"><h4><span class="glyphicon glyphicon-lock"></span> Security &amp; Monitoring</h4></div>
+        <div class="panel-body">
+            <div class="alert alert-info"><span class="glyphicon glyphicon-info-sign"></span> <strong>How it works:</strong> These features actively monitor your server for suspicious activity beyond just network attacks. They watch for runaway processes, port scanning, unauthorized file changes, and coordinated attacks.</div>
+            <form id="securityForm">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5><span class="glyphicon glyphicon-dashboard"></span> Process Tracking</h5>
+                        <p class="text-muted" style="font-size:12px">Alert when processes use too many resources (catches crypto miners, runaway scripts)</p>
+                        <div class="form-group">
+                            <label>Alert if a process runs longer than <small class="text-muted">(seconds, 0=off)</small></label>
+                            <input type="number" class="form-control" name="PT_LIMIT" value="{{ security.PT_LIMIT }}" min="0">
+                            <p class="help-block" style="font-size:11px">1800 = alert after 30 minutes. Good for catching stuck processes.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Max memory per user <small class="text-muted">(MB, 0=off)</small></label>
+                            <input type="number" class="form-control" name="PT_USERMEM" value="{{ security.PT_USERMEM }}" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Max CPU time per user <small class="text-muted">(seconds, 0=off)</small></label>
+                            <input type="number" class="form-control" name="PT_USERTIME" value="{{ security.PT_USERTIME }}" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="PT_SKIP_HTTP" value="1" {{ 'checked' if security.PT_SKIP_HTTP == '1' }}>
+                                Skip web server processes <small class="text-muted">(Apache/Nginx run legitimately long)</small>
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="PT_DELETED" value="1" {{ 'checked' if security.PT_DELETED == '1' }}>
+                                Alert on deleted-file processes <small class="text-muted">(possible rootkit)</small>
+                            </label>
+                        </div>
+
+                        <hr>
+                        <h5><span class="glyphicon glyphicon-search"></span> Port Scan Detection</h5>
+                        <p class="text-muted" style="font-size:12px">Block IPs that probe multiple ports looking for vulnerabilities</p>
+                        <div class="form-group">
+                            <label>Tracking window <small class="text-muted">(seconds, 0=off)</small></label>
+                            <input type="number" class="form-control" name="PS_INTERVAL" value="{{ security.PS_INTERVAL }}" min="0">
+                            <p class="help-block" style="font-size:11px">300 = track over 5 minutes. Recommended value.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Ports hit before blocking</label>
+                            <input type="number" class="form-control" name="PS_LIMIT" value="{{ security.PS_LIMIT }}" min="0">
+                            <p class="help-block" style="font-size:11px">10 = block after scanning 10 different ports. Recommended.</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h5><span class="glyphicon glyphicon-eye-open"></span> File &amp; Directory Monitoring</h5>
+                        <p class="text-muted" style="font-size:12px">Watch for unauthorized changes to critical system files</p>
+                        <div class="form-group">
+                            <label>Directory watch interval <small class="text-muted">(seconds, 0=off)</small></label>
+                            <input type="number" class="form-control" name="LF_DIRWATCH" value="{{ security.LF_DIRWATCH }}" min="0">
+                            <p class="help-block" style="font-size:11px">300 = check every 5 minutes for changes in /tmp and other watched directories.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Integrity check interval <small class="text-muted">(seconds, 0=off)</small></label>
+                            <input type="number" class="form-control" name="LF_INTEGRITY" value="{{ security.LF_INTEGRITY }}" min="0">
+                            <p class="help-block" style="font-size:11px">3600 = hourly file integrity check. Detects if system files have been tampered with.</p>
+                        </div>
+
+                        <hr>
+                        <h5><span class="glyphicon glyphicon-warning-sign"></span> Attack Detection</h5>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="LF_DISTATTACK" value="1" {{ 'checked' if security.LF_DISTATTACK not in ('0', '') }}>
+                                Detect distributed brute-force attacks
+                            </label>
+                            <p class="help-block" style="font-size:11px">Catches coordinated attacks from multiple IPs targeting the same service.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="LF_EXPLOIT" value="1" {{ 'checked' if security.LF_EXPLOIT not in ('0', '') }}>
+                                Scan for exploit scripts
+                            </label>
+                            <p class="help-block" style="font-size:11px">Checks /tmp and writable directories for malicious scripts.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="AT_ALERT" value="1" {{ 'checked' if security.AT_ALERT == '1' }}>
+                                Account change alerts
+                            </label>
+                            <p class="help-block" style="font-size:11px">Alert when system accounts are created, deleted, or modified.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="SMTP_BLOCK" value="1" {{ 'checked' if security.SMTP_BLOCK == '1' }}>
+                                Block outgoing spam
+                            </label>
+                            <p class="help-block" style="font-size:11px">Prevents compromised accounts from sending spam email. Root and mail users are exempt.</p>
+                        </div>
+
+                        <hr>
+                        <h5><span class="glyphicon glyphicon-globe"></span> Web Server Protection</h5>
+                        <div class="form-group">
+                            <label>Block after 404 errors <small class="text-muted">(0=off)</small></label>
+                            <input type="number" class="form-control" name="LF_APACHE_404" value="{{ security.LF_APACHE_404 }}" min="0">
+                            <p class="help-block" style="font-size:11px">Block IPs scanning for vulnerabilities by hitting many missing pages.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Block after 403 errors <small class="text-muted">(0=off)</small></label>
+                            <input type="number" class="form-control" name="LF_APACHE_403" value="{{ security.LF_APACHE_403 }}" min="0">
+                            <p class="help-block" style="font-size:11px">Block IPs trying to access forbidden directories.</p>
+                        </div>
+                    </div>
+                </div>
+                <hr>
+                <button type="submit" class="btn btn-primary">
+                    <span class="glyphicon glyphicon-floppy-disk"></span> Save Security Settings
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== DYNAMIC DNS ==================== -->
+<div class="tab-pane" id="dyndns">
+    <div class="panel panel-default">
+        <div class="panel-heading"><h4><span class="glyphicon glyphicon-globe"></span> Dynamic DNS Hostnames</h4></div>
+        <div class="panel-body">
+            <div class="alert alert-info"><span class="glyphicon glyphicon-info-sign"></span> <strong>How it works:</strong> If your home/office IP changes (most ISPs do this), add your dynamic DNS hostname here. CSF will automatically resolve it periodically and keep you whitelisted so you never lock yourself out.</div>
+
+            <div id="dyndns-list">
+                {% for entry in dyndns %}
+                <div class="input-group" style="margin-bottom:5px">
+                    <input type="text" class="form-control dyndns-entry" value="{{ entry }}" readonly>
+                    <span class="input-group-btn">
+                        <button class="btn btn-danger remove-dyndns" data-host="{{ entry }}">
+                            <span class="glyphicon glyphicon-trash"></span>
+                        </button>
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="input-group" style="margin-top:15px; max-width:500px">
+                <input type="text" class="form-control" id="new-dyndns" placeholder="myhome.dyndns.org">
+                <span class="input-group-btn">
+                    <button class="btn btn-success" id="add-dyndns-btn">
+                        <span class="glyphicon glyphicon-plus"></span> Add Hostname
+                    </button>
+                </span>
+            </div>
+            <p class="help-block" style="font-size:11px">Popular services: <a href="https://www.noip.com/" target="_blank">No-IP</a>, <a href="https://www.duckdns.org/" target="_blank">DuckDNS</a>, <a href="https://www.dynu.com/" target="_blank">Dynu</a></p>
+
+            <hr>
+            <button class="btn btn-primary" id="save-dyndns-btn">
+                <span class="glyphicon glyphicon-floppy-disk"></span> Save Dynamic DNS
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== SERVICE INTEGRATION ==================== -->
+<div class="tab-pane" id="services">
+    <div class="panel panel-default">
+        <div class="panel-heading">
+            <h4>
+                <span class="glyphicon glyphicon-link"></span> Service Integration
+                <button class="btn btn-sm btn-info pull-right" id="detect-services-btn">
+                    <span class="glyphicon glyphicon-refresh"></span> Detect Services
+                </button>
+            </h4>
+        </div>
+        <div class="panel-body">
+            <div class="alert alert-info">
+                <span class="glyphicon glyphicon-info-sign"></span>
+                <strong>What this does:</strong> When you run Docker, WireGuard, Netbird, Coolify or Dokploy, this panel auto-detects those services and checks two things: (1) whether the required firewall ports are open in TCP_IN / UDP_IN, and (2) whether their internal subnets are whitelisted so LFD stops raising false alarms.
+            </div>
+
+            <div id="services-loading" style="display:none" class="text-center"><span class="glyphicon glyphicon-refresh spin"></span> Detecting services...</div>
+
+            <!-- Required Ports Check -->
+            <h5><span class="glyphicon glyphicon-transfer"></span> Required Firewall Ports</h5>
+            <p class="text-muted" style="font-size:12px">Checks whether the ports needed by your detected services are open in TCP_IN / UDP_IN.</p>
+            <div id="service-port-check">
+                <div class="text-muted">Click "Detect Services" to check port requirements.</div>
+            </div>
+            <div id="service-port-fix-row" style="display:none; margin-top:10px">
+                <button class="btn btn-warning" id="add-service-ports-btn">
+                    <span class="glyphicon glyphicon-plus"></span> Add All Missing Ports
+                </button>
+                <small class="text-muted" style="margin-left:8px">Updates TCP_IN / UDP_IN — restart CSF to apply</small>
+            </div>
+
+            <hr>
+            <!-- Detected Networks -->
+            <h5><span class="glyphicon glyphicon-hdd"></span> Detected Internal Networks</h5>
+            <p class="text-muted" style="font-size:12px">These are the private subnets used by your services. Toggle each one to add/remove from the LFD ignore list (csf.ignore).</p>
+            <div id="detected-networks">
+                <div class="text-muted">Click "Detect Services" to scan your server.</div>
+            </div>
+
+            <hr>
+            <h5><span class="glyphicon glyphicon-flash"></span> Quick Fix: Whitelist All Detected Services</h5>
+            <p class="text-muted" style="font-size:12px">One-click fix: adds all detected Docker/WireGuard/Netbird networks to csf.ignore AND common container processes (PostgreSQL, Nginx, Node.js, Redis) to csf.pignore so LFD stops flagging them.</p>
+            <button class="btn btn-success" id="autofix-services-btn">
+                <span class="glyphicon glyphicon-ok-circle"></span> Auto-Fix All Services
+            </button>
+            <div id="autofix-results" style="display:none; margin-top:15px"></div>
+
+            <hr>
+            <!-- Process Ignores -->
+            <h5><span class="glyphicon glyphicon-tasks"></span> Process Tracking Exemptions</h5>
+            <p class="text-muted" style="font-size:12px">LFD's process tracker flags long-running or high-resource processes. Container services like PostgreSQL and Nginx run legitimately for a long time. Add them here so LFD ignores them (csf.pignore).</p>
+            <div id="process-ignores">
+                <div class="text-muted">Click "Detect Services" to see current status.</div>
+            </div>
+
+            <hr>
+            <!-- Manual Add -->
+            <h5><span class="glyphicon glyphicon-plus"></span> Manually Add to Ignore Lists</h5>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="panel panel-default">
+                        <div class="panel-heading"><strong>Add IP/CIDR to csf.ignore</strong></div>
+                        <div class="panel-body">
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="manual-ignore-ip" placeholder="e.g. 172.21.0.0/16">
+                                <span class="input-group-btn">
+                                    <button class="btn btn-success" id="manual-ignore-add"><span class="glyphicon glyphicon-plus"></span> Add</button>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="panel panel-default">
+                        <div class="panel-heading"><strong>Add Process to csf.pignore</strong></div>
+                        <div class="panel-body">
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="manual-pignore-entry" placeholder="e.g. exe:/usr/sbin/mysqld">
+                                <span class="input-group-btn">
+                                    <button class="btn btn-success" id="manual-pignore-add"><span class="glyphicon glyphicon-plus"></span> Add</button>
+                                </span>
+                            </div>
+                            <p class="help-block" style="font-size:11px">Formats: <code>exe:/path/to/binary</code>, <code>user:username</code>, <code>pexe:/regex/pattern.*</code></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== DOCKER MONITORS ==================== -->
+<div class="tab-pane" id="monitors">
+    <div class="panel panel-default">
+        <div class="panel-heading">
+            <h4>
+                <span class="glyphicon glyphicon-eye-open"></span> Docker Service Monitors
+                <button class="btn btn-sm btn-info pull-right" id="scan-monitors-btn">
+                    <span class="glyphicon glyphicon-refresh"></span> Scan Now
+                </button>
+            </h4>
+        </div>
+        <div class="panel-body">
+            <div class="alert alert-info"><span class="glyphicon glyphicon-info-sign"></span> <strong>How it works:</strong> CSFv2 watches Docker container logs for failed login attempts. If a container gets brute-forced, CSFv2 can block the attacker's IP just like it does for SSH.</div>
+
+            <div id="monitor-status">
+                {% for name, info in monitor_status.items() %}
+                <div class="panel panel-{{ 'success' if info.installed else 'default' }}">
+                    <div class="panel-heading">
+                        <span class="glyphicon glyphicon-{{ 'ok-circle text-success' if info.installed else 'remove-circle text-muted' }}"></span>
+                        <strong>{{ name|title }}</strong>
+                        <span class="pull-right">
+                            {% if info.installed %}
+                            <span class="label label-success">Detected: {{ info.containers|join(', ') }}</span>
+                            {% else %}
+                            <span class="label label-default">Not Installed</span>
+                            {% endif %}
+                            <label style="margin-left:10px; font-weight:normal">
+                                <input type="checkbox" class="monitor-toggle" data-name="{{ name }}" {{ 'checked' if info.enabled }}>
+                                Enabled
+                            </label>
+                        </span>
+                    </div>
+                    <div class="panel-body">
+                        <small class="text-muted">{{ info.description }}</small>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div id="scan-results" style="display:none; margin-top:15px">
+                <h5>Scan Results</h5>
+                <div id="scan-output"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== GENERAL SETTINGS ==================== -->
+<div class="tab-pane" id="misc">
+    <div class="panel panel-default">
+        <div class="panel-heading"><h4><span class="glyphicon glyphicon-cog"></span> General Settings</h4></div>
+        <div class="panel-body">
+            <form id="miscForm">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5>Core Settings</h5>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="TESTING" value="1" {{ 'checked' if misc.TESTING == '1' }}>
+                                <strong>Testing Mode</strong>
+                            </label>
+                            <p class="help-block" style="font-size:11px">Safety net: auto-clears firewall rules every 5 minutes. Turn OFF once you confirm you can still log in after a restart.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="DOCKER" value="1" {{ 'checked' if misc.DOCKER == '1' }}>
+                                <strong>Docker Support</strong>
+                            </label>
+                            <p class="help-block" style="font-size:11px">MUST be ON if you run Docker, Dokploy, Coolify, or any containers. Prevents CSF from breaking Docker networking.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="IPV6" value="1" {{ 'checked' if misc.IPV6 == '1' }}>
+                                IPv6 Support
+                            </label>
+                            <p class="help-block" style="font-size:11px">Enable if your server has IPv6 connectivity.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="ICMP_IN" value="1" {{ 'checked' if misc.ICMP_IN == '1' }}>
+                                Allow Ping (ICMP In)
+                            </label>
+                            <p class="help-block" style="font-size:11px">Let monitoring services check if your server is alive.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="AUTO_UPDATES" value="1" {{ 'checked' if misc.AUTO_UPDATES == '1' }}>
+                                Auto Updates
+                            </label>
+                            <p class="help-block" style="font-size:11px">Automatically update CSF when new versions are available.</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h5><span class="glyphicon glyphicon-lock"></span> API Keys</h5>
+                        <div class="form-group">
+                            <label>AbuseIPDB API Key</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="abuseipdb_key" value="{{ api_keys.ABUSEIPDB_KEY }}" placeholder="Paste your API key here">
+                                <span class="input-group-btn">
+                                    <button class="btn btn-default toggle-key-vis" type="button" title="Show/hide">
+                                        <span class="glyphicon glyphicon-eye-open"></span>
+                                    </button>
+                                </span>
+                            </div>
+                            <p class="help-block" style="font-size:11px">
+                                Used for IP reputation lookups. Free (1,000/day): <a href="https://www.abuseipdb.com/account/api" target="_blank">Get key at abuseipdb.com</a>
+                            </p>
+                        </div>
+                        <button class="btn btn-success btn-sm" id="saveApiKeys">
+                            <span class="glyphicon glyphicon-floppy-disk"></span> Save API Key
+                        </button>
+                        <hr>
+
+                        <h5>Block Limits</h5>
+                        <div class="form-group">
+                            <label>Max permanent blocks</label>
+                            <input type="number" class="form-control" name="DENY_IP_LIMIT" value="{{ misc.DENY_IP_LIMIT }}" min="0">
+                            <p class="help-block" style="font-size:11px">When full, the oldest blocks are removed. Default: 200.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Max temporary blocks</label>
+                            <input type="number" class="form-control" name="DENY_TEMP_IP_LIMIT" value="{{ misc.DENY_TEMP_IP_LIMIT }}" min="0">
+                        </div>
+
+                        <h5 style="margin-top:20px">Repeat Offender Escalation</h5>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="LF_PERMBLOCK" value="1" {{ 'checked' if misc.LF_PERMBLOCK == '1' }}>
+                                Auto-permanently ban repeat offenders
+                            </label>
+                            <p class="help-block" style="font-size:11px">IPs that get temp-blocked multiple times get permanently banned.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Temp blocks before permanent ban</label>
+                            <input type="number" class="form-control" name="LF_PERMBLOCK_COUNT" value="{{ misc.LF_PERMBLOCK_COUNT }}" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label>Lookback window <small class="text-muted">(seconds, 86400 = 24 hours)</small></label>
+                            <input type="number" class="form-control" name="LF_PERMBLOCK_INTERVAL" value="{{ misc.LF_PERMBLOCK_INTERVAL }}" min="0">
+                        </div>
+                    </div>
+                </div>
+                <hr>
+                <button type="submit" class="btn btn-primary">
+                    <span class="glyphicon glyphicon-floppy-disk"></span> Save General Settings
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+</div><!-- /tab-content -->
+
+<div class="text-center" style="margin-top:15px">
+    <form method="POST" action="/action/restart" style="display:inline">
+        <input type="hidden" name="redirect_to" value="/qconfig">
+        <button type="submit" class="btn btn-warning confirmButton" data-query="Restart CSF to apply changes?" data-action="/action/restart">
+            <span class="glyphicon glyphicon-refresh"></span> Restart CSF &amp; Apply
+        </button>
+    </form>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    var knownPorts = {{ ports_json|safe }};
+
+    /* showToast is defined globally in base.html */
+
+    /* ===== PORT MANAGEMENT ===== */
+    function getPortsArray(key) {
+        var raw = $('#raw-' + key).val();
+        return raw ? raw.split(',').map(function(p){ return p.trim(); }).filter(Boolean) : [];
+    }
+
+    $(document).on('click', '.remove-port', function(e) {
+        e.preventDefault();
+        var key = $(this).data('key'), port = String($(this).data('port'));
+        var ports = getPortsArray(key).filter(function(p){ return p !== port; });
+        $('#raw-' + key).val(ports.join(','));
+        $(this).closest('.port-tag').fadeOut(200, function(){ $(this).remove(); });
+        $.post('/qconfig/ports', {key: key, ports: ports.join(',')}, function(r) {
+            if (r.success) showToast(r.message, 'success');
+        });
+    });
+
+    $('.add-port-btn').click(function() {
+        var key = $(this).data('key');
+        var input = $('.add-port-input[data-key="' + key + '"]');
+        var port = input.val().trim();
+        if (!port || !/^\d{1,5}$/.test(port)) { alert('Enter a valid port number'); return; }
+        var ports = getPortsArray(key);
+        if (ports.indexOf(port) >= 0) { alert('Port already exists'); return; }
+        ports.push(port);
+        $('#raw-' + key).val(ports.join(','));
+        var label = knownPorts[port] ? ' <small class="text-muted">(' + knownPorts[port] + ')</small>' : '';
+        $('#tags-' + key).append(
+            '<span class="label label-default port-tag" style="font-size:13px;margin:2px;display:inline-block;padding:5px 10px">' +
+            port + label +
+            ' <a href="#" class="remove-port text-danger" data-key="' + key + '" data-port="' + port + '" style="margin-left:5px">&times;</a></span>'
+        );
+        input.val('');
+        $.post('/qconfig/ports', {key: key, ports: ports.join(',')}, function(r) {
+            if (r.success) showToast(r.message, 'success');
+        });
+    });
+
+    $('.add-port-input').keypress(function(e) {
+        if (e.which === 13) { e.preventDefault(); $(this).siblings('.input-group-btn').find('.add-port-btn').click(); }
+    });
+
+    /* ===== COUNTRY BLOCKING ===== */
+    function getCCArray(target) {
+        var raw = $('#raw-' + target).val();
+        return raw ? raw.split(',').map(function(c){ return c.trim(); }).filter(Boolean) : [];
+    }
+
+    $(document).on('click', '.remove-cc', function(e) {
+        e.preventDefault();
+        var target = $(this).data('target'), cc = $(this).data('cc');
+        var arr = getCCArray(target).filter(function(c){ return c !== cc; });
+        $('#raw-' + target).val(arr.join(','));
+        $(this).closest('.cc-tag').fadeOut(200, function(){ $(this).remove(); });
+    });
+
+    $('.add-cc-btn').click(function() {
+        var target = $(this).data('target');
+        var sel = $('.add-cc-select[data-target="' + target + '"]');
+        var cc = sel.val();
+        if (!cc) return;
+        var arr = getCCArray(target);
+        if (arr.indexOf(cc) >= 0) { alert('Country already added'); return; }
+        arr.push(cc);
+        $('#raw-' + target).val(arr.join(','));
+        var cls = target === 'CC_DENY' ? 'danger' : 'success';
+        var container = target === 'CC_DENY' ? '#cc-deny-tags' : '#cc-allow-tags';
+        $(container).append(
+            '<span class="label label-' + cls + ' cc-tag" style="font-size:13px;margin:2px;display:inline-block;padding:5px 10px">' +
+            '<img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/7.2.3/flags/4x3/' + cc.toLowerCase() + '.svg" style="height:12px;margin-right:4px" onerror="this.style.display=\'none\'"> ' +
+            cc + ' <a href="#" class="remove-cc" data-target="' + target + '" data-cc="' + cc + '" style="margin-left:5px">&times;</a></span>'
+        );
+        sel.val('');
+    });
+
+    $('.save-country-btn').click(function() {
+        $.post('/qconfig/country', {
+            CC_DENY: $('#raw-CC_DENY').val(),
+            CC_ALLOW: $('#raw-CC_ALLOW').val(),
+        }, function(r) {
+            if (r.success) showToast(r.message, 'success');
+            else showToast(r.error || 'Failed', 'danger');
+        });
+    });
+
+    /* ===== CONNLIMIT VISUAL BUILDER ===== */
+    function parseConnlimit(raw) {
+        if (!raw) return [];
+        return raw.split(',').map(function(pair) {
+            var parts = pair.trim().split(';');
+            return parts.length === 2 ? {port: parts[0].trim(), limit: parts[1].trim()} : null;
+        }).filter(Boolean);
+    }
+
+    function renderConnlimitRows() {
+        var rows = parseConnlimit($('#connlimit-hidden').val());
+        var tbody = $('#connlimit-rows');
+        tbody.empty();
+        rows.forEach(function(r, i) {
+            var portName = knownPorts[r.port] ? ' <small class="text-muted">(' + knownPorts[r.port] + ')</small>' : '';
+            tbody.append(
+                '<tr>' +
+                '<td><input type="number" class="form-control input-sm cl-port" value="' + r.port + '" min="1" max="65535">' + portName + '</td>' +
+                '<td><input type="number" class="form-control input-sm cl-limit" value="' + r.limit + '" min="1"></td>' +
+                '<td><button type="button" class="btn btn-sm btn-danger cl-remove"><span class="glyphicon glyphicon-trash"></span></button></td>' +
+                '</tr>'
+            );
+        });
+        if (rows.length === 0) {
+            tbody.append('<tr class="cl-empty"><td colspan="3" class="text-muted text-center">No limits set. Click "Add Port Limit" to add one.</td></tr>');
+        }
+    }
+
+    function syncConnlimit() {
+        var parts = [];
+        $('#connlimit-rows tr').each(function() {
+            var port = $(this).find('.cl-port').val();
+            var limit = $(this).find('.cl-limit').val();
+            if (port && limit) parts.push(port + ';' + limit);
+        });
+        $('#connlimit-hidden').val(parts.join(','));
+    }
+
+    renderConnlimitRows();
+
+    $('#add-connlimit-row').click(function() {
+        $('#connlimit-rows .cl-empty').remove();
+        $('#connlimit-rows').append(
+            '<tr>' +
+            '<td><input type="number" class="form-control input-sm cl-port" placeholder="e.g. 80" min="1" max="65535"></td>' +
+            '<td><input type="number" class="form-control input-sm cl-limit" placeholder="e.g. 50" min="1"></td>' +
+            '<td><button type="button" class="btn btn-sm btn-danger cl-remove"><span class="glyphicon glyphicon-trash"></span></button></td>' +
+            '</tr>'
+        );
+    });
+
+    $(document).on('click', '.cl-remove', function() {
+        $(this).closest('tr').remove();
+        syncConnlimit();
+        if ($('#connlimit-rows tr').length === 0) renderConnlimitRows();
+    });
+    $(document).on('change', '.cl-port, .cl-limit', syncConnlimit);
+
+    /* ===== PORTFLOOD VISUAL BUILDER ===== */
+    function parsePortflood(raw) {
+        if (!raw) return [];
+        return raw.split(',').map(function(entry) {
+            var parts = entry.trim().split(';');
+            return parts.length === 4 ? {port: parts[0].trim(), count: parts[1].trim(), interval: parts[2].trim(), proto: parts[3].trim()} : null;
+        }).filter(Boolean);
+    }
+
+    function renderPortfloodRows() {
+        var rows = parsePortflood($('#portflood-hidden').val());
+        var tbody = $('#portflood-rows');
+        tbody.empty();
+        rows.forEach(function(r) {
+            var portName = knownPorts[r.port] ? ' <small class="text-muted">(' + knownPorts[r.port] + ')</small>' : '';
+            tbody.append(
+                '<tr>' +
+                '<td><input type="number" class="form-control input-sm pf-port" value="' + r.port + '" min="1" max="65535">' + portName + '</td>' +
+                '<td><input type="number" class="form-control input-sm pf-count" value="' + r.count + '" min="1"></td>' +
+                '<td><input type="number" class="form-control input-sm pf-interval" value="' + r.interval + '" min="1"></td>' +
+                '<td><select class="form-control input-sm pf-proto"><option value="tcp"' + (r.proto==='tcp'?' selected':'') + '>TCP</option><option value="udp"' + (r.proto==='udp'?' selected':'') + '>UDP</option></select></td>' +
+                '<td><button type="button" class="btn btn-sm btn-danger pf-remove"><span class="glyphicon glyphicon-trash"></span></button></td>' +
+                '</tr>'
+            );
+        });
+        if (rows.length === 0) {
+            tbody.append('<tr class="pf-empty"><td colspan="5" class="text-muted text-center">No rate limits set. Click "Add Rate Limit" to add one.</td></tr>');
+        }
+    }
+
+    function syncPortflood() {
+        var parts = [];
+        $('#portflood-rows tr').each(function() {
+            var port = $(this).find('.pf-port').val();
+            var count = $(this).find('.pf-count').val();
+            var interval = $(this).find('.pf-interval').val();
+            var proto = $(this).find('.pf-proto').val();
+            if (port && count && interval && proto) parts.push(port + ';' + count + ';' + interval + ';' + proto);
+        });
+        $('#portflood-hidden').val(parts.join(','));
+    }
+
+    renderPortfloodRows();
+
+    $('#add-portflood-row').click(function() {
+        $('#portflood-rows .pf-empty').remove();
+        $('#portflood-rows').append(
+            '<tr>' +
+            '<td><input type="number" class="form-control input-sm pf-port" placeholder="e.g. 80" min="1" max="65535"></td>' +
+            '<td><input type="number" class="form-control input-sm pf-count" placeholder="e.g. 20" min="1"></td>' +
+            '<td><input type="number" class="form-control input-sm pf-interval" placeholder="e.g. 5" min="1"></td>' +
+            '<td><select class="form-control input-sm pf-proto"><option value="tcp">TCP</option><option value="udp">UDP</option></select></td>' +
+            '<td><button type="button" class="btn btn-sm btn-danger pf-remove"><span class="glyphicon glyphicon-trash"></span></button></td>' +
+            '</tr>'
+        );
+    });
+
+    $(document).on('click', '.pf-remove', function() {
+        $(this).closest('tr').remove();
+        syncPortflood();
+        if ($('#portflood-rows tr').length === 0) renderPortfloodRows();
+    });
+    $(document).on('change', '.pf-port, .pf-count, .pf-interval, .pf-proto', syncPortflood);
+
+    /* ===== CONNECTION LIMITS FORM ===== */
+    $('#connForm').submit(function(e) {
+        e.preventDefault();
+        syncConnlimit();
+        syncPortflood();
+        var data = {};
+        $(this).find('input[name], select[name]').each(function() {
+            if (this.type === 'checkbox') data[this.name] = this.checked ? '1' : '0';
+            else data[this.name] = $(this).val();
+        });
+        $.post('/qconfig/connections', data, function(r) {
+            if (r.success) showToast(r.message, 'success');
+            else showToast(r.error || 'Failed', 'danger');
+        });
+    });
+
+    /* ===== EMAIL ALERTS FORM ===== */
+    $('#alertsForm').submit(function(e) {
+        e.preventDefault();
+        var data = {};
+        $(this).find('input[name], select[name]').each(function() {
+            if (this.type === 'checkbox') data[this.name] = this.checked ? '1' : '0';
+            else data[this.name] = $(this).val();
+        });
+        $.post('/qconfig/alerts', data, function(r) {
+            if (r.success) showToast(r.message, 'success');
+            else showToast(r.error || 'Failed', 'danger');
+        });
+    });
+
+    /* ===== CLOUDFLARE FORM ===== */
+    $('#cloudflareForm').submit(function(e) {
+        e.preventDefault();
+        var data = {};
+        $(this).find('input[name], select[name]').each(function() {
+            if (this.type === 'checkbox') data[this.name] = this.checked ? '1' : '0';
+            else data[this.name] = $(this).val();
+        });
+        $.post('/qconfig/cloudflare', data, function(r) {
+            if (r.success) showToast(r.message, 'success');
+            else showToast(r.error || 'Failed', 'danger');
+        });
+    });
+
+    /* ===== SECURITY FORM ===== */
+    $('#securityForm').submit(function(e) {
+        e.preventDefault();
+        var data = {};
+        $(this).find('input[name], select[name]').each(function() {
+            if (this.type === 'checkbox') data[this.name] = this.checked ? '1' : '0';
+            else data[this.name] = $(this).val();
+        });
+        $.post('/qconfig/security', data, function(r) {
+            if (r.success) showToast(r.message, 'success');
+            else showToast(r.error || 'Failed', 'danger');
+        });
+    });
+
+    /* ===== DYNAMIC DNS ===== */
+    $(document).on('click', '.remove-dyndns', function() {
+        $(this).closest('.input-group').fadeOut(200, function(){ $(this).remove(); });
+    });
+
+    $('#add-dyndns-btn').click(function() {
+        var host = $('#new-dyndns').val().trim();
+        if (!host) return;
+        $('#dyndns-list').append(
+            '<div class="input-group" style="margin-bottom:5px">' +
+            '<input type="text" class="form-control dyndns-entry" value="' + host + '" readonly>' +
+            '<span class="input-group-btn"><button class="btn btn-danger remove-dyndns" data-host="' + host + '">' +
+            '<span class="glyphicon glyphicon-trash"></span></button></span></div>'
+        );
+        $('#new-dyndns').val('');
+    });
+
+    $('#save-dyndns-btn').click(function() {
+        var entries = [];
+        $('.dyndns-entry').each(function() { entries.push($(this).val()); });
+        $.ajax({
+            url: '/qconfig/dyndns',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({entries: entries}),
+            success: function(r) {
+                if (r.success) showToast(r.message, 'success');
+                else showToast(r.error || 'Failed', 'danger');
+            }
+        });
+    });
+
+    /* ===== DOCKER MONITORS ===== */
+    $('#scan-monitors-btn').click(function() {
+        var btn = $(this);
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh spin"></span> Scanning...');
+        $.getJSON('/api/docker/scan', function(data) {
+            var html = '';
+            for (var name in data) {
+                var m = data[name];
+                html += '<div class="panel panel-' + (m.failures.length > 0 ? 'danger' : 'success') + '">';
+                html += '<div class="panel-heading"><strong>' + name + '</strong> — ' + m.description;
+                html += ' <span class="badge">' + m.containers_found.length + ' containers</span>';
+                if (m.failures.length > 0) html += ' <span class="label label-danger">' + m.failures.length + ' failures detected</span>';
+                html += '</div>';
+                if (m.failures.length > 0) {
+                    html += '<div class="panel-body"><table class="table table-condensed"><thead><tr><th>IP</th><th>Container</th><th>Log Line</th></tr></thead><tbody>';
+                    m.failures.forEach(function(f) {
+                        html += '<tr><td><strong>' + f.ip + '</strong></td><td>' + f.container + '</td><td><small>' + f.line + '</small></td></tr>';
+                    });
+                    html += '</tbody></table></div>';
+                }
+                html += '</div>';
+            }
+            if (!html) html = '<div class="alert alert-success">No login failures detected in Docker container logs.</div>';
+            $('#scan-output').html(html);
+            $('#scan-results').show();
+        }).always(function() {
+            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-refresh"></span> Scan Now');
+        });
+    });
+
+    /* ===== GENERAL SETTINGS ===== */
+    $('#miscForm').submit(function(e) {
+        e.preventDefault();
+        var data = {};
+        $(this).find('input[name], select[name]').each(function() {
+            if (this.type === 'checkbox') data[this.name] = this.checked ? '1' : '0';
+            else data[this.name] = $(this).val();
+        });
+        $.post('/qconfig/misc', data, function(r) {
+            if (r.success) showToast(r.message, 'success');
+            else showToast(r.error || 'Failed', 'danger');
+        });
+    });
+
+    /* ===== API KEYS ===== */
+    $('.toggle-key-vis').click(function() {
+        var input = $(this).closest('.input-group').find('input');
+        input.attr('type', input.attr('type') === 'password' ? 'text' : 'password');
+    });
+    $('#saveApiKeys').click(function() {
+        $.post('/qconfig/apikeys', { ABUSEIPDB_KEY: $('#abuseipdb_key').val() }, function(r) {
+            if (r.success) showToast(r.message, 'success');
+            else showToast(r.error || 'Failed', 'danger');
+        });
+    });
+    /* ===== SERVICE INTEGRATION ===== */
+    function renderNetworks(data) {
+        var html = '';
+        if (!data.networks || data.networks.length === 0) {
+            html = '<div class="alert alert-warning">No Docker, WireGuard, or Netbird networks detected on this server.</div>';
+        } else {
+            html = '<table class="table table-condensed table-bordered"><thead><tr><th>Service</th><th>Network</th><th>Subnet</th><th>LFD Status</th><th>Action</th></tr></thead><tbody>';
+            data.networks.forEach(function(n) {
+                var typeLabel = {docker: 'Docker', wireguard: 'WireGuard', netbird: 'Netbird'}[n.type] || n.type;
+                var typeCls = {docker: 'primary', wireguard: 'info', netbird: 'warning'}[n.type] || 'default';
+                html += '<tr>';
+                html += '<td><span class="label label-' + typeCls + '">' + typeLabel + '</span></td>';
+                html += '<td>' + n.name + '</td>';
+                html += '<td><code>' + n.subnet + '</code></td>';
+                if (n.ignored) {
+                    html += '<td><span class="label label-success">Whitelisted</span></td>';
+                    html += '<td><button class="btn btn-xs btn-danger svc-toggle-ignore" data-subnet="' + n.subnet + '" data-action="remove">Remove</button></td>';
+                } else {
+                    html += '<td><span class="label label-danger">Not Whitelisted</span></td>';
+                    html += '<td><button class="btn btn-xs btn-success svc-toggle-ignore" data-subnet="' + n.subnet + '" data-action="add" data-comment="' + n.type + ': ' + n.name + '">Whitelist</button></td>';
+                }
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+        }
+        $('#detected-networks').html(html);
+    }
+
+    function renderProcessIgnores(data) {
+        var html = '<table class="table table-condensed table-bordered"><thead><tr><th>Process</th><th>Pattern</th><th>Status</th><th>Action</th></tr></thead><tbody>';
+        data.process_ignores.forEach(function(p) {
+            html += '<tr>';
+            html += '<td><strong>' + p.label + '</strong></td>';
+            html += '<td><code>' + p.entry + '</code></td>';
+            if (p.ignored) {
+                html += '<td><span class="label label-success">Exempted</span></td>';
+                html += '<td><span class="text-muted">Already added</span></td>';
+            } else {
+                html += '<td><span class="label label-warning">Not Exempted</span></td>';
+                html += '<td><button class="btn btn-xs btn-success svc-add-pignore" data-entry="' + p.entry + '" data-comment="' + p.label + '">Exempt</button></td>';
+            }
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+        $('#process-ignores').html(html);
+    }
+
+    function renderPortCheck(data) {
+        var services = data.services || [];
+        if (services.length === 0) {
+            $('#service-port-check').html('<div class="alert alert-warning" style="margin:0">No services detected. Click Detect Services.</div>');
+            $('#service-port-fix-row').hide();
+            return;
+        }
+
+        var missingByRule = {TCP_IN: [], TCP_OUT: [], UDP_IN: [], UDP_OUT: []};
+        var html = '';
+
+        services.forEach(function(svc) {
+            var allOk = svc.port_checks.every(function(pc) { return pc.open; })
+                     && svc.settings.every(function(s) { return s.ok; });
+
+            var statusBadge = allOk
+                ? '<span class="label label-success pull-right"><span class="glyphicon glyphicon-ok"></span> All open</span>'
+                : '<span class="label label-warning pull-right"><span class="glyphicon glyphicon-warning-sign"></span> Needs attention</span>';
+
+            html += '<div class="panel panel-' + (allOk ? 'success' : 'warning') + '" style="margin-bottom:8px">';
+            html += '<div class="panel-heading" style="padding:6px 12px">';
+            html += '<strong><span class="glyphicon ' + svc.icon + '"></span> ' + svc.label + '</strong>';
+            html += statusBadge;
+            html += '</div>';
+            html += '<div class="panel-body" style="padding:6px 12px">';
+            html += '<table class="table table-condensed" style="margin:0;font-size:12px">';
+            html += '<thead><tr><th style="width:90px">Rule</th><th style="width:60px">Port</th><th>Purpose</th><th style="width:90px">Status</th><th style="width:60px"></th></tr></thead><tbody>';
+
+            svc.port_checks.forEach(function(pc) {
+                var statusCell, addBtn = '';
+                if (pc.open) {
+                    statusCell = '<span class="label label-success"><span class="glyphicon glyphicon-ok"></span> Open</span>';
+                } else {
+                    statusCell = '<span class="label label-danger"><span class="glyphicon glyphicon-remove"></span> Missing</span>';
+                    addBtn = '<button class="btn btn-xs btn-success svc-add-one-port" data-rule="' + pc.rule + '" data-port="' + pc.port + '"><span class="glyphicon glyphicon-plus"></span> Add</button>';
+                    if (missingByRule[pc.rule]) missingByRule[pc.rule].push(pc.port);
+                }
+                html += '<tr>';
+                html += '<td><code>' + pc.rule + '</code></td>';
+                html += '<td><code>' + pc.port + '</code></td>';
+                html += '<td>' + pc.reason + '</td>';
+                html += '<td>' + statusCell + '</td>';
+                html += '<td>' + addBtn + '</td>';
+                html += '</tr>';
+            });
+
+            svc.settings.forEach(function(s) {
+                var statusCell, fixNote = '';
+                if (s.ok) {
+                    statusCell = '<span class="label label-success"><span class="glyphicon glyphicon-ok"></span> Set</span>';
+                } else {
+                    statusCell = '<span class="label label-danger"><span class="glyphicon glyphicon-remove"></span> Off</span>';
+                    fixNote = '<a href="/config#' + s.key + '" class="btn btn-xs btn-warning">Fix in Config</a>';
+                }
+                html += '<tr>';
+                html += '<td><code>csf.conf</code></td>';
+                html += '<td><code>' + s.key + '</code></td>';
+                html += '<td>' + s.reason + '</td>';
+                html += '<td>' + statusCell + '</td>';
+                html += '<td>' + fixNote + '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table></div></div>';
+        });
+
+        $('#service-port-check').html(html);
+
+        var missingTcp = missingByRule['TCP_IN'].concat(missingByRule['TCP_OUT']);
+        var missingUdp = missingByRule['UDP_IN'].concat(missingByRule['UDP_OUT']);
+        if (missingTcp.length > 0 || missingUdp.length > 0) {
+            $('#add-service-ports-btn').data('tcp', missingByRule['TCP_IN'].join(',')).data('udp', missingByRule['UDP_IN'].join(','));
+            $('#service-port-fix-row').show();
+        } else {
+            $('#service-port-fix-row').hide();
+        }
+    }
+
+    /* One-click add for individual port in the port-check table */
+    $(document).on('click', '.svc-add-one-port', function() {
+        var btn = $(this);
+        var rule = btn.data('rule');
+        var port = btn.data('port');
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span>');
+        $.post('/api/ports/add-port', {key: rule, port: port}, function(r) {
+            if (r.success) {
+                showToast('Port ' + port + ' added to ' + rule, 'success');
+                $('#detect-services-btn').click();
+            } else {
+                showToast(r.error || 'Failed', 'danger');
+                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-plus"></span> Add');
+            }
+        });
+    });
+
+    $('#add-service-ports-btn').on('click', function() {
+        var btn = $(this);
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh spin"></span> Adding...');
+        /* Collect all missing ports from the current rendered table */
+        var pending = [];
+        $('#service-port-check .svc-add-one-port').each(function() {
+            var rule = $(this).data('rule');
+            var port = $(this).data('port');
+            if (rule && port) pending.push($.post('/api/ports/add-port', {key: rule, port: port}));
+        });
+        if (pending.length === 0) {
+            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-plus"></span> Add All Missing Ports');
+            return;
+        }
+        $.when.apply($, pending).always(function() {
+            showToast('All missing ports added. Restart CSF to apply.', 'success');
+            $('#detect-services-btn').click();
+            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-plus"></span> Add All Missing Ports');
+        });
+    });
+
+    $('#detect-services-btn').click(function() {
+        var btn = $(this);
+        btn.prop('disabled', true);
+        $('#services-loading').show();
+        $.getJSON('/api/services/port-check', renderPortCheck);
+        $.getJSON('/api/services/detect', function(data) {
+            renderNetworks(data);
+            renderProcessIgnores(data);
+        }).fail(function() {
+            $('#detected-networks').html('<div class="alert alert-danger">Failed to detect services. Check server logs.</div>');
+        }).always(function() {
+            btn.prop('disabled', false);
+            $('#services-loading').hide();
+        });
+    });
+
+    $(document).on('click', '.svc-toggle-ignore', function() {
+        var btn = $(this);
+        btn.prop('disabled', true);
+        $.post('/qconfig/services/ignore', {
+            subnet: btn.data('subnet'),
+            action: btn.data('action'),
+            comment: btn.data('comment') || ''
+        }, function(r) {
+            if (r.success) {
+                showToast(r.message, 'success');
+                $('#detect-services-btn').click();
+            } else {
+                showToast(r.error || 'Failed', 'danger');
+                btn.prop('disabled', false);
+            }
+        });
+    });
+
+    $(document).on('click', '.svc-add-pignore', function() {
+        var btn = $(this);
+        btn.prop('disabled', true);
+        $.post('/qconfig/services/pignore', {
+            entry: btn.data('entry'),
+            comment: btn.data('comment') || ''
+        }, function(r) {
+            if (r.success) {
+                showToast(r.message, 'success');
+                $('#detect-services-btn').click();
+            } else {
+                showToast(r.error || 'Failed', 'danger');
+                btn.prop('disabled', false);
+            }
+        });
+    });
+
+    $('#autofix-services-btn').click(function() {
+        var btn = $(this);
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh spin"></span> Fixing...');
+        $.post('/qconfig/services/autofix', function(r) {
+            if (r.success) {
+                var html = '<div class="alert alert-success"><strong>' + r.message + '</strong></div>';
+                if (r.fixes && r.fixes.length > 0) {
+                    html += '<ul class="list-group">';
+                    r.fixes.forEach(function(f) {
+                        var label = f.name || f.subnet || f.entry;
+                        var msg = f.result ? f.result.message : 'Done';
+                        html += '<li class="list-group-item"><span class="glyphicon glyphicon-ok text-success"></span> ' + label + ' — ' + msg + '</li>';
+                    });
+                    html += '</ul>';
+                } else {
+                    html += '<p class="text-muted">Everything was already whitelisted.</p>';
+                }
+                $('#autofix-results').html(html).show();
+                $('#detect-services-btn').click();
+            } else {
+                showToast('Auto-fix failed', 'danger');
+            }
+        }).always(function() {
+            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-ok-circle"></span> Auto-Fix All Services');
+        });
+    });
+
+    $('#manual-ignore-add').click(function() {
+        var ip = $('#manual-ignore-ip').val().trim();
+        if (!ip) { alert('Enter an IP or CIDR'); return; }
+        $.post('/qconfig/services/ignore', {subnet: ip, action: 'add', comment: 'Manual add'}, function(r) {
+            if (r.success) { showToast(r.message, 'success'); $('#manual-ignore-ip').val(''); }
+            else showToast(r.error || 'Failed', 'danger');
+        });
+    });
+
+    $('#manual-pignore-add').click(function() {
+        var entry = $('#manual-pignore-entry').val().trim();
+        if (!entry) { alert('Enter a process pattern'); return; }
+        $.post('/qconfig/services/pignore', {entry: entry, comment: 'Manual add'}, function(r) {
+            if (r.success) { showToast(r.message, 'success'); $('#manual-pignore-entry').val(''); }
+            else showToast(r.error || 'Failed', 'danger');
+        });
+    });
+
+    /* auto-detect on tab show */
+    $('#configTabs a[href="#services"]').on('shown.bs.tab', function() {
+        if ($('#detected-networks').find('table').length === 0) {
+            $('#detect-services-btn').click();
+        }
+    });
+
+    /* ===== HASH-BASED TAB SELECTION ===== */
+    var hash = window.location.hash;
+    if (hash) {
+        var tab = $('#configTabs a[href="' + hash + '"]');
+        if (tab.length) tab.tab('show');
+    }
+});
+
+/* ===== PORT RECOMMENDATIONS ===== */
+var _portRecOpen = false;
+
+function togglePortRec() {
+    _portRecOpen = !_portRecOpen;
+    if (_portRecOpen) {
+        $('#port-rec-body').slideDown(200);
+        $('#port-rec-chevron').removeClass('glyphicon-chevron-down').addClass('glyphicon-chevron-up');
+        if ($('#port-rec-content').is(':empty') || $('#port-rec-loading').is(':visible')) {
+            loadPortRec();
+        }
+    } else {
+        $('#port-rec-body').slideUp(200);
+        $('#port-rec-chevron').removeClass('glyphicon-chevron-up').addClass('glyphicon-chevron-down');
+    }
+}
+
+function loadPortRec() {
+    $('#port-rec-loading').show();
+    $('#port-rec-content').hide();
+    $.getJSON('/api/ports/recommendations', function(data) {
+        renderPortRec(data);
+    }).fail(function() {
+        $('#port-rec-loading').hide();
+        $('#port-rec-content').html('<div class="alert alert-danger">Failed to load recommendations. Check server logs.</div>').show();
+    });
+}
+
+function renderPortRec(data) {
+    $('#port-rec-loading').hide();
+    var recs = data.recommendations || [];
+    if (recs.length === 0) {
+        $('#port-rec-badge').hide();
+        $('#port-rec-content').html('<div class="alert alert-warning" style="margin:0">No services detected. Make sure services are running.</div>').show();
+        return;
+    }
+
+    var missingCount = recs.filter(function(r) { return r.status === 'missing'; }).length;
+    if (missingCount > 0) {
+        $('#port-rec-badge').text(missingCount + ' need attention').css('background', '#f0ad4e').show();
+    } else {
+        $('#port-rec-badge').text('All open').css('background', '#5cb85c').show();
+    }
+
+    var html = '<table class="table table-condensed table-bordered" style="margin:0">'
+        + '<thead><tr><th>Service</th><th>Port</th><th>Required in</th><th>Status</th><th></th></tr></thead><tbody>';
+
+    recs.forEach(function(svc) {
+        var allPorts = svc.already_open.concat(svc.gaps);
+        if (allPorts.length === 0) return;
+
+        var rowspan = allPorts.length;
+        var first = true;
+        allPorts.forEach(function(entry) {
+            html += '<tr>';
+            if (first) {
+                html += '<td rowspan="' + rowspan + '"><strong>' + svc.label + '</strong></td>';
+                html += '<td rowspan="' + rowspan + '"><code>' + svc.port + '</code></td>';
+                first = false;
+            }
+            html += '<td><code>' + entry.key + '</code> <small class="text-muted">(' + entry.label + ')</small></td>';
+            var isGap = svc.gaps.some(function(g) { return g.key === entry.key; });
+            if (isGap) {
+                html += '<td><span class="label label-warning">Missing</span></td>';
+                html += '<td><button class="btn btn-xs btn-success add-rec-port-btn"'
+                    + ' data-key="' + entry.key + '" data-port="' + entry.port + '"'
+                    + ' data-svc="' + svc.id + '">'
+                    + '<span class="glyphicon glyphicon-plus"></span> Add</button></td>';
+            } else {
+                html += '<td><span class="label label-success">Open</span></td>';
+                html += '<td class="text-muted" style="font-size:11px">Already open</td>';
+            }
+            html += '</tr>';
+        });
+    });
+
+    html += '</tbody></table>';
+
+    if (missingCount > 0) {
+        html += '<div style="margin-top:10px">'
+            + '<button class="btn btn-warning btn-sm" id="add-all-rec-btn">'
+            + '<span class="glyphicon glyphicon-plus"></span> Add All Missing Ports</button>'
+            + '<small class="text-muted" style="margin-left:8px">Adds every missing port to its required rule at once</small>'
+            + '</div>';
+    }
+
+    $('#port-rec-content').html(html).show();
+
+    /* Single port add */
+    $(document).off('click.recport').on('click.recport', '.add-rec-port-btn', function() {
+        var btn = $(this);
+        var key = btn.data('key');
+        var port = btn.data('port');
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span>');
+        $.post('/api/ports/add-port', {key: key, port: port}, function(r) {
+            if (r.success) {
+                showToast('Port ' + port + ' added to ' + key, 'success');
+                loadPortRec();
+                reloadPortTag(key);
+            } else {
+                showToast(r.error || 'Failed', 'danger');
+                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-plus"></span> Add');
+            }
+        });
+    });
+
+    /* Add all missing */
+    $(document).off('click.recall').on('click.recall', '#add-all-rec-btn', function() {
+        var btn = $(this);
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Adding...');
+        var pending = [];
+        recs.forEach(function(svc) {
+            svc.gaps.forEach(function(g) {
+                pending.push($.post('/api/ports/add-port', {key: g.key, port: g.port}));
+            });
+        });
+        if (pending.length === 0) { btn.prop('disabled', false).html('All open!'); return; }
+        $.when.apply($, pending).always(function() {
+            showToast('All missing ports added. Restart CSF to apply.', 'success');
+            loadPortRec();
+            ['TCP_IN','TCP_OUT','UDP_IN','UDP_OUT'].forEach(reloadPortTag);
+            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-plus"></span> Add All Missing Ports');
+        });
+    });
+}
+
+function reloadPortTag(key) {
+    $.get('/qconfig/port-tags?key=' + key, function(r) {
+        if (r && r.raw !== undefined) {
+            $('#raw-' + key).val(r.raw);
+        }
+    });
+    /* Reload the page section for this key's tag list via the existing endpoint */
+    $.getJSON('/api/port-tags/' + key, function(r) {
+        if (!r || !r.ports) return;
+        var html = '';
+        r.ports.forEach(function(p) {
+            html += '<span class="label label-default port-tag" style="font-size:13px; margin:2px; display:inline-block; padding:5px 10px">'
+                + p.port + (p.label ? ' <small class="text-muted">(' + p.label + ')</small>' : '')
+                + '<a href="#" class="remove-port text-danger" data-key="' + key + '" data-port="' + p.port + '" style="margin-left:5px">&times;</a></span>';
+        });
+        $('#tags-' + key).html(html);
+        $('#raw-' + key).val(r.raw);
+    }).fail(function() {
+        /* If no such endpoint, just reload the page after a short delay */
+    });
+}
+
+/* Auto-load recommendations when Ports tab is shown */
+$('#configTabs a[href="#ports"]').on('shown.bs.tab', function() {
+    if (!_portRecOpen) {
+        _portRecOpen = true;
+        $('#port-rec-body').show();
+        $('#port-rec-chevron').removeClass('glyphicon-chevron-down').addClass('glyphicon-chevron-up');
+        loadPortRec();
+    }
+});
+
+/* ===== SMART PORT DEFAULTS ===== */
+var _portLabels = {{ ports_json|safe }};
+
+function loadSmartDefaults() {
+    var btn = $('#btn-smart-defaults');
+    btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Scanning server...');
+    $.getJSON('/api/port-defaults', function(data) {
+        btn.prop('disabled', false).html('<span class="glyphicon glyphicon-refresh"></span> Reset Ports to Smart Defaults');
+        showSmartDefaultsModal(data);
+    }).fail(function() {
+        btn.prop('disabled', false).html('<span class="glyphicon glyphicon-refresh"></span> Reset Ports to Smart Defaults');
+        showToast('Failed to scan server services', 'danger');
+    });
+}
+
+function showSmartDefaultsModal(data) {
+    var detected = data.detected;
+    var defaults = data.defaults;
+    var current = data.current;
+    var labels = data.labels;
+
+    var svcHtml = '<div class="well well-sm" style="max-height:200px; overflow-y:auto">';
+    if (detected.length === 0) {
+        svcHtml += '<p class="text-muted">No services detected</p>';
+    } else {
+        svcHtml += '<table class="table table-condensed" style="margin:0"><thead><tr><th>Service</th><th>Port</th><th>Direction</th></tr></thead><tbody>';
+        detected.forEach(function(svc) {
+            var dirs = [];
+            if (svc.tcp_in) dirs.push('<span class="label label-success">TCP IN</span>');
+            if (svc.tcp_out) dirs.push('<span class="label label-info">TCP OUT</span>');
+            if (svc.udp_in) dirs.push('<span class="label label-warning">UDP IN</span>');
+            if (svc.udp_out) dirs.push('<span class="label label-default">UDP OUT</span>');
+            svcHtml += '<tr><td><strong>' + svc.label + '</strong></td><td>' + svc.port + '</td><td>' + dirs.join(' ') + '</td></tr>';
+        });
+        svcHtml += '</tbody></table>';
+    }
+    svcHtml += '</div>';
+
+    var portKeys = ['TCP_IN', 'TCP_OUT', 'UDP_IN', 'UDP_OUT'];
+    var compHtml = '<table class="table table-bordered table-condensed" style="font-size:12px">';
+    compHtml += '<thead><tr><th>Setting</th><th>Current</th><th><span class="glyphicon glyphicon-arrow-right"></span> New Default</th></tr></thead><tbody>';
+    portKeys.forEach(function(key) {
+        var curPorts = current[key] ? current[key].split(',').map(function(p){return p.trim()}).filter(Boolean) : [];
+        var newPorts = defaults[key] ? defaults[key].split(',').map(function(p){return p.trim()}).filter(Boolean) : [];
+        var curLabeled = curPorts.map(function(p) {
+            var lbl = labels[p] || _portLabels[p] || '';
+            return lbl ? p + ' <small class="text-muted">(' + lbl + ')</small>' : p;
+        });
+        var newLabeled = newPorts.map(function(p) {
+            var lbl = labels[p] || _portLabels[p] || '';
+            return lbl ? p + ' <small class="text-muted">(' + lbl + ')</small>' : p;
+        });
+        var changed = current[key] !== defaults[key];
+        compHtml += '<tr' + (changed ? ' class="warning"' : '') + '>';
+        compHtml += '<td><strong>' + key + '</strong></td>';
+        compHtml += '<td>' + (curLabeled.join(', ') || '<em class="text-muted">empty</em>') + '</td>';
+        compHtml += '<td>' + (newLabeled.join(', ') || '<em class="text-muted">empty</em>') + '</td>';
+        compHtml += '</tr>';
+    });
+    compHtml += '</tbody></table>';
+    compHtml += '<div class="checkbox"><label><input type="checkbox" id="apply-ipv6" checked> Also apply the same ports to IPv6 (TCP6/UDP6)</label></div>';
+
+    var html = '<div class="modal fade" id="smartDefaultsModal" tabindex="-1">'
+        + '<div class="modal-dialog modal-lg"><div class="modal-content">'
+        + '<div class="modal-header" style="border-bottom:2px solid #f0ad4e">'
+        + '<button type="button" class="close" data-dismiss="modal">&times;</button>'
+        + '<h4 class="modal-title"><span class="glyphicon glyphicon-search"></span> Smart Port Defaults — Detected Services</h4>'
+        + '</div>'
+        + '<div class="modal-body">'
+        + '<h5><span class="glyphicon glyphicon-th-list"></span> Services Found on This Server</h5>'
+        + svcHtml
+        + '<h5 style="margin-top:15px"><span class="glyphicon glyphicon-transfer"></span> Port Changes Preview</h5>'
+        + '<p class="text-muted" style="font-size:12px">Yellow rows will change. Review carefully before applying.</p>'
+        + compHtml
+        + '</div>'
+        + '<div class="modal-footer">'
+        + '<button class="btn btn-default" data-dismiss="modal">Cancel</button>'
+        + '<button class="btn btn-warning" onclick="applySmartDefaults()"><span class="glyphicon glyphicon-ok"></span> Apply These Defaults</button>'
+        + '</div>'
+        + '</div></div></div>';
+
+    $('#smartDefaultsModal').remove();
+    $('body').append(html);
+    window._smartDefaults = defaults;
+    $('#smartDefaultsModal').modal('show');
+}
+
+function applySmartDefaults() {
+    var selections = {};
+    var keys = ['TCP_IN', 'TCP_OUT', 'UDP_IN', 'UDP_OUT'];
+    var includeV6 = $('#apply-ipv6').is(':checked');
+    keys.forEach(function(k) {
+        selections[k] = window._smartDefaults[k];
+        if (includeV6) {
+            selections[k.replace('TCP_', 'TCP6_').replace('UDP_', 'UDP6_')] = window._smartDefaults[k];
+        }
+    });
+    $('#smartDefaultsModal .btn-warning').prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Applying...');
+    $.ajax({
+        url: '/api/port-defaults/apply',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({selections: selections}),
+        success: function(r) {
+            $('#smartDefaultsModal').modal('hide');
+            if (r.success) {
+                showToast(r.message, 'success');
+                setTimeout(function(){ location.reload(); }, 1500);
+            } else {
+                showToast(r.error || 'Failed to apply', 'danger');
+            }
+        },
+        error: function() {
+            showToast('Failed to apply defaults', 'danger');
+            $('#smartDefaultsModal .btn-warning').prop('disabled', false).html('<span class="glyphicon glyphicon-ok"></span> Apply These Defaults');
+        }
+    });
+}
+</script>
+{% endblock %}

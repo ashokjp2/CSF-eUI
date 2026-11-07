@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block page_title %}Firewall Timeline{% endblock %}
+
+{% block content %}
+<p class="text-muted" style="margin-bottom:15px">Visual overview of firewall events over time</p>
+
+        <!-- Controls -->
+        <div class="btn-group" style="margin-bottom:15px">
+            <button class="btn btn-default tl-range active" data-hours="24">24 Hours</button>
+            <button class="btn btn-default tl-range" data-hours="72">3 Days</button>
+            <button class="btn btn-default tl-range" data-hours="168">7 Days</button>
+        </div>
+
+        <!-- Summary Tiles -->
+        <div class="row" id="tl-summary">
+            <div class="col-md-3 col-xs-6">
+                <div class="panel panel-danger">
+                    <div class="panel-body text-center">
+                        <h2 id="tl-total-blocks" style="margin:0">-</h2>
+                        <small>Total Blocks</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-xs-6">
+                <div class="panel panel-warning">
+                    <div class="panel-body text-center">
+                        <h2 id="tl-total-logins" style="margin:0">-</h2>
+                        <small>Login Events</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-xs-6">
+                <div class="panel panel-info">
+                    <div class="panel-body text-center">
+                        <h2 id="tl-total-alerts" style="margin:0">-</h2>
+                        <small>Allow Events</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-xs-6">
+                <div class="panel panel-default">
+                    <div class="panel-body text-center">
+                        <h2 id="tl-peak" style="margin:0">-</h2>
+                        <small>Peak Hour (<span id="tl-peak-time">-</span>)</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <h4 class="panel-title" style="margin:0">
+                    <span class="glyphicon glyphicon-signal"></span> Events Over Time
+                    <span class="pull-right text-muted" style="font-size:12px">
+                        <span style="color:#d9534f">&#9632;</span> Blocks
+                        <span style="color:#f0ad4e; margin-left:8px">&#9632;</span> Logins
+                        <span style="color:#5bc0de; margin-left:8px">&#9632;</span> Allows
+                    </span>
+                </h4>
+            </div>
+            <div class="panel-body" style="padding:10px; overflow-x:auto">
+                <div id="tl-chart" style="min-height:250px; position:relative">
+                    <div id="tl-loading" style="text-align:center; padding:80px 0">
+                        <span class="glyphicon glyphicon-hourglass" style="font-size:24px"></span>
+                        <p>Loading timeline...</p>
+                    </div>
+                    <canvas id="tl-canvas" style="display:none; width:100%; height:250px"></canvas>
+                    <!-- Fallback bar chart if canvas not supported -->
+                    <div id="tl-bars" style="display:none"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent events table -->
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <h4 class="panel-title" style="margin:0">
+                    <span class="glyphicon glyphicon-th-list"></span> Hourly Breakdown
+                </h4>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-condensed table-hover" id="tl-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th class="text-center">Blocks</th>
+                            <th class="text-center">Logins</th>
+                            <th class="text-center">Allows</th>
+                            <th>Activity</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tl-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    function loadTimeline(hours) {
+        $('#tl-loading').show();
+        $('#tl-bars').hide();
+        $.getJSON('/api/timeline', {hours: hours}, function(data) {
+            $('#tl-loading').hide();
+
+            // Summary
+            var s = data.summary;
+            $('#tl-total-blocks').text(s.total_blocks);
+            $('#tl-total-logins').text(s.total_logins);
+            $('#tl-total-alerts').text(s.total_alerts);
+            $('#tl-peak').text(s.peak_blocks);
+            $('#tl-peak-time').text(s.peak_hour);
+
+            // Bar chart (CSS-based, no external library needed)
+            var tl = data.timeline;
+            var maxVal = Math.max.apply(null, tl.map(function(t) {
+                return t.blocks + t.logins + t.alerts;
+            })) || 1;
+
+            var barsHtml = '<div style="display:flex; align-items:flex-end; height:200px; gap:1px; padding:0 5px">';
+            tl.forEach(function(t) {
+                var total = t.blocks + t.logins + t.alerts;
+                var pct = (total / maxVal * 100).toFixed(1);
+                var bPct = total > 0 ? (t.blocks / total * 100).toFixed(0) : 0;
+                var lPct = total > 0 ? (t.logins / total * 100).toFixed(0) : 0;
+                var barW = Math.max(100 / tl.length - 0.5, 2);
+
+                barsHtml += '<div style="flex:1; min-width:' + barW + 'px; height:100%; display:flex; flex-direction:column; justify-content:flex-end" title="' + t.label + ': ' + t.blocks + ' blocks, ' + t.logins + ' logins, ' + t.alerts + ' allows">';
+                if (total > 0) {
+                    var h = Math.max(pct, 2);
+                    barsHtml += '<div style="height:' + h + '%; display:flex; flex-direction:column">';
+                    if (t.blocks > 0) barsHtml += '<div style="flex:' + t.blocks + '; background:#d9534f; min-height:1px"></div>';
+                    if (t.logins > 0) barsHtml += '<div style="flex:' + t.logins + '; background:#f0ad4e; min-height:1px"></div>';
+                    if (t.alerts > 0) barsHtml += '<div style="flex:' + t.alerts + '; background:#5bc0de; min-height:1px"></div>';
+                    barsHtml += '</div>';
+                }
+                barsHtml += '</div>';
+            });
+            barsHtml += '</div>';
+
+            // X-axis labels (show every Nth)
+            var step = Math.max(Math.floor(tl.length / 12), 1);
+            barsHtml += '<div style="display:flex; gap:1px; padding:0 5px; font-size:10px; color:#999">';
+            tl.forEach(function(t, i) {
+                barsHtml += '<div style="flex:1; text-align:center; overflow:hidden">' + (i % step === 0 ? t.label : '') + '</div>';
+            });
+            barsHtml += '</div>';
+
+            $('#tl-bars').html(barsHtml).show();
+
+            // Table
+            var tbody = '';
+            tl.slice().reverse().forEach(function(t) {
+                var total = t.blocks + t.logins + t.alerts;
+                if (total === 0 && hours <= 24) return;
+                var barW = total > 0 ? Math.min(total / maxVal * 100, 100) : 0;
+                tbody += '<tr>' +
+                    '<td>' + t.label + '</td>' +
+                    '<td class="text-center">' + (t.blocks > 0 ? '<span class="text-danger"><strong>' + t.blocks + '</strong></span>' : '0') + '</td>' +
+                    '<td class="text-center">' + (t.logins > 0 ? '<span class="text-warning"><strong>' + t.logins + '</strong></span>' : '0') + '</td>' +
+                    '<td class="text-center">' + (t.alerts > 0 ? '<span class="text-info"><strong>' + t.alerts + '</strong></span>' : '0') + '</td>' +
+                    '<td><div style="height:14px; background:#f5f5f5; border-radius:2px">' +
+                    '<div style="height:100%; width:' + barW.toFixed(0) + '%; background:linear-gradient(90deg, #d9534f, #f0ad4e); border-radius:2px"></div>' +
+                    '</div></td></tr>';
+            });
+            $('#tl-tbody').html(tbody || '<tr><td colspan="5" class="text-center text-muted">No events in this period</td></tr>');
+        });
+    }
+
+    $('.tl-range').on('click', function() {
+        $('.tl-range').removeClass('active');
+        $(this).addClass('active');
+        loadTimeline($(this).data('hours'));
+    });
+
+    loadTimeline(24);
+});
+</script>
+{% endblock %}

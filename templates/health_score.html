@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block page_title %}Health Check{% endblock %}
+
+{% block content %}
+        <!-- Score Display -->
+        <div class="row" style="margin-bottom:20px">
+            <div class="col-md-4 text-center">
+                <div style="position:relative; width:180px; height:180px; margin:0 auto">
+                    <svg viewBox="0 0 180 180" style="transform:rotate(-90deg)">
+                        <circle cx="90" cy="90" r="80" fill="none" stroke="#eee" stroke-width="12"/>
+                        <circle cx="90" cy="90" r="80" fill="none"
+                                stroke="{{ '#5cb85c' if score.color == 'success' else '#5bc0de' if score.color == 'info' else '#f0ad4e' if score.color == 'warning' else '#d9534f' }}"
+                                stroke-width="12" stroke-linecap="round"
+                                stroke-dasharray="{{ (score.score / 100) * 502 }} 502"/>
+                    </svg>
+                    <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center">
+                        <div style="font-size:48px; font-weight:bold; color:{{ '#5cb85c' if score.color == 'success' else '#5bc0de' if score.color == 'info' else '#f0ad4e' if score.color == 'warning' else '#d9534f' }}">
+                            {{ score.grade }}
+                        </div>
+                        <div style="font-size:14px; color:#999">{{ score.score }}/100</div>
+                    </div>
+                </div>
+                <p class="text-muted" style="margin-top:10px">{{ score.description }}</p>
+            </div>
+            <div class="col-md-8">
+                <div class="row">
+                    <div class="col-xs-3">
+                        <div class="well well-sm text-center" style="border-left:4px solid #5cb85c; margin-bottom:10px">
+                            <span class="text-success" style="font-size:24px; font-weight:bold">{{ score.summary.pass }}</span>
+                            <br><small>Passed</small>
+                        </div>
+                    </div>
+                    <div class="col-xs-3">
+                        <div class="well well-sm text-center" style="border-left:4px solid #f0ad4e; margin-bottom:10px">
+                            <span class="text-warning" style="font-size:24px; font-weight:bold">{{ score.summary.warn }}</span>
+                            <br><small>Warnings</small>
+                        </div>
+                    </div>
+                    <div class="col-xs-3">
+                        <div class="well well-sm text-center" style="border-left:4px solid #d9534f; margin-bottom:10px">
+                            <span class="text-danger" style="font-size:24px; font-weight:bold">{{ score.summary.fail }}</span>
+                            <br><small>Failed</small>
+                        </div>
+                    </div>
+                    <div class="col-xs-3">
+                        <div class="well well-sm text-center" style="border-left:4px solid #5bc0de; margin-bottom:10px">
+                            <span class="text-info" style="font-size:24px; font-weight:bold">{{ score.summary.info }}</span>
+                            <br><small>Info</small>
+                        </div>
+                    </div>
+                </div>
+
+                {% if score.recommendations %}
+                <h4 style="margin-top:5px"><span class="glyphicon glyphicon-wrench"></span> Top Recommendations</h4>
+                {% for rec in score.recommendations %}
+                <div style="padding:8px 12px; margin-bottom:6px; border-left:4px solid {{ '#d9534f' if rec.priority == 'critical' else '#f0ad4e' }}; background:{{ '#fdf2f2' if rec.priority == 'critical' else '#fef9f0' }}">
+                    <div>
+                        {% if rec.priority == 'critical' %}
+                        <span class="label label-danger">CRITICAL</span>
+                        {% else %}
+                        <span class="label label-warning">FIX</span>
+                        {% endif %}
+                        <strong>{{ rec.title }}</strong>
+                        <small class="text-muted">({{ rec.category }})</small>
+                    </div>
+                    {% if rec.detail %}
+                    <div style="font-size:12px; color:#666; margin-top:3px">{{ rec.detail }}</div>
+                    {% endif %}
+                    {% if rec.setting %}
+                    <a href="/config" class="btn btn-xs btn-default" style="margin-top:4px">
+                        <span class="glyphicon glyphicon-cog"></span> Fix: {{ rec.setting }}
+                    </a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Detailed results -->
+        <h4><span class="glyphicon glyphicon-list-alt"></span> Detailed Check Results</h4>
+        {% for category in score.report.checks %}
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <h4 class="panel-title" style="margin:0">
+                    {% if category.category == 'SSH Hardening' %}
+                    <span class="glyphicon glyphicon-lock"></span>
+                    {% elif category.category == 'CSF Firewall Settings' %}
+                    <span class="glyphicon glyphicon-fire"></span>
+                    {% elif category.category == 'System Security' %}
+                    <span class="glyphicon glyphicon-shield"></span>
+                    {% else %}
+                    <span class="glyphicon glyphicon-cog"></span>
+                    {% endif %}
+                    {{ category.category }}
+                    <span class="badge pull-right">{{ category["items"]|length }}</span>
+                </h4>
+            </div>
+            <div class="panel-body" style="padding:0">
+                {% for item in category["items"] %}
+                <div style="padding:8px 15px; border-bottom:1px solid #eee;
+                    {% if item.status == 'fail' %}border-left:4px solid #d9534f; background:#fdf2f2{% elif item.status == 'warn' %}border-left:4px solid #f0ad4e; background:#fef9f0{% elif item.status == 'pass' %}border-left:4px solid #5cb85c{% elif item.status == 'info' %}border-left:4px solid #5bc0de; background:#f0f9ff{% endif %}">
+                    <span class="glyphicon glyphicon-{{ 'ok-sign text-success' if item.status == 'pass' else 'warning-sign text-warning' if item.status == 'warn' else 'remove-sign text-danger' if item.status == 'fail' else 'info-sign text-info' }}"></span>
+                    <strong>{{ item.title }}</strong>
+                    {% if item.detail %}
+                    <div style="margin-top:3px; padding-left:22px; font-size:12px" class="text-muted">{{ item.detail }}</div>
+                    {% endif %}
+                    {% if item.setting %}
+                    <a href="/config" class="btn btn-xs btn-default" style="margin-left:22px; margin-top:3px">
+                        <span class="glyphicon glyphicon-cog"></span> Edit {{ item.setting }}
+                    </a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+
+    </div>
+</div>
+{% endblock %}

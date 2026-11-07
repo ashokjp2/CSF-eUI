@@ -1,0 +1,494 @@
+{% extends "base.html" %}
+{% block page_title %}Log Viewer{% endblock %}
+
+{% block content %}
+<div class="panel panel-default">
+    <div class="panel-heading">
+        <h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-eye-open"></span> System Logs</h4>
+    </div>
+    <div class="panel-body">
+        <ul class="nav nav-tabs" style="margin-bottom:15px">
+            <li class="active"><a data-toggle="tab" href="#smartview"><span class="glyphicon glyphicon-th-list"></span> Smart View</a></li>
+            <li><a data-toggle="tab" href="#logtail"><span class="glyphicon glyphicon-console"></span> Raw Logs</a></li>
+            <li><a data-toggle="tab" href="#loggrep"><span class="glyphicon glyphicon-search"></span> Search</a></li>
+        </ul>
+
+        <div class="tab-content">
+
+            <!-- ====== SMART VIEW ====== -->
+            <div class="tab-pane active" id="smartview">
+                <div class="row" style="margin-bottom:10px">
+                    <div class="col-md-4">
+                        <select class="form-control" id="smartLogFile">
+                            {% for log in log_files %}
+                            <option value="{{ log }}"{{ ' selected' if 'lfd.log' in log }}>{{ log|replace('/var/log/', '') }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-control" id="smartLines">
+                            <option value="30">30 lines</option>
+                            <option value="50" selected>50 lines</option>
+                            <option value="100">100 lines</option>
+                            <option value="200">200 lines</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-control" id="smartFilter">
+                            <option value="all">All Events</option>
+                            <option value="block">Blocks Only</option>
+                            <option value="allow">Allows Only</option>
+                            <option value="warning">Warnings</option>
+                            <option value="login">Login Events</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-primary" id="smartLoad">
+                            <span class="glyphicon glyphicon-refresh"></span> Load
+                        </button>
+                        <label class="checkbox-inline" style="margin-left:10px">
+                            <input type="checkbox" id="smartAuto"> Auto-refresh
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Summary bar -->
+                <div id="logSummary" style="display:none; margin-bottom:12px">
+                    <div class="row">
+                        <div class="col-xs-3">
+                            <div class="well well-sm text-center" style="margin-bottom:0">
+                                <span class="text-danger" style="font-size:20px; font-weight:bold" id="sumBlocks">0</span>
+                                <br><small>Blocks</small>
+                            </div>
+                        </div>
+                        <div class="col-xs-3">
+                            <div class="well well-sm text-center" style="margin-bottom:0">
+                                <span class="text-success" style="font-size:20px; font-weight:bold" id="sumAllows">0</span>
+                                <br><small>Allows</small>
+                            </div>
+                        </div>
+                        <div class="col-xs-3">
+                            <div class="well well-sm text-center" style="margin-bottom:0">
+                                <span class="text-warning" style="font-size:20px; font-weight:bold" id="sumWarnings">0</span>
+                                <br><small>Warnings</small>
+                            </div>
+                        </div>
+                        <div class="col-xs-3">
+                            <div class="well well-sm text-center" style="margin-bottom:0">
+                                <span class="text-info" style="font-size:20px; font-weight:bold" id="sumOther">0</span>
+                                <br><small>Other</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="smartOutput">
+                    <div class="alert alert-info">Select a log file and click <strong>Load</strong> to see parsed events.</div>
+                </div>
+            </div>
+
+            <!-- ====== RAW LOG TAIL ====== -->
+            <div class="tab-pane" id="logtail">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label>Log File</label>
+                            <select class="form-control" id="CSFlognum">
+                                {% for log in log_files %}
+                                <option value="{{ log }}">{{ log }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label>Lines</label>
+                            <select class="form-control" id="CSFlines">
+                                <option value="20">20</option>
+                                <option value="50" selected>50</option>
+                                <option value="100">100</option>
+                                <option value="200">200</option>
+                                <option value="500">500</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label>&nbsp;</label>
+                        <div>
+                            <button type="button" class="btn btn-primary" id="startTail">
+                                <span class="glyphicon glyphicon-play"></span> Start
+                            </button>
+                            <button type="button" class="btn btn-warning" id="pauseTail" disabled>
+                                <span class="glyphicon glyphicon-pause"></span> Pause
+                            </button>
+                            <button type="button" class="btn btn-default" id="refreshTail">
+                                <span class="glyphicon glyphicon-refresh"></span> Refresh
+                            </button>
+                            <span id="CSFrefreshing" style="display:none" class="text-info">
+                                <span class="glyphicon glyphicon-refresh spinning"></span> Refreshing...
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="checkbox" style="margin-bottom:5px">
+                    <label><input type="checkbox" id="highlightLogs" checked> Syntax highlighting</label>
+                </div>
+                <pre class="comment log-output" id="tailOutput" style="max-height:500px; overflow-y:auto; font-size:12px">Select a log file and click Start to begin watching.</pre>
+            </div>
+
+            <!-- ====== LOG SEARCH ====== -->
+            <div class="tab-pane" id="loggrep">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label>Log File</label>
+                            <select class="form-control" id="grepLogFile">
+                                {% for log in log_files %}
+                                <option value="{{ log }}">{{ log }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label>Search Pattern</label>
+                            <input type="text" class="form-control" id="CSFgrep" placeholder="e.g. an IP, DENY, sshd...">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label>&nbsp;</label>
+                        <div>
+                            <label class="checkbox-inline">
+                                <input type="checkbox" id="CSFgrep_i" checked> Case insensitive
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-primary" id="searchBtn">
+                    <span class="glyphicon glyphicon-search"></span> Search
+                </button>
+                <pre class="comment log-output" id="grepOutput" style="max-height:500px; overflow-y:auto; font-size:12px; margin-top:10px">Enter a search pattern and click Search.</pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ===== SMART VIEW ===== */
+var smartTimer = null;
+
+function parseLine(line) {
+    line = line.trim();
+    if (!line) return null;
+
+    var entry = { raw: line, type: 'info', icon: 'info-sign', label: 'Info', ip: '', detail: '', time: '' };
+
+    // Extract timestamp
+    var tsMatch = line.match(/^(\w{3}\s+\d+\s+\d+:\d+:\d+)/);
+    if (tsMatch) entry.time = tsMatch[1];
+    var isoMatch = line.match(/^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})/);
+    if (isoMatch) entry.time = isoMatch[1];
+
+    // Extract IP
+    var ipMatch = line.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/);
+    if (ipMatch) entry.ip = ipMatch[1];
+
+    // Classify
+    if (/\b(Blocked|DENY|DROP|REJECT|BANNED|blocked)\b/i.test(line)) {
+        entry.type = 'block'; entry.icon = 'ban-circle'; entry.label = 'Blocked';
+        // Try to extract reason
+        var blockMatch = line.match(/Blocked in \w+\s*(?:\((.+?)\))?/i) || line.match(/\*Blocked\*\s*(.+?)(?:\s+\[|$)/i);
+        if (blockMatch) entry.detail = blockMatch[1] || '';
+        if (!entry.detail) {
+            if (/sshd/i.test(line)) entry.detail = 'SSH brute-force';
+            else if (/ftpd/i.test(line)) entry.detail = 'FTP brute-force';
+            else if (/smtp/i.test(line)) entry.detail = 'SMTP auth failure';
+            else if (/pop3/i.test(line)) entry.detail = 'POP3 brute-force';
+            else if (/imap/i.test(line)) entry.detail = 'IMAP brute-force';
+            else if (/modsec/i.test(line)) entry.detail = 'ModSecurity trigger';
+            else if (/htaccess/i.test(line)) entry.detail = 'htaccess violation';
+            else if (/port scan/i.test(line)) entry.detail = 'Port scan detected';
+            else if (/CT_LIMIT/i.test(line)) entry.detail = 'Connection limit exceeded';
+            else if (/distributed/i.test(line)) entry.detail = 'Distributed attack';
+        }
+        if (!entry.detail) entry.detail = 'Firewall block';
+    } else if (/\b(ACCEPT|ALLOW|allowed|unblocked)\b/i.test(line)) {
+        entry.type = 'allow'; entry.icon = 'ok-circle'; entry.label = 'Allowed';
+        entry.detail = 'IP allowed through firewall';
+    } else if (/\b(WARNING|WARN|CAUTION)\b/i.test(line)) {
+        entry.type = 'warning'; entry.icon = 'warning-sign'; entry.label = 'Warning';
+        entry.detail = line.replace(/.*?(WARNING|WARN):?\s*/i, '').substring(0, 120);
+    } else if (/\b(login|auth|session opened|session closed|Failed password|Accepted)\b/i.test(line)) {
+        if (/Failed|Invalid|error/i.test(line)) {
+            entry.type = 'block'; entry.icon = 'lock'; entry.label = 'Login Failed';
+            if (/sshd/i.test(line)) entry.detail = 'SSH login failure';
+            else if (/su:/i.test(line)) entry.detail = 'su authentication failure';
+            else entry.detail = 'Authentication failure';
+        } else {
+            entry.type = 'allow'; entry.icon = 'log-in'; entry.label = 'Login OK';
+            entry.detail = 'Successful authentication';
+        }
+    } else if (/\b(started|stopped|restarted|Starting|Stopping)\b/i.test(line)) {
+        entry.type = 'info'; entry.icon = 'cog'; entry.label = 'Service';
+        var svcMatch = line.match(/(csf|lfd|sshd|docker|nginx|apache|mysql|postfix|dovecot)\b/i);
+        entry.detail = (svcMatch ? svcMatch[1] + ' ' : '') + ((/start/i.test(line)) ? 'started' : 'stopped');
+    } else {
+        // Generic — show a trimmed version
+        entry.detail = line.replace(/^\w{3}\s+\d+\s+\d+:\d+:\d+\s+\S+\s+/, '').substring(0, 120);
+    }
+
+    return entry;
+}
+
+function loadSmart() {
+    var logfile = $('#smartLogFile').val();
+    var lines = $('#smartLines').val();
+    var filter = $('#smartFilter').val();
+
+    $.post('/logs/tail', { logfile: logfile, lines: lines }, function(data) {
+        if (!data.output) {
+            $('#smartOutput').html('<div class="alert alert-warning">No log data available.</div>');
+            return;
+        }
+
+        var rawLines = data.output.split('\n');
+        var entries = [];
+        var counts = { block: 0, allow: 0, warning: 0, info: 0 };
+
+        for (var i = 0; i < rawLines.length; i++) {
+            var e = parseLine(rawLines[i]);
+            if (!e) continue;
+            if (e.type === 'block') counts.block++;
+            else if (e.type === 'allow') counts.allow++;
+            else if (e.type === 'warning') counts.warning++;
+            else counts.info++;
+
+            if (filter === 'all' ||
+                (filter === 'block' && e.type === 'block') ||
+                (filter === 'allow' && e.type === 'allow') ||
+                (filter === 'warning' && e.type === 'warning') ||
+                (filter === 'login' && /login|auth|password|session/i.test(e.raw))) {
+                entries.push(e);
+            }
+        }
+
+        $('#sumBlocks').text(counts.block);
+        $('#sumAllows').text(counts.allow);
+        $('#sumWarnings').text(counts.warning);
+        $('#sumOther').text(counts.info);
+        $('#logSummary').show();
+
+        if (entries.length === 0) {
+            $('#smartOutput').html('<div class="alert alert-info">No matching events found.</div>');
+            return;
+        }
+
+        var html = '<div class="list-group">';
+        for (var j = entries.length - 1; j >= 0; j--) {
+            var e = entries[j];
+            var colorMap = { block: 'danger', allow: 'success', warning: 'warning', info: 'default' };
+            var color = colorMap[e.type] || 'default';
+
+            html += '<div class="list-group-item">';
+            html += '<div class="row">';
+
+            // Left: icon + label
+            html += '<div class="col-xs-2 col-md-1 text-center">';
+            html += '<span class="glyphicon glyphicon-' + e.icon + ' text-' + color + '" style="font-size:20px"></span>';
+            html += '</div>';
+
+            // Center: details
+            html += '<div class="col-xs-10 col-md-7">';
+            html += '<span class="label label-' + color + '">' + e.label + '</span> ';
+            if (e.ip) {
+                html += '<strong class="log-ip" style="cursor:pointer" data-ip="' + e.ip + '">' + e.ip + '</strong> ';
+            }
+            html += '<span class="text-muted">' + escapeHtml(e.detail) + '</span>';
+            html += '</div>';
+
+            // Right: time + actions
+            html += '<div class="col-xs-12 col-md-4 text-right">';
+            if (e.time) html += '<small class="text-muted">' + e.time + '</small> ';
+            if (e.ip) {
+                html += '<div class="btn-group btn-group-xs" style="margin-left:5px">';
+                html += '<a href="/search?ip=' + e.ip + '" class="btn btn-default" title="Lookup"><span class="glyphicon glyphicon-search"></span></a>';
+                html += '<button class="btn btn-success quick-allow" data-ip="' + e.ip + '" title="Allow"><span class="glyphicon glyphicon-ok"></span></button>';
+                html += '<button class="btn btn-danger quick-deny" data-ip="' + e.ip + '" title="Deny"><span class="glyphicon glyphicon-ban-circle"></span></button>';
+                html += '</div>';
+            }
+            html += '</div>';
+
+            html += '</div>';
+
+            // Expandable raw line
+            html += '<div class="raw-toggle" style="display:none; margin-top:5px"><pre style="font-size:11px; margin:0; padding:4px 8px; background:rgba(0,0,0,0.03)">' + escapeHtml(e.raw) + '</pre></div>';
+
+            html += '</div>';
+        }
+        html += '</div>';
+
+        $('#smartOutput').html(html);
+
+        // Geo lookup for visible IPs
+        var ips = [];
+        $('#smartOutput .log-ip').each(function() {
+            var ip = $(this).data('ip');
+            if (ip && ips.indexOf(ip) === -1) ips.push(ip);
+        });
+        if (ips.length > 0 && ips.length <= 50) {
+            $.ajax({
+                url: '/api/geoip/batch',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ips: ips}),
+                success: function(geo) {
+                    $('#smartOutput .log-ip').each(function() {
+                        var ip = $(this).data('ip');
+                        var g = geo[ip];
+                        if (g && g.country_code && g.country_code !== 'XX') {
+                            $(this).prepend('<img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/7.2.3/flags/4x3/' +
+                                g.country_code.toLowerCase() + '.svg" style="height:12px;margin-right:4px" title="' +
+                                g.country + (g.city ? ' - ' + g.city : '') + '"> ');
+                        }
+                    });
+                }
+            });
+        }
+    });
+}
+
+function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(text));
+    return div.innerHTML;
+}
+
+$(function() {
+    // Smart view
+    $('#smartLoad').click(function() { loadSmart(); });
+    $('#smartFilter').change(function() { loadSmart(); });
+    $('#smartAuto').change(function() {
+        if (this.checked) {
+            loadSmart();
+            smartTimer = setInterval(loadSmart, 10000);
+        } else {
+            if (smartTimer) clearInterval(smartTimer);
+        }
+    });
+
+    // Click row to show raw line
+    $(document).on('click', '.list-group-item', function(e) {
+        if ($(e.target).closest('a,button').length) return;
+        $(this).find('.raw-toggle').slideToggle(150);
+    });
+
+    // Quick allow/deny from log entries
+    $(document).on('click', '.quick-allow', function(e) {
+        e.stopPropagation();
+        var ip = $(this).data('ip');
+        if (!confirm('Allow ' + ip + ' through the firewall?')) return;
+        $.post('/quick/allow', {ip: ip}, function() {
+            showToast('Allowed ' + ip, 'success');
+        });
+    });
+    $(document).on('click', '.quick-deny', function(e) {
+        e.stopPropagation();
+        var ip = $(this).data('ip');
+        if (!confirm('Block ' + ip + '?')) return;
+        $.post('/quick/deny', {ip: ip}, function() {
+            showToast('Denied ' + ip, 'danger');
+        });
+    });
+
+    // Auto-load smart view on page load
+    loadSmart();
+});
+
+/* showToast defined globally in base.html */
+
+/* ===== RAW LOG TAIL ===== */
+var tailTimer = null;
+var tailPaused = false;
+
+function highlightLog(text) {
+    if (!$('#highlightLogs').is(':checked')) return $('<span/>').text(text);
+    var escaped = $('<span/>').text(text).html();
+    escaped = escaped.replace(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/g, '<span class="log-ip">$1</span>');
+    escaped = escaped.replace(/\b(DENY|BLOCK|DROP|REJECT|BANNED|FAILED|INVALID|ERROR)\b/gi, '<span class="log-deny">$1</span>');
+    escaped = escaped.replace(/\b(ACCEPT|ALLOW|SUCCESS|STARTED|ENABLED)\b/gi, '<span class="log-allow">$1</span>');
+    escaped = escaped.replace(/\b(WARNING|WARN|CAUTION)\b/gi, '<span class="log-warn">$1</span>');
+    escaped = escaped.replace(/((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d+\s+\d+:\d+:\d+)/g, '<span class="log-time">$1</span>');
+    escaped = escaped.replace(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})/g, '<span class="log-time">$1</span>');
+    return escaped;
+}
+
+function renderLog(el, text) {
+    if ($('#highlightLogs').is(':checked')) {
+        var lines = text.split('\n');
+        var html = lines.map(function(l) { return highlightLog(l); }).join('\n');
+        el.html(html);
+    } else {
+        el.text(text);
+    }
+}
+
+function doTail() {
+    if (tailPaused) return;
+    var logfile = $('#CSFlognum').val();
+    var lines = $('#CSFlines').val();
+    $('#CSFrefreshing').show();
+    $.post('/logs/tail', { logfile: logfile, lines: lines }, function(data) {
+        if (data.output) {
+            renderLog($('#tailOutput'), data.output);
+            var el = document.getElementById('tailOutput');
+            el.scrollTop = el.scrollHeight;
+        } else if (data.error) {
+            $('#tailOutput').text(data.error);
+        }
+        $('#CSFrefreshing').hide();
+    });
+}
+
+$('#startTail').on('click', function() {
+    tailPaused = false;
+    doTail();
+    if (tailTimer) clearInterval(tailTimer);
+    tailTimer = setInterval(doTail, 5000);
+    $('#pauseTail').prop('disabled', false);
+    $(this).prop('disabled', true);
+});
+
+$('#pauseTail').on('click', function() {
+    tailPaused = !tailPaused;
+    $(this).html(tailPaused ?
+        '<span class="glyphicon glyphicon-play"></span> Resume' :
+        '<span class="glyphicon glyphicon-pause"></span> Pause'
+    );
+});
+
+$('#refreshTail').on('click', function() {
+    doTail();
+});
+
+$('#searchBtn').on('click', function() {
+    var logfile = $('#grepLogFile').val();
+    var pattern = $('#CSFgrep').val();
+    if (!pattern) { alert('Enter a search pattern'); return; }
+    $.post('/logs/grep', {
+        logfile: logfile,
+        pattern: pattern,
+        case_insensitive: $('#CSFgrep_i').is(':checked') ? '1' : '0',
+        extended: $('#CSFgrep_E').is(':checked') ? '1' : '0'
+    }, function(data) {
+        if (data.output) {
+            renderLog($('#grepOutput'), data.output || 'No matches found.');
+        } else if (data.error) {
+            $('#grepOutput').text(data.error);
+        }
+    });
+});
+</script>
+{% endblock %}

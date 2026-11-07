@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block page_title %}Firewall Status{% endblock %}
+
+{% block content %}
+<div class="panel panel-default">
+    <div class="panel-heading">
+        <h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-list"></span> Firewall Status (iptables)</h4>
+        <div class="pull-right">
+            <button class="btn btn-default btn-xs" id="fontplus-btn">
+                <span class="glyphicon glyphicon-plus"></span>
+            </button>
+            <button class="btn btn-default btn-xs" id="fontminus-btn">
+                <span class="glyphicon glyphicon-minus"></span>
+            </button>
+        </div>
+    </div>
+    <div class="panel-body">
+        <h4>IPv4 Rules</h4>
+        <pre class="comment" id="output" style="max-height:600px; overflow-y:auto; font-size:12px">{{ result.stdout if result else 'CSF not running or not installed' }}</pre>
+
+        {% if result6 %}
+        <h4 style="margin-top:20px">IPv6 Rules</h4>
+        <pre class="comment" style="max-height:600px; overflow-y:auto; font-size:12px">{{ result6.stdout }}</pre>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+var myFont = 12;
+$('#fontplus-btn').on('click', function() {
+    if (myFont < 20) {
+        myFont += 1;
+        $('#output').css('font-size', myFont + 'px');
+    }
+});
+$('#fontminus-btn').on('click', function() {
+    if (myFont > 8) {
+        myFont -= 1;
+        $('#output').css('font-size', myFont + 'px');
+    }
+});
+</script>
+{% endblock %}

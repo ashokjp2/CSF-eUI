@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block page_title %}Attack Analytics{% endblock %}
+
+{% block content %}
+<p class="text-muted" style="margin-bottom:15px">Who is attacking your server and how</p>
+
+        <div class="btn-group" style="margin-bottom:15px">
+            <button class="btn btn-default aa-range active" data-hours="24">24 Hours</button>
+            <button class="btn btn-default aa-range" data-hours="72">3 Days</button>
+            <button class="btn btn-default aa-range" data-hours="168">7 Days</button>
+        </div>
+
+        <!-- Summary tiles -->
+        <div class="row">
+            <div class="col-md-4 col-xs-4">
+                <div class="panel panel-danger">
+                    <div class="panel-body text-center">
+                        <h2 id="aa-total" style="margin:0">-</h2>
+                        <small>Total Attacks</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 col-xs-4">
+                <div class="panel panel-warning">
+                    <div class="panel-body text-center">
+                        <h2 id="aa-ips" style="margin:0">-</h2>
+                        <small>Unique IPs</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 col-xs-4">
+                <div class="panel panel-info">
+                    <div class="panel-body text-center">
+                        <h2 id="aa-countries" style="margin:0">-</h2>
+                        <small>Countries</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Top Attackers -->
+            <div class="col-md-7">
+                <div class="panel panel-danger">
+                    <div class="panel-heading">
+                        <h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-alert"></span> Top Attackers</h4>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-condensed table-hover" style="margin:0">
+                            <thead><tr><th>#</th><th>IP Address</th><th>Country</th><th>Hits</th><th>Actions</th></tr></thead>
+                            <tbody id="aa-ips-table"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Countries -->
+            <div class="col-md-5">
+                <div class="panel panel-warning">
+                    <div class="panel-heading">
+                        <h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-globe"></span> Top Countries</h4>
+                    </div>
+                    <div id="aa-countries-chart" style="padding:10px"></div>
+                </div>
+
+                <!-- Attack Types -->
+                <div class="panel panel-info">
+                    <div class="panel-heading">
+                        <h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-flash"></span> Attack Types</h4>
+                    </div>
+                    <div id="aa-types" style="padding:10px"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hourly Heatmap -->
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-time"></span> Attack Heatmap (by hour of day)</h4>
+            </div>
+            <div class="panel-body" id="aa-heatmap" style="padding:10px"></div>
+        </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    function loadAnalytics(hours) {
+        $.getJSON('/api/analytics', {hours: hours}, function(d) {
+            $('#aa-total').text(d.total_attacks);
+            $('#aa-ips').text(d.unique_ips);
+            $('#aa-countries').text(d.unique_countries);
+
+            // Top IPs table
+            var html = '';
+            d.top_ips.forEach(function(ip, i) {
+                var flag = ip.country ? '<img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/7.2.3/flags/4x3/' + ip.country.toLowerCase() + '.svg" style="height:14px;margin-right:4px">' + ip.country : '-';
+                html += '<tr>' +
+                    '<td>' + (i + 1) + '</td>' +
+                    '<td><code>' + ip.ip + '</code></td>' +
+                    '<td>' + flag + '</td>' +
+                    '<td><span class="badge" style="background:#d9534f">' + ip.count + '</span></td>' +
+                    '<td>' +
+                    '<a href="/ip-lookup?ip=' + ip.ip + '" class="btn btn-xs btn-info" title="Lookup"><span class="glyphicon glyphicon-search"></span></a> ' +
+                    '<a href="/logs/search?q=' + ip.ip + '" class="btn btn-xs btn-default" title="View Logs"><span class="glyphicon glyphicon-list-alt"></span></a>' +
+                    '</td></tr>';
+            });
+            $('#aa-ips-table').html(html || '<tr><td colspan="5" class="text-center text-muted">No attack data</td></tr>');
+
+            // Top Countries bar chart
+            var maxC = d.top_countries.length > 0 ? d.top_countries[0].count : 1;
+            html = '';
+            d.top_countries.forEach(function(c) {
+                var pct = (c.count / maxC * 100).toFixed(0);
+                html += '<div style="margin-bottom:4px">' +
+                    '<div style="display:flex; align-items:center">' +
+                    '<img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/7.2.3/flags/4x3/' + c.code.toLowerCase() + '.svg" style="height:14px; width:20px; margin-right:6px">' +
+                    '<span style="width:50px; font-size:12px">' + c.code + '</span>' +
+                    '<div style="flex:1; background:#f5f5f5; height:18px; border-radius:3px; margin-right:6px">' +
+                    '<div style="width:' + pct + '%; background:#f0ad4e; height:100%; border-radius:3px; min-width:2px"></div></div>' +
+                    '<span style="font-size:12px; font-weight:bold; width:40px; text-align:right">' + c.count + '</span>' +
+                    '</div></div>';
+            });
+            $('#aa-countries-chart').html(html || '<p class="text-muted">No country data</p>');
+
+            // Attack types
+            var maxT = d.attack_types.length > 0 ? d.attack_types[0].count : 1;
+            var colors = ['#d9534f', '#f0ad4e', '#5bc0de', '#5cb85c', '#777', '#337ab7', '#9b59b6', '#e67e22'];
+            html = '';
+            d.attack_types.forEach(function(t, i) {
+                var pct = (t.count / maxT * 100).toFixed(0);
+                var color = colors[i % colors.length];
+                html += '<div style="margin-bottom:4px">' +
+                    '<div style="display:flex; align-items:center">' +
+                    '<span style="width:130px; font-size:12px">' + t.type + '</span>' +
+                    '<div style="flex:1; background:#f5f5f5; height:18px; border-radius:3px; margin-right:6px">' +
+                    '<div style="width:' + pct + '%; background:' + color + '; height:100%; border-radius:3px; min-width:2px"></div></div>' +
+                    '<span style="font-size:12px; font-weight:bold; width:40px; text-align:right">' + t.count + '</span>' +
+                    '</div></div>';
+            });
+            $('#aa-types').html(html || '<p class="text-muted">No data</p>');
+
+            // Hourly heatmap
+            var maxH = Math.max.apply(null, d.hourly.map(function(h) { return h.count; })) || 1;
+            html = '<div style="display:flex; gap:3px; align-items:flex-end; height:80px">';
+            d.hourly.forEach(function(h) {
+                var intensity = h.count / maxH;
+                var r = Math.round(217 + (255 - 217) * (1 - intensity));
+                var g = Math.round(83 + (255 - 83) * (1 - intensity));
+                var b = Math.round(79 + (255 - 79) * (1 - intensity));
+                if (h.count === 0) { r = 240; g = 240; b = 240; }
+                var height = h.count > 0 ? Math.max(intensity * 100, 8) : 5;
+                html += '<div style="flex:1; height:' + height + '%; background:rgb(' + r + ',' + g + ',' + b + '); border-radius:2px; min-width:8px" title="' + h.hour + ': ' + h.count + ' attacks"></div>';
+            });
+            html += '</div>';
+            html += '<div style="display:flex; gap:3px; font-size:10px; color:#999; margin-top:2px">';
+            d.hourly.forEach(function(h, i) {
+                html += '<div style="flex:1; text-align:center">' + (i % 3 === 0 ? h.hour.replace(':00','') : '') + '</div>';
+            });
+            html += '</div>';
+            $('#aa-heatmap').html(html);
+        });
+    }
+
+    $('.aa-range').on('click', function() {
+        $('.aa-range').removeClass('active');
+        $(this).addClass('active');
+        loadAnalytics($(this).data('hours'));
+    });
+
+    loadAnalytics(24);
+});
+</script>
+{% endblock %}

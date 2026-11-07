@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% block page_title %}Updates{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6">
+        <div class="panel panel-{{ 'success' if not info.update_available else 'warning' }}">
+            <div class="panel-heading">
+                <h4 class="panel-title" style="margin:0">
+                    <span class="glyphicon glyphicon-info-sign"></span> Version Information
+                </h4>
+            </div>
+            <div class="panel-body">
+                <table class="table table-condensed" style="margin:0">
+                    <tr>
+                        <td style="width:160px"><strong>Installed</strong></td>
+                        <td><span class="label label-primary" style="font-size:14px">v{{ info.current }}</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Latest on GitHub</strong></td>
+                        <td>
+                            {% if info.latest == 'unknown' %}
+                            <span class="label label-default">Could not check</span>
+                            {% elif info.update_available %}
+                            <span class="label label-warning" style="font-size:14px">v{{ info.latest }} — Update available!</span>
+                            {% else %}
+                            <span class="label label-success" style="font-size:14px">v{{ info.latest }} — Up to date</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Last checked</strong></td>
+                        <td class="text-muted">{{ info.last_checked }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Repository</strong></td>
+                        <td>
+                            <a href="https://github.com/ashokjp2/CSF-eUI" target="_blank" rel="noopener">
+                                <span class="glyphicon glyphicon-link"></span> ashokjp2/CSF-eUI
+                            </a>
+                        </td>
+                    </tr>
+                </table>
+                <div style="margin-top:12px">
+                    <button class="btn btn-default btn-sm" id="btn-check">
+                        <span class="glyphicon glyphicon-refresh"></span> Check Now
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <h4 class="panel-title" style="margin:0">
+                    <span class="glyphicon glyphicon-cloud-download"></span> Update Application
+                </h4>
+            </div>
+            <div class="panel-body">
+                {% if info.update_available %}
+                <div class="alert alert-warning" style="padding:8px 12px; margin-bottom:12px">
+                    <span class="glyphicon glyphicon-exclamation-sign"></span>
+                    <strong>v{{ info.latest }}</strong> is available. The app will restart after updating.
+                </div>
+                {% else %}
+                <p class="text-muted">The app is on the latest version. You can still force an update to re-apply the current release.</p>
+                {% endif %}
+
+                <div class="alert alert-info" style="padding:8px 12px; margin-bottom:12px; font-size:12px">
+                    <span class="glyphicon glyphicon-info-sign"></span>
+                    Update pulls from GitHub, installs any new dependencies, then restarts the service.
+                    Your configuration (<code>/etc/csf/</code>) is never touched.
+                </div>
+
+                <button class="btn btn-{{ 'warning' if info.update_available else 'default' }} btn-block" id="btn-update">
+                    <span class="glyphicon glyphicon-cloud-download"></span>
+                    {{ 'Update to v' + info.latest if info.update_available else 'Force re-install current release' }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Update log -->
+<div class="panel panel-default" id="log-panel" style="display:none">
+    <div class="panel-heading">
+        <h4 class="panel-title" style="margin:0">
+            <span class="glyphicon glyphicon-list-alt"></span> Update Log
+            <span class="pull-right" id="log-status"></span>
+        </h4>
+    </div>
+    <div class="panel-body" style="padding:0">
+        <pre id="update-log"
+             style="background:#1a1a2e; color:#a8d8a8; margin:0; padding:16px;
+                    min-height:200px; max-height:500px; overflow-y:auto;
+                    font-size:12px; border-radius:0 0 4px 4px; white-space:pre-wrap"></pre>
+    </div>
+</div>
+
+<!-- Auto-update status -->
+<div class="panel panel-default">
+    <div class="panel-heading">
+        <h4 class="panel-title" style="margin:0">
+            <span class="glyphicon glyphicon-time"></span> Automatic Update Checks
+        </h4>
+    </div>
+    <div class="panel-body">
+        <p class="text-muted" style="margin-bottom:8px">
+            A systemd timer checks for new versions every 12 hours and caches the result.
+            The app shows a notification when an update is available — it never auto-installs without your action.
+        </p>
+        <div id="timer-status">
+            <span class="label label-default">Checking timer status...</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    // Check for updates button
+    $('#btn-check').on('click', function() {
+        var btn = $(this);
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh spin"></span> Checking...');
+        $.getJSON('/api/version/check?force=1', function(r) {
+            showToast(r.update_available
+                ? 'Update available: v' + r.latest
+                : 'Already up to date (v' + r.current + ')', r.update_available ? 'warning' : 'success');
+            setTimeout(function(){ location.reload(); }, 1200);
+        }).fail(function() {
+            showToast('Check failed', 'danger');
+            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-refresh"></span> Check Now');
+        });
+    });
+
+    // Update button — SSE stream
+    $('#btn-update').on('click', function() {
+        if (!confirm('This will pull the latest code from GitHub and restart the app. Continue?')) return;
+        var btn = $(this);
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Updating...');
+        $('#log-panel').show();
+        $('#log-status').html('<span class="label label-info">Running...</span>');
+        var log = $('#update-log');
+        log.text('');
+
+        var es = new EventSource('/api/version/update-stream');
+        es.onmessage = function(e) {
+            if (e.data === '__DONE_OK__') {
+                es.close();
+                $('#log-status').html('<span class="label label-success">Complete</span>');
+                log.append('\n[Done] Refreshing in 5 seconds...');
+                log.scrollTop(log[0].scrollHeight);
+                setTimeout(function(){ location.reload(); }, 5000);
+                return;
+            }
+            if (e.data === '__DONE_ERROR__') {
+                es.close();
+                $('#log-status').html('<span class="label label-danger">Failed</span>');
+                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-cloud-download"></span> Retry Update');
+                return;
+            }
+            log.append(e.data + '\n');
+            log.scrollTop(log[0].scrollHeight);
+        };
+        es.onerror = function() {
+            es.close();
+            $('#log-status').html('<span class="label label-warning">Connection lost (service may have restarted)</span>');
+            log.append('\n[Connection closed — service may have restarted. Refreshing in 5 s...]\n');
+            log.scrollTop(log[0].scrollHeight);
+            setTimeout(function(){ location.reload(); }, 5000);
+        };
+    });
+
+    // Check systemd timer status
+    $.getJSON('/api/version/timer-status', function(r) {
+        var label = r.active
+            ? '<span class="label label-success"><span class="glyphicon glyphicon-ok"></span> Timer active — checks every 12 h</span>'
+            : '<span class="label label-warning"><span class="glyphicon glyphicon-warning-sign"></span> Timer not found — run install.sh to enable</span>';
+        $('#timer-status').html(label);
+    }).fail(function() {
+        $('#timer-status').html('<span class="label label-default">Could not check timer</span>');
+    });
+});
+</script>
+<style>
+.spin { animation: spin 1s linear infinite; display:inline-block; }
+@keyframes spin { 100% { transform:rotate(360deg); } }
+</style>
+{% endblock %}

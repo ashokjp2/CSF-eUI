@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block page_title %}Ports{% endblock %}
+
+{% block content %}
+<div class="panel panel-default">
+    <div class="panel-heading">
+        <h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-transfer"></span> Listening Ports</h4>
+    </div>
+    <div class="panel-body">
+        <pre class="comment" id="output" style="max-height:600px; overflow-y:auto; font-size:12px">{{ result.stdout if result.success else result.stderr }}</pre>
+    </div>
+</div>
+
+{% endblock %}

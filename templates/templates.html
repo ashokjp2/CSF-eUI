@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block page_title %}Email Templates{% endblock %}
+
+{% block content %}
+<div class="panel panel-default">
+    <div class="panel-heading"><h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-envelope"></span> Email Alert Templates</h4></div>
+    <div class="panel-body">
+        {% if templates %}
+        <table class="table table-bordered table-striped">
+            <thead><tr><th>Template</th><th>Action</th></tr></thead>
+            <tbody>
+                {% for t in templates %}
+                <tr>
+                    <td>{{ t }}</td>
+                    <td>
+                        <a href="/templates/{{ t }}" class="btn btn-xs btn-default">
+                            <span class="glyphicon glyphicon-edit"></span> Edit
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No templates found.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,399 @@
+{% extends "base.html" %}
+{% block page_title %}Rule Builder{% endblock %}
+
+{% block content %}
+<!-- Plain-English Rule Builder -->
+<div class="panel panel-primary">
+    <div class="panel-heading">
+        <h4 style="margin:0"><span class="glyphicon glyphicon-comment"></span> Plain-English Rule Builder</h4>
+    </div>
+    <div class="panel-body">
+        <p class="text-muted">Type what you want in plain English. No technical knowledge needed.</p>
+        <div class="row">
+            <div class="col-md-9">
+                <div class="input-group input-group-lg">
+                    <input type="text" class="form-control" id="nlp-input" placeholder="e.g. Block all traffic from China" autofocus>
+                    <span class="input-group-btn">
+                        <button class="btn btn-primary" id="nlp-parse">
+                            <span class="glyphicon glyphicon-flash"></span> Build Rule
+                        </button>
+                    </span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="dropdown">
+                    <button class="btn btn-default btn-lg btn-block dropdown-toggle" data-toggle="dropdown">
+                        <span class="glyphicon glyphicon-list"></span> Examples <span class="caret"></span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-right" style="width:100%">
+                        <li><a href="#" class="nlp-example">Block all traffic from China</a></li>
+                        <li><a href="#" class="nlp-example">Allow 10.0.0.0/8</a></li>
+                        <li><a href="#" class="nlp-example">Open port 8080</a></li>
+                        <li><a href="#" class="nlp-example">Close port 3306</a></li>
+                        <li><a href="#" class="nlp-example">Allow SSH access</a></li>
+                        <li><a href="#" class="nlp-example">Block after 3 failed logins</a></li>
+                        <li><a href="#" class="nlp-example">Enable syn flood protection</a></li>
+                        <li><a href="#" class="nlp-example">Limit connections to 200</a></li>
+                        <li><a href="#" class="nlp-example">Disable testing mode</a></li>
+                        <li><a href="#" class="nlp-example">Allow web access</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Parsed result -->
+        <div id="nlp-result" style="display:none; margin-top:15px"></div>
+    </div>
+</div>
+
+<div class="panel panel-default">
+    <div class="panel-heading">
+        <h4><span class="glyphicon glyphicon-wrench"></span> Firewall Rule Builder</h4>
+    </div>
+    <div class="panel-body">
+        <div class="bs-callout bs-callout-info">
+            <p>Build firewall rules visually. Rules are added to csf.allow or csf.deny and require a CSF restart to take effect.</p>
+        </div>
+
+        <form id="ruleForm">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Rule Type</label>
+                        <select class="form-control" id="ruleType" name="type">
+                            <option value="allow">Allow</option>
+                            <option value="deny">Deny</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>IP Address / CIDR</label>
+                        <input type="text" class="form-control" id="ruleIp" name="ip" placeholder="e.g. 192.168.1.0/24" required>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label>Protocol</label>
+                        <select class="form-control" id="ruleProto" name="protocol">
+                            <option value="">Any</option>
+                            <option value="tcp">TCP</option>
+                            <option value="udp">UDP</option>
+                            <option value="icmp">ICMP</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label>Direction</label>
+                        <select class="form-control" id="ruleDir" name="direction">
+                            <option value="in">Inbound</option>
+                            <option value="out">Outbound</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label>Ports</label>
+                        <input type="text" class="form-control" id="rulePorts" name="ports" placeholder="e.g. 80,443">
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="form-group">
+                        <label>Comment</label>
+                        <input type="text" class="form-control" id="ruleComment" name="comment" placeholder="Optional description">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label>&nbsp;</label>
+                    <div>
+                        <button type="submit" class="btn btn-primary btn-block">
+                            <span class="glyphicon glyphicon-plus"></span> Add Rule
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+
+        <!-- Preview -->
+        <div class="panel panel-info" style="margin-top:15px">
+            <div class="panel-heading"><h5>Rule Preview</h5></div>
+            <div class="panel-body">
+                <code id="rulePreview" style="font-size:14px">Enter rule details above...</code>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div id="ruleResult" style="display:none; margin-top:15px"></div>
+    </div>
+</div>
+
+<!-- Bulk Operations -->
+<div class="panel panel-default">
+    <div class="panel-heading">
+        <h4><span class="glyphicon glyphicon-list"></span> Bulk IP Operations</h4>
+    </div>
+    <div class="panel-body">
+        <form id="bulkForm">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Action</label>
+                        <select class="form-control" id="bulkAction" name="action">
+                            <option value="allow">Allow</option>
+                            <option value="deny">Deny</option>
+                            <option value="unblock">Unblock</option>
+                            <option value="tempdeny">Temp Deny</option>
+                            <option value="tempallow">Temp Allow</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group" id="bulkTtlGroup" style="display:none">
+                        <label>Duration (sec)</label>
+                        <input type="number" class="form-control" name="ttl" value="3600" min="60">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label>Comment</label>
+                        <input type="text" class="form-control" name="comment" placeholder="Optional comment">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label>&nbsp;</label>
+                    <button type="submit" class="btn btn-warning btn-block">
+                        <span class="glyphicon glyphicon-flash"></span> Execute Bulk Action
+                    </button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>IP Addresses (one per line or comma-separated)</label>
+                <textarea class="form-control" id="bulkIps" name="ips" rows="6" placeholder="192.168.1.1&#10;10.0.0.0/24&#10;172.16.0.1" required></textarea>
+                <small class="text-muted">Max 100 IPs per batch</small>
+            </div>
+        </form>
+
+        <div id="bulkResult" style="display:none; margin-top:15px"></div>
+    </div>
+</div>
+
+<!-- IP Lookup -->
+<div class="panel panel-default">
+    <div class="panel-heading">
+        <h4><span class="glyphicon glyphicon-globe"></span> IP Lookup</h4>
+    </div>
+    <div class="panel-body">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="lookupIp" placeholder="Enter IP address">
+                    <span class="input-group-btn">
+                        <button class="btn btn-info" id="geoLookupBtn" type="button">
+                            <span class="glyphicon glyphicon-map-marker"></span> Geolocation
+                        </button>
+                        <button class="btn btn-warning" id="repLookupBtn" type="button">
+                            <span class="glyphicon glyphicon-alert"></span> Reputation
+                        </button>
+                    </span>
+                </div>
+            </div>
+        </div>
+        <div id="lookupResult" style="margin-top:15px"></div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updatePreview() {
+    var type = $('#ruleType').val();
+    var ip = $('#ruleIp').val() || '<IP>';
+    var proto = $('#ruleProto').val();
+    var dir = $('#ruleDir').val();
+    var ports = $('#rulePorts').val();
+    var comment = $('#ruleComment').val();
+    var rule;
+
+    if (proto && ports) {
+        rule = proto + '|' + dir + '|d=' + ports + '|s=' + ip;
+    } else {
+        rule = ip;
+    }
+    if (comment) rule += ' #' + comment;
+
+    $('#rulePreview').text('csf.' + type + ': ' + rule);
+}
+
+$('#ruleForm input, #ruleForm select').on('input change', updatePreview);
+
+$('#ruleForm').on('submit', function(e) {
+    e.preventDefault();
+    $.post('/rules/build', $(this).serialize(), function(resp) {
+        if (resp.success) {
+            $('#ruleResult').html(
+                '<div class="alert alert-success"><strong>Rule added to ' + resp.file + ':</strong> <code>' + resp.rule + '</code><br>' + resp.message + '</div>'
+            ).show();
+            CSFv2.toast('Rule added', 'success');
+        } else {
+            $('#ruleResult').html('<div class="alert alert-danger">' + resp.error + '</div>').show();
+        }
+    });
+});
+
+$('#bulkAction').on('change', function() {
+    $('#bulkTtlGroup').toggle($(this).val().indexOf('temp') === 0);
+});
+
+$('#bulkForm').on('submit', function(e) {
+    e.preventDefault();
+    CSFv2.toast('Processing bulk action...', 'info', 3000);
+    $.post('/bulk/action', $(this).serialize(), function(resp) {
+        if (resp.success) {
+            var html = '<div class="alert alert-success">' +
+                '<strong>Processed:</strong> ' + resp.processed +
+                ' | <strong>Succeeded:</strong> ' + resp.succeeded +
+                ' | <strong>Failed:</strong> ' + resp.failed + '</div>';
+            if (resp.failed > 0) {
+                html += '<ul class="list-group">';
+                resp.results.filter(function(r) { return !r.success; }).forEach(function(r) {
+                    html += '<li class="list-group-item list-group-item-danger">' + r.ip + ': ' + r.output + '</li>';
+                });
+                html += '</ul>';
+            }
+            $('#bulkResult').html(html).show();
+            CSFv2.toast(resp.succeeded + ' IPs processed', 'success');
+        }
+    });
+});
+
+$('#geoLookupBtn').on('click', function() {
+    var ip = $('#lookupIp').val().trim();
+    if (!ip) { CSFv2.toast('Enter an IP', 'warning'); return; }
+    $.getJSON('/api/geoip/' + ip, function(data) {
+        var flag = data.country_code && data.country_code !== 'XX'
+            ? '<img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/7.2.3/flags/4x3/' + data.country_code.toLowerCase() + '.svg" style="height:16px;margin-right:5px" alt="' + data.country_code + '">'
+            : '';
+        $('#lookupResult').html(
+            '<div class="well">' +
+            '<h4>' + flag + data.country + ' — ' + (data.city || 'N/A') + '</h4>' +
+            '<table class="table table-condensed" style="margin:0">' +
+            '<tr><td><strong>Region</strong></td><td>' + (data.region || '-') + '</td></tr>' +
+            '<tr><td><strong>ISP</strong></td><td>' + (data.isp || '-') + '</td></tr>' +
+            '<tr><td><strong>Organization</strong></td><td>' + (data.org || '-') + '</td></tr>' +
+            '<tr><td><strong>AS</strong></td><td>' + (data.as || '-') + '</td></tr>' +
+            '</table>' +
+            '<div class="btn-group" style="margin-top:10px">' +
+            '<button class="btn btn-xs btn-success quick-action-ip" data-ip="' + ip + '" data-action="allow">Allow</button>' +
+            '<button class="btn btn-xs btn-danger quick-action-ip" data-ip="' + ip + '" data-action="deny">Deny</button>' +
+            '<button class="btn btn-xs btn-warning quick-action-ip" data-ip="' + ip + '" data-action="unblock">Unblock</button>' +
+            '</div></div>'
+        );
+    });
+});
+
+$('#repLookupBtn').on('click', function() {
+    var ip = $('#lookupIp').val().trim();
+    if (!ip) { CSFv2.toast('Enter an IP', 'warning'); return; }
+    CSFv2.toast('Checking reputation...', 'info', 2000);
+    $.getJSON('/api/reputation/' + ip, function(data) {
+        if (data.error) {
+            $('#lookupResult').html('<div class="alert alert-warning">' + data.error + '</div>');
+            return;
+        }
+        var scoreClass = data.abuse_score > 75 ? 'danger' : data.abuse_score > 25 ? 'warning' : 'success';
+        $('#lookupResult').html(
+            '<div class="well">' +
+            '<h4>Reputation: <span class="label label-' + scoreClass + '">' + data.abuse_score + '% abuse confidence</span></h4>' +
+            '<table class="table table-condensed" style="margin:0">' +
+            '<tr><td><strong>Total Reports</strong></td><td>' + data.total_reports + '</td></tr>' +
+            '<tr><td><strong>ISP</strong></td><td>' + (data.isp || '-') + '</td></tr>' +
+            '<tr><td><strong>Domain</strong></td><td>' + (data.domain || '-') + '</td></tr>' +
+            '<tr><td><strong>Last Reported</strong></td><td>' + (data.last_reported || 'Never') + '</td></tr>' +
+            '<tr><td><strong>Whitelisted</strong></td><td>' + (data.is_whitelisted ? 'Yes' : 'No') + '</td></tr>' +
+            '</table></div>'
+        );
+    });
+});
+
+$(document).on('click', '.quick-action-ip', function() {
+    var ip = $(this).data('ip');
+    var action = $(this).data('action');
+    CSFv2.ajaxAction('/quick/' + action, {ip: ip}, 'IP ' + action + ' successful');
+});
+
+// Plain-English Rule Builder
+$('.nlp-example').on('click', function(e) {
+    e.preventDefault();
+    $('#nlp-input').val($(this).text());
+    $('#nlp-parse').click();
+});
+
+$('#nlp-parse').on('click', function() {
+    var text = $('#nlp-input').val().trim();
+    if (!text) { showToast('Type a rule in plain English', 'warning'); return; }
+
+    $.ajax({
+        url: '/api/rules/parse',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({text: text}),
+        success: function(r) {
+            if (r.success) {
+                var html = '';
+                r.rules.forEach(function(rule, i) {
+                    html += '<div class="panel panel-info" style="margin-bottom:8px">' +
+                        '<div class="panel-body">' +
+                        '<h5 style="margin-top:0"><span class="glyphicon glyphicon-ok-circle text-success"></span> ' + rule.description + '</h5>' +
+                        '<p><strong>Action:</strong> <code>' + rule.action + '</code></p>';
+                    if (rule.warning) {
+                        html += '<div class="alert alert-warning" style="margin-bottom:8px; padding:6px 10px"><small>' +
+                            '<span class="glyphicon glyphicon-warning-sign"></span> ' + rule.warning + '</small></div>';
+                    }
+                    html += '<button class="btn btn-success btn-sm nlp-apply" data-index="' + i + '">' +
+                        '<span class="glyphicon glyphicon-flash"></span> Apply This Rule</button>' +
+                        '</div></div>';
+                });
+                $('#nlp-result').html(html).show();
+                window._nlpRules = r.rules;
+            } else {
+                var errHtml = '<div class="alert alert-warning"><pre style="background:none;border:none;padding:0;margin:0;white-space:pre-wrap">' +
+                    r.error + '</pre></div>';
+                $('#nlp-result').html(errHtml).show();
+            }
+        }
+    });
+});
+
+$('#nlp-input').on('keypress', function(e) { if (e.which === 13) $('#nlp-parse').click(); });
+
+$(document).on('click', '.nlp-apply', function() {
+    var btn = $(this);
+    var idx = btn.data('index');
+    var rule = window._nlpRules[idx];
+    btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Applying...');
+    $.ajax({
+        url: '/api/rules/apply',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({rule: rule}),
+        success: function(r) {
+            if (r.success) {
+                showToast(r.output || 'Rule applied!', 'success');
+                btn.html('<span class="glyphicon glyphicon-ok"></span> Applied').removeClass('btn-success').addClass('btn-default');
+            } else {
+                showToast(r.error || 'Failed', 'danger');
+                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-flash"></span> Apply This Rule');
+            }
+        },
+        error: function() {
+            showToast('Request failed', 'danger');
+            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-flash"></span> Apply This Rule');
+        }
+    });
+});
+</script>
+{% endblock %}

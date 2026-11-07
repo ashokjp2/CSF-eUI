@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block page_title %}Bandwidth{% endblock %}
+
+{% block content %}
+<div class="row" id="stats-row"></div>
+
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <div class="pull-right">
+                    <button class="btn btn-xs btn-default" id="btn-refresh">
+                        <span class="glyphicon glyphicon-refresh"></span> Refresh
+                    </button>
+                </div>
+                <h4 class="panel-title" style="margin:0">Interface Statistics</h4>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-condensed" style="font-size:12px">
+                    <thead><tr><th>Interface</th><th>RX Bytes</th><th>TX Bytes</th><th>RX Packets</th><th>TX Packets</th><th>RX Errors</th><th>TX Errors</th></tr></thead>
+                    <tbody id="iface-table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="panel panel-default">
+                    <div class="panel-heading"><h4 class="panel-title" style="margin:0">IPTables Counters</h4></div>
+                    <div class="table-responsive" style="max-height:400px;overflow-y:auto">
+                        <table class="table table-condensed" style="font-size:11px">
+                            <thead><tr><th>Chain</th><th>Packets</th><th>Bytes</th><th>Target</th><th>Source</th><th>Dest</th></tr></thead>
+                            <tbody id="iptables-table"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="panel panel-default">
+                    <div class="panel-heading"><h4 class="panel-title" style="margin:0">Top Connections</h4></div>
+                    <div class="table-responsive" style="max-height:400px;overflow-y:auto">
+                        <table class="table table-condensed" style="font-size:12px">
+                            <thead><tr><th>IP</th><th>Connections</th></tr></thead>
+                            <tbody id="conn-table"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    function humanBytes(b) {
+        var units = ['B','KB','MB','GB','TB'];
+        var i = 0;
+        while (b >= 1024 && i < units.length - 1) { b /= 1024; i++; }
+        return b.toFixed(1) + ' ' + units[i];
+    }
+
+    function load() {
+        $.getJSON('/api/bandwidth', function(d) {
+            // Stats tiles
+            var totalRx = 0, totalTx = 0;
+            d.interfaces.forEach(function(iface) {
+                if (iface.name !== 'lo') { totalRx += iface.rx_bytes; totalTx += iface.tx_bytes; }
+            });
+            $('#stats-row').html(
+                '<div class="col-md-4"><div class="panel panel-success"><div class="panel-body text-center">' +
+                '<h2 style="margin:0">' + humanBytes(totalRx) + '</h2><small class="text-muted">Total RX</small></div></div></div>' +
+                '<div class="col-md-4"><div class="panel panel-info"><div class="panel-body text-center">' +
+                '<h2 style="margin:0">' + humanBytes(totalTx) + '</h2><small class="text-muted">Total TX</small></div></div></div>' +
+                '<div class="col-md-4"><div class="panel panel-warning"><div class="panel-body text-center">' +
+                '<h2 style="margin:0">' + d.top_connections.length + '</h2><small class="text-muted">Active IPs</small></div></div></div>'
+            );
+
+            // Interfaces
+            var ihtml = '';
+            d.interfaces.forEach(function(iface) {
+                ihtml += '<tr><td><strong>' + iface.name + '</strong></td>' +
+                    '<td>' + humanBytes(iface.rx_bytes) + '</td><td>' + humanBytes(iface.tx_bytes) + '</td>' +
+                    '<td>' + iface.rx_packets + '</td><td>' + iface.tx_packets + '</td>' +
+                    '<td>' + iface.rx_errors + '</td><td>' + iface.tx_errors + '</td></tr>';
+            });
+            $('#iface-table').html(ihtml);
+
+            // IPTables
+            var ipthtml = '';
+            d.iptables_counters.slice(0, 50).forEach(function(r) {
+                ipthtml += '<tr><td>' + r.chain + '</td><td>' + r.packets + '</td><td>' + humanBytes(parseInt(r.bytes) || 0) + '</td>' +
+                    '<td>' + r.target + '</td><td>' + r.source + '</td><td>' + r.destination + '</td></tr>';
+            });
+            $('#iptables-table').html(ipthtml || '<tr><td colspan="6" class="text-muted">No data</td></tr>');
+
+            // Connections
+            var chtml = '';
+            d.top_connections.forEach(function(c) {
+                chtml += '<tr><td><code>' + c.ip + '</code></td><td><span class="badge">' + c.count + '</span></td></tr>';
+            });
+            $('#conn-table').html(chtml || '<tr><td colspan="2" class="text-muted">No connections</td></tr>');
+        }).fail(function() { showToast('Failed to load bandwidth data', 'danger'); });
+    }
+    load();
+    $('#btn-refresh').on('click', load);
+});
+</script>
+{% endblock %}

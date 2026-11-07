@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block page_title %}Log Search{% endblock %}
+
+{% block content %}
+<p class="text-muted" style="margin-bottom:15px">Search across all logs by IP, action type, or keyword with color-coded results</p>
+
+        <!-- Search Form -->
+        <div class="panel panel-default">
+            <div class="panel-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label>Search Query</label>
+                            <input type="text" class="form-control" id="ls-query" placeholder="IP address, keyword, or pattern...">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label>Log File</label>
+                            <select class="form-control" id="ls-log">
+                                <option value="">All Logs</option>
+                                <option value="lfd">LFD</option>
+                                <option value="auth">Auth</option>
+                                <option value="syslog">Syslog</option>
+                                <option value="kern">Kernel</option>
+                                <option value="messages">Messages</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label>Action Type</label>
+                            <select class="form-control" id="ls-action">
+                                <option value="">All Actions</option>
+                                <option value="block">Blocks</option>
+                                <option value="login_fail">Failed Logins</option>
+                                <option value="login_ok">Successful Logins</option>
+                                <option value="allow">Allows</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label>Time Range</label>
+                            <select class="form-control" id="ls-range">
+                                <option value="1h">Last 1 Hour</option>
+                                <option value="6h">Last 6 Hours</option>
+                                <option value="24h" selected>Last 24 Hours</option>
+                                <option value="7d">Last 7 Days</option>
+                                <option value="30d">Last 30 Days</option>
+                                <option value="all">All Time</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <label>&nbsp;</label>
+                        <button class="btn btn-primary btn-block" id="ls-search">
+                            <span class="glyphicon glyphicon-search"></span> Search
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Summary -->
+        <div id="ls-summary" style="display:none; margin-bottom:10px">
+            <span class="label label-primary" id="ls-count"></span>
+            <span class="label label-danger" id="ls-blocks"></span>
+            <span class="label label-warning" id="ls-fails"></span>
+            <span class="label label-success" id="ls-logins"></span>
+        </div>
+
+        <!-- Results -->
+        <div id="ls-results"></div>
+        <div id="ls-loading" style="display:none; text-align:center; padding:30px">
+            <span class="glyphicon glyphicon-hourglass" style="font-size:24px"></span>
+            <p>Searching logs...</p>
+        </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    function doSearch() {
+        var params = {
+            query: $('#ls-query').val().trim(),
+            log: $('#ls-log').val(),
+            action: $('#ls-action').val(),
+            range: $('#ls-range').val()
+        };
+        $('#ls-loading').show();
+        $('#ls-results').empty();
+        $('#ls-summary').hide();
+
+        $.getJSON('/api/logs/search', params, function(data) {
+            $('#ls-loading').hide();
+            var results = data.results || [];
+
+            // Summary
+            var blocks = results.filter(function(r) { return r.action === 'block'; }).length;
+            var fails = results.filter(function(r) { return r.action === 'login_fail'; }).length;
+            var logins = results.filter(function(r) { return r.action === 'login_ok'; }).length;
+            $('#ls-count').text(results.length + ' results');
+            $('#ls-blocks').text(blocks + ' blocks');
+            $('#ls-fails').text(fails + ' failed logins');
+            $('#ls-logins').text(logins + ' logins');
+            $('#ls-summary').show();
+
+            if (results.length === 0) {
+                $('#ls-results').html('<div class="alert alert-info">No matching log entries found.</div>');
+                return;
+            }
+
+            var html = '<div class="list-group">';
+            results.forEach(function(r) {
+                var cls = '';
+                if (r.severity === 'danger') cls = 'list-group-item-danger';
+                else if (r.severity === 'warning') cls = 'list-group-item-warning';
+                else if (r.severity === 'success') cls = 'list-group-item-success';
+                else if (r.severity === 'info') cls = 'list-group-item-info';
+
+                var badge = '<span class="badge">' + r.log + '</span>';
+                var actionBadge = '';
+                if (r.action === 'block') actionBadge = '<span class="label label-danger" style="margin-left:4px">BLOCK</span>';
+                else if (r.action === 'login_fail') actionBadge = '<span class="label label-warning" style="margin-left:4px">FAIL</span>';
+                else if (r.action === 'login_ok') actionBadge = '<span class="label label-success" style="margin-left:4px">LOGIN</span>';
+                else if (r.action === 'allow') actionBadge = '<span class="label label-info" style="margin-left:4px">ALLOW</span>';
+
+                var ipLinks = '';
+                if (r.ips && r.ips.length > 0) {
+                    r.ips.forEach(function(ip) {
+                        ipLinks += ' <a href="/ip-lookup?ip=' + ip + '" class="label label-default" title="Lookup ' + ip + '">' + ip + '</a>';
+                    });
+                }
+
+                html += '<div class="list-group-item ' + cls + '" style="font-family:monospace; font-size:12px; padding:6px 10px; word-break:break-all">' +
+                    badge + actionBadge + ipLinks +
+                    '<div style="margin-top:3px">' + r.line + '</div></div>';
+            });
+            html += '</div>';
+            $('#ls-results').html(html);
+        }).fail(function() {
+            $('#ls-loading').hide();
+            $('#ls-results').html('<div class="alert alert-danger">Search failed.</div>');
+        });
+    }
+
+    $('#ls-search').on('click', doSearch);
+    $('#ls-query').on('keypress', function(e) { if (e.which === 13) doSearch(); });
+
+    // Auto-search if query parameter provided
+    var urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('q')) {
+        $('#ls-query').val(urlParams.get('q'));
+        doSearch();
+    }
+});
+</script>
+{% endblock %}

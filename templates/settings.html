@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block page_title %}Settings{% endblock %}
+
+{% block content %}
+<div class="panel panel-default">
+    <div class="panel-heading"><h4 style="margin:0"><span class="glyphicon glyphicon-cog"></span> CSFv2 Settings</h4></div>
+    <div class="panel-body">
+        <h4>Change Password</h4>
+        <form method="POST" action="/settings">
+            <input type="hidden" name="action" value="change_password">
+            <div class="form-group">
+                <label>New Password</label>
+                <input type="password" class="form-control" name="new_password"
+                       required minlength="8" style="max-width:400px">
+            </div>
+            <div class="form-group">
+                <label>Confirm Password</label>
+                <input type="password" class="form-control" name="confirm_password"
+                       required minlength="8" style="max-width:400px">
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <span class="glyphicon glyphicon-floppy-disk"></span> Change Password
+            </button>
+        </form>
+
+        <hr>
+        <h4>About CSFv2</h4>
+        <table class="table table-bordered" style="max-width:500px">
+            <tr><td>CSF Version</td><td>{{ status.version }}</td></tr>
+            <tr><td>Firewall</td><td>{{ 'Enabled' if status.enabled else 'Disabled' }}</td></tr>
+            <tr><td>Testing Mode</td><td>{{ 'Yes' if status.testing else 'No' }}</td></tr>
+            <tr><td>LFD</td><td>{{ 'Running' if status.lfd_running else 'Stopped' }}</td></tr>
+        </table>
+    </div>
+</div>
+{% endblock %}

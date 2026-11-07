@@ -1,0 +1,532 @@
+{% extends "base.html" %}
+{% block page_title %}{{ info.title }}{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="panel panel-primary">
+    <div class="panel-heading">
+        <h4 class="panel-title">
+            <span class="glyphicon glyphicon-{{ info.icon }}"></span>
+            {{ info.title }}
+            <small style="color:rgba(255,255,255,.7)">({{ info.path }})</small>
+        </h4>
+    </div>
+    <div class="panel-body">
+        <p class="lead" style="margin-bottom:5px;font-size:14px">{{ info.description }}</p>
+        <p class="text-muted" style="margin:0;font-size:12px">
+            <span class="glyphicon glyphicon-info-sign"></span>
+            Changes require a CSF + LFD restart to take effect.
+        </p>
+    </div>
+</div>
+
+<!-- Alert area -->
+<div id="alert-area"></div>
+
+<!-- ============================================================
+     REDIRECT
+     ============================================================ -->
+{% if filetype == 'redirect' %}
+
+<!-- Add redirect rule (on top) -->
+<div class="panel panel-success">
+    <div class="panel-heading"><h4 class="panel-title"><span class="glyphicon glyphicon-plus"></span> Add Redirect Rule</h4></div>
+    <div class="panel-body">
+        <form id="add-form" class="form-horizontal">
+            <div class="form-group">
+                <label class="col-sm-3 control-label">Source Port</label>
+                <div class="col-sm-9">
+                    <input type="number" class="form-control" id="add-src" placeholder="e.g. 80" min="1" max="65535" required>
+                    <p class="help-block">Incoming port that CSF will intercept.</p>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-3 control-label">Destination Port</label>
+                <div class="col-sm-9">
+                    <input type="number" class="form-control" id="add-dst" placeholder="e.g. 8080" min="1" max="65535" required>
+                    <p class="help-block">Port to redirect traffic to.</p>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-3 control-label">Protocol</label>
+                <div class="col-sm-9">
+                    <select class="form-control" id="add-proto" style="width:auto">
+                        <option value="tcp">TCP</option>
+                        <option value="udp">UDP</option>
+                        <option value="tcp6">TCP6</option>
+                        <option value="udp6">UDP6</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-3 control-label">Destination IP <small class="text-muted">(optional)</small></label>
+                <div class="col-sm-9">
+                    <input type="text" class="form-control" id="add-destip" placeholder="Leave blank to redirect to same host">
+                    <p class="help-block">Only needed to forward traffic to a different server (DNAT).</p>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-offset-3 col-sm-9">
+                    <button type="submit" class="btn btn-success"><span class="glyphicon glyphicon-plus"></span> Add Rule</button>
+                </div>
+            </div>
+        </form>
+
+        <div class="alert alert-info" style="margin-top:10px;margin-bottom:0">
+            <span class="glyphicon glyphicon-info-sign"></span>
+            <strong>Examples:</strong>
+            <ul style="margin:5px 0 0 10px;padding:0">
+                <li><code>80 → 8080 TCP</code> — redirect HTTP to an unprivileged port</li>
+                <li><code>443 → 4430 TCP : 10.0.0.5</code> — forward HTTPS to another server</li>
+                <li><code>53 → 5353 UDP</code> — redirect DNS queries</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Current redirect rules -->
+<div class="panel panel-default">
+    <div class="panel-heading">
+        <h4 class="panel-title">
+            <span class="glyphicon glyphicon-list"></span> Current Redirect Rules
+            <span class="badge" id="entry-count">{{ info.entries|length }}</span>
+        </h4>
+    </div>
+    <div class="panel-body" style="padding:0">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover" style="margin:0" id="entries-table">
+                <thead>
+                    <tr>
+                        <th style="width:130px">Source Port</th>
+                        <th style="width:130px">Dest Port</th>
+                        <th style="width:100px">Protocol</th>
+                        <th>Dest IP <small class="text-muted">(optional)</small></th>
+                        <th style="width:60px"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in info.entries %}
+                    <tr data-idx="{{ loop.index0 }}">
+                        <td><code>{{ entry.src_port }}</code></td>
+                        <td><code>{{ entry.dest_port }}</code></td>
+                        <td><span class="label label-default">{{ entry.proto }}</span></td>
+                        <td><small class="text-muted">{{ entry.dest_ip or '—' }}</small></td>
+                        <td>
+                            <button class="btn btn-xs btn-danger remove-entry" data-idx="{{ loop.index0 }}" title="Remove">
+                                <span class="glyphicon glyphicon-trash"></span>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not info.entries %}
+                    <tr id="empty-row"><td colspan="5" class="text-center text-muted" style="padding:20px">No redirect rules configured</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<!-- ============================================================
+     IP / USER LIST  (allow, deny, smtpauth)
+     ============================================================ -->
+
+<!-- Add entry (on top) -->
+<div class="panel panel-success">
+    <div class="panel-heading"><h4 class="panel-title"><span class="glyphicon glyphicon-plus"></span> Add Entry</h4></div>
+    <div class="panel-body">
+
+        {% if filetype in ('allow', 'deny') %}
+        <!-- Tabs: IP Address vs Port/Service Rule -->
+        <ul class="nav nav-tabs" style="margin-bottom:15px">
+            <li class="active"><a data-toggle="tab" href="#tab-ip"><span class="glyphicon glyphicon-globe"></span> IP Address</a></li>
+            <li><a data-toggle="tab" href="#tab-rule"><span class="glyphicon glyphicon-filter"></span> Port / Service Rule</a></li>
+        </ul>
+
+        <div class="tab-content">
+            <!-- Tab 1: Plain IP / CIDR -->
+            <div id="tab-ip" class="tab-pane fade in active">
+                <form id="add-form" class="form-horizontal">
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label">IP / CIDR</label>
+                        <div class="col-sm-10">
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="add-value"
+                                       placeholder="{{ info.placeholder }}"
+                                       autocomplete="off" spellcheck="false" required>
+                                <span class="input-group-btn">
+                                    <input type="text" class="form-control" id="add-comment"
+                                           placeholder="Optional note (e.g. Home server)" style="border-left:1px solid #ccc;border-radius:0;width:230px">
+                                    <button type="submit" class="btn btn-success">
+                                        <span class="glyphicon glyphicon-plus"></span> Add
+                                    </button>
+                                </span>
+                            </div>
+                            <p class="help-block" style="margin-top:8px">
+                                <span class="glyphicon glyphicon-info-sign"></span>
+                                Quick examples:
+                                {% for ex in info.examples %}
+                                <button type="button" class="btn btn-xs btn-default example-fill" data-value="{{ ex }}" style="margin-left:3px">{{ ex }}</button>
+                                {% endfor %}
+                            </p>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Tab 2: Advanced Port/Service Rule -->
+            <div id="tab-rule" class="tab-pane fade">
+                <form id="add-rule-form" class="form-horizontal">
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label">Protocol</label>
+                        <div class="col-sm-4">
+                            <select class="form-control" id="rule-proto">
+                                <option value="tcp">TCP</option>
+                                <option value="udp">UDP</option>
+                                <option value="tcp6">TCP6 (IPv6)</option>
+                                <option value="udp6">UDP6 (IPv6)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label">Direction</label>
+                        <div class="col-sm-4">
+                            <select class="form-control" id="rule-dir">
+                                <option value="in">Inbound (in)</option>
+                                <option value="out">Outbound (out)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label">Dest Port</label>
+                        <div class="col-sm-4">
+                            <input type="text" class="form-control" id="rule-dport" placeholder="e.g. 80 or 80,443 or 1024:65535" required>
+                            <p class="help-block">Single port, comma-separated, or range (start:end).</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label">Source</label>
+                        <div class="col-sm-4">
+                            <input type="text" class="form-control" id="rule-source" placeholder="0/0 = any" value="0/0">
+                            <p class="help-block">IP/CIDR to match, or <code>0/0</code> for any source.</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label">Note</label>
+                        <div class="col-sm-4">
+                            <input type="text" class="form-control" id="rule-comment" placeholder="Optional">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="col-sm-offset-2 col-sm-10">
+                            <div class="well well-sm" id="rule-preview" style="font-family:monospace;font-size:13px;margin-bottom:10px">
+                                <strong>Preview:</strong> <code id="rule-preview-text">tcp|in|d=80|s=0/0</code>
+                            </div>
+                            <button type="submit" class="btn btn-success">
+                                <span class="glyphicon glyphicon-plus"></span> Add Rule
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% else %}
+        <!-- smtpauth: simple form only -->
+        <form id="add-form" class="form-horizontal">
+            <div class="form-group">
+                <label class="col-sm-2 control-label">Username</label>
+                <div class="col-sm-10">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="add-value"
+                               placeholder="{{ info.placeholder }}"
+                               autocomplete="off" spellcheck="false" required>
+                        <span class="input-group-btn">
+                            <input type="text" class="form-control" id="add-comment"
+                                   placeholder="Optional note" style="border-left:1px solid #ccc;border-radius:0;width:230px">
+                            <button type="submit" class="btn btn-success">
+                                <span class="glyphicon glyphicon-plus"></span> Add
+                            </button>
+                        </span>
+                    </div>
+                    {% if info.examples %}
+                    <p class="help-block" style="margin-top:8px">
+                        <span class="glyphicon glyphicon-info-sign"></span>
+                        Quick examples:
+                        {% for ex in info.examples %}
+                        <button type="button" class="btn btn-xs btn-default example-fill" data-value="{{ ex }}" style="margin-left:3px">{{ ex }}</button>
+                        {% endfor %}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+        </form>
+        {% endif %}
+
+        {% if filetype == 'deny' %}
+        <div class="alert alert-warning" style="margin-top:10px;margin-bottom:0">
+            <span class="glyphicon glyphicon-warning-sign"></span>
+            <strong>Warning:</strong> Blocking an IP here is permanent. If you need a temporary block, use the <a href="/lfd/blocks">Temporary Blocks</a> section instead.
+        </div>
+        {% elif filetype == 'allow' %}
+        <div class="alert alert-info" style="margin-top:10px;margin-bottom:0">
+            <span class="glyphicon glyphicon-info-sign"></span>
+            <strong>Tip:</strong> Entries here bypass all firewall rules. For LFD-only exceptions (stop LFD from blocking an IP), use the <a href="/lfd/ignore">LFD Ignore List</a> instead.
+        </div>
+        {% elif filetype == 'smtpauth' %}
+        <div class="alert alert-info" style="margin-top:10px;margin-bottom:0">
+            <span class="glyphicon glyphicon-info-sign"></span>
+            Only these accounts can authenticate via SMTP when <code>SMTP_AUTH_RESTRICT = "1"</code> in csf.conf.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Current entries table -->
+<div class="panel panel-default">
+    <div class="panel-heading">
+        <h4 class="panel-title">
+            <span class="glyphicon glyphicon-th-list"></span> Current Entries
+            <span class="badge badge-{{ info.badge_class }}" id="entry-count">{{ info.entries|length }}</span>
+        </h4>
+    </div>
+    <div class="panel-body" style="padding:0">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover" style="margin:0" id="entries-table">
+                <thead>
+                    <tr>
+                        <th>
+                            {% if info.format == 'ip' %}IP / CIDR
+                            {% elif info.format == 'user' %}Username / Email
+                            {% else %}Value{% endif %}
+                        </th>
+                        <th style="width:300px">Note</th>
+                        <th style="width:60px"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in info.entries %}
+                    <tr data-idx="{{ loop.index0 }}">
+                        <td>
+                            {% if info.format == 'ip' %}
+                            <code>{{ entry.value }}</code>
+                            {% else %}
+                            <strong>{{ entry.value }}</strong>
+                            {% endif %}
+                        </td>
+                        <td><small class="text-muted">{{ entry.comment or '' }}</small></td>
+                        <td>
+                            <button class="btn btn-xs btn-danger remove-entry" data-idx="{{ loop.index0 }}" title="Remove">
+                                <span class="glyphicon glyphicon-trash"></span>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not info.entries %}
+                    <tr id="empty-row"><td colspan="3" class="text-center text-muted" style="padding:20px">No entries — the list is empty</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Action bar -->
+<div class="row" style="margin-top:5px">
+    <div class="col-sm-6">
+        <a href="/files/{{ filetype }}?raw=1" class="btn btn-default">
+            <span class="glyphicon glyphicon-pencil"></span> Raw File Editor
+        </a>
+    </div>
+    <div class="col-sm-6 text-right">
+        <button class="btn btn-warning" id="restart-btn">
+            <span class="glyphicon glyphicon-refresh"></span> Restart CSF + LFD
+        </button>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+    var filetype = '{{ filetype }}';
+    var isRedirect = filetype === 'redirect';
+    var entries = {{ info.entries | tojson }};
+
+    /* ---- Helpers ---- */
+    function esc(s) {
+        return $('<span>').text(s || '').html();
+    }
+
+    function showAlert(type, msg) {
+        var icon = {success:'ok-sign', danger:'exclamation-sign', warning:'warning-sign', info:'info-sign'}[type] || 'info-sign';
+        var html = '<div class="alert alert-'+type+' alert-dismissible" style="margin-bottom:10px">' +
+            '<button type="button" class="close" data-dismiss="alert">&times;</button>' +
+            '<span class="glyphicon glyphicon-'+icon+'"></span> '+esc(msg)+'</div>';
+        $('#alert-area').html(html);
+        setTimeout(function(){ $('#alert-area .alert').fadeOut(400, function(){ $(this).remove(); }); }, 6000);
+    }
+
+    /* ---- Render ---- */
+    function renderTable() {
+        var tbody = $('#entries-table tbody');
+        tbody.empty();
+        $('#entry-count').text(entries.length);
+
+        if (entries.length === 0) {
+            var cols = isRedirect ? 5 : 3;
+            tbody.append('<tr id="empty-row"><td colspan="'+cols+'" class="text-center text-muted" style="padding:20px">No entries — the list is empty</td></tr>');
+            return;
+        }
+
+        entries.forEach(function(e, i) {
+            var tr;
+            var rmBtn = '<button class="btn btn-xs btn-danger remove-entry" data-idx="'+i+'" title="Remove"><span class="glyphicon glyphicon-trash"></span></button>';
+
+            if (isRedirect) {
+                var protoLabel = '<span class="label label-default">'+esc(e.proto)+'</span>';
+                var destIp = e.dest_ip ? esc(e.dest_ip) : '<span class="text-muted">—</span>';
+                tr = '<tr data-idx="'+i+'">' +
+                    '<td><code>'+esc(e.src_port)+'</code></td>' +
+                    '<td><code>'+esc(e.dest_port)+'</code></td>' +
+                    '<td>'+protoLabel+'</td>' +
+                    '<td><small class="text-muted">'+destIp+'</small></td>' +
+                    '<td>'+rmBtn+'</td></tr>';
+            } else {
+                var val = filetype === 'allow' || filetype === 'deny'
+                    ? '<code>'+esc(e.value)+'</code>'
+                    : '<strong>'+esc(e.value)+'</strong>';
+                var comment = e.comment ? '<small class="text-muted">'+esc(e.comment)+'</small>' : '';
+                tr = '<tr data-idx="'+i+'">' +
+                    '<td>'+val+'</td>' +
+                    '<td>'+comment+'</td>' +
+                    '<td>'+rmBtn+'</td></tr>';
+            }
+            tbody.append(tr);
+        });
+    }
+
+    /* ---- Save ---- */
+    function saveEntries(callback) {
+        $.ajax({
+            url: '/api/csf-file/'+filetype+'/save',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({entries: entries}),
+            success: function(resp) {
+                if (resp.success) {
+                    showAlert('success', resp.message || 'Saved');
+                } else {
+                    showAlert('danger', resp.error || 'Save failed');
+                }
+                if (callback) callback(resp);
+            },
+            error: function() { showAlert('danger', 'Request failed — check connectivity'); }
+        });
+    }
+
+    /* ---- Remove ---- */
+    $(document).on('click', '.remove-entry', function() {
+        var idx = parseInt($(this).data('idx'), 10);
+        var e = entries[idx];
+        var label = isRedirect ? (e.src_port + ' → ' + e.dest_port) : e.value;
+        if (!confirm('Remove "' + label + '"?')) return;
+        entries.splice(idx, 1);
+        renderTable();
+        saveEntries();
+    });
+
+    /* ---- Add ---- */
+    $('#add-form').on('submit', function(ev) {
+        ev.preventDefault();
+
+        if (isRedirect) {
+            var src  = $('#add-src').val().trim();
+            var dst  = $('#add-dst').val().trim();
+            var proto = $('#add-proto').val();
+            var dip  = $('#add-destip').val().trim();
+            if (!src || !dst) { showAlert('danger', 'Source and destination ports are required'); return; }
+            /* Duplicate check */
+            for (var i = 0; i < entries.length; i++) {
+                if (entries[i].src_port === src && entries[i].proto === proto) {
+                    showAlert('danger', 'A rule for port '+src+'/'+proto+' already exists'); return;
+                }
+            }
+            entries.push({ src_port: src, dest_port: dst, proto: proto, dest_ip: dip });
+            $('#add-src, #add-dst, #add-destip').val('');
+        } else {
+            var val = $('#add-value').val().trim();
+            var comment = $('#add-comment').val().trim();
+            if (!val) return;
+            for (var j = 0; j < entries.length; j++) {
+                if (entries[j].value === val) {
+                    showAlert('warning', '"'+val+'" is already in the list'); return;
+                }
+            }
+            entries.push({ value: val, comment: comment });
+            $('#add-value, #add-comment').val('');
+        }
+        renderTable();
+        saveEntries();
+    });
+
+    /* ---- Example fill ---- */
+    $(document).on('click', '.example-fill', function() {
+        $('#add-value').val($(this).data('value')).focus();
+    });
+
+    /* ---- Advanced rule form (allow/deny only) ---- */
+    function buildRuleString() {
+        var proto = $('#rule-proto').val() || 'tcp';
+        var dir   = $('#rule-dir').val() || 'in';
+        var dport = $('#rule-dport').val().trim() || '80';
+        var src   = $('#rule-source').val().trim() || '0/0';
+        return proto + '|' + dir + '|d=' + dport + '|s=' + src;
+    }
+
+    $('#rule-proto, #rule-dir, #rule-dport, #rule-source').on('input change', function() {
+        $('#rule-preview-text').text(buildRuleString());
+    });
+
+    $('#add-rule-form').on('submit', function(ev) {
+        ev.preventDefault();
+        var dport = $('#rule-dport').val().trim();
+        if (!dport) { showAlert('danger', 'Destination port is required'); return; }
+        var ruleStr = buildRuleString();
+        var comment = $('#rule-comment').val().trim();
+        for (var i = 0; i < entries.length; i++) {
+            if (entries[i].value === ruleStr) {
+                showAlert('warning', 'This rule already exists'); return;
+            }
+        }
+        entries.push({ value: ruleStr, comment: comment });
+        renderTable();
+        saveEntries();
+        $('#rule-dport, #rule-comment').val('');
+        $('#rule-source').val('0/0');
+        $('#rule-preview-text').text(buildRuleString());
+    });
+
+    /* ---- Restart ---- */
+    $('#restart-btn').on('click', function() {
+        var btn = $(this);
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh spinning"></span> Restarting...');
+        $.post('/api/restart', function(resp) {
+            if (resp.success) {
+                showAlert('success', 'CSF + LFD restarted successfully');
+            } else {
+                showAlert('danger', 'Restart failed: ' + (resp.error || 'Unknown error'));
+            }
+            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-refresh"></span> Restart CSF + LFD');
+        }).fail(function() {
+            showAlert('danger', 'Restart request failed');
+            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-refresh"></span> Restart CSF + LFD');
+        });
+    });
+
+})();
+</script>
+{% endblock %}

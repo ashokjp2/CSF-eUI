@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block page_title %}Search Results{% endblock %}
+
+{% block content %}
+<div class="panel panel-default">
+    <div class="panel-heading">
+        <h4 style="margin:0"><span class="glyphicon glyphicon-search"></span> Search Results for {{ ip }}</h4>
+    </div>
+    <div class="panel-body">
+        <!-- Geo Info -->
+        <div id="geoInfo" class="well well-sm" style="margin-bottom:15px; display:none"></div>
+
+        <pre class="comment" id="output" style="max-height:600px; overflow-y:auto">{{ result.stdout if result.success else result.stderr }}</pre>
+
+        <div style="margin-top:15px">
+            <div class="btn-group">
+                <form method="POST" action="/quick/unblock" style="display:inline">
+                    <input type="hidden" name="ip" value="{{ ip }}">
+                    <button type="submit" class="btn btn-warning">
+                        <span class="glyphicon glyphicon-ok-circle"></span> Unblock
+                    </button>
+                </form>
+                <form method="POST" action="/quick/allow" style="display:inline; margin-left:5px">
+                    <input type="hidden" name="ip" value="{{ ip }}">
+                    <button type="submit" class="btn btn-success">
+                        <span class="glyphicon glyphicon-ok-circle"></span> Allow
+                    </button>
+                </form>
+                <form method="POST" action="/quick/deny" style="display:inline; margin-left:5px">
+                    <input type="hidden" name="ip" value="{{ ip }}">
+                    <button type="submit" class="btn btn-danger">
+                        <span class="glyphicon glyphicon-ban-circle"></span> Deny
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    var ip = '{{ ip }}';
+    if (!ip) return;
+    $.getJSON('/api/geoip/' + ip, function(data) {
+        if (!data || !data.country) return;
+        var flag = data.country_code && data.country_code !== 'XX'
+            ? '<img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/7.2.3/flags/4x3/' + data.country_code.toLowerCase() + '.svg" style="height:16px;margin-right:6px">'
+            : '';
+        $('#geoInfo').html(
+            flag + '<strong>' + data.country + '</strong>' +
+            (data.city ? ' — ' + data.city : '') +
+            (data.region ? ', ' + data.region : '') +
+            (data.isp ? ' | <small>' + data.isp + '</small>' : '')
+        ).show();
+    });
+});
+</script>
+{% endblock %}

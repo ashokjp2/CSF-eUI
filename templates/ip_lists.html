@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block page_title %}Allow / Deny Lists{% endblock %}
+
+{% block content %}
+<p class="text-muted" style="margin-bottom:15px">Manage csf.allow and csf.deny files with an easy-to-use interface</p>
+
+        <!-- Quick Add -->
+        <div class="panel panel-primary">
+            <div class="panel-heading">
+                <h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-plus"></span> Quick Add IP</h4>
+            </div>
+            <div class="panel-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label>IP Address or CIDR</label>
+                            <input type="text" class="form-control" id="qa-ip" placeholder="e.g. 192.168.1.0/24">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label>Comment</label>
+                            <input type="text" class="form-control" id="qa-comment" placeholder="e.g. Office network">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <label>&nbsp;</label>
+                        <button class="btn btn-success btn-block" id="qa-allow">
+                            <span class="glyphicon glyphicon-ok"></span> Allow
+                        </button>
+                    </div>
+                    <div class="col-md-2">
+                        <label>&nbsp;</label>
+                        <button class="btn btn-danger btn-block" id="qa-deny">
+                            <span class="glyphicon glyphicon-ban-circle"></span> Deny
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Allow List -->
+            <div class="col-md-6">
+                <div class="panel panel-success">
+                    <div class="panel-heading">
+                        <h4 class="panel-title" style="margin:0">
+                            <span class="glyphicon glyphicon-ok-circle"></span> Allowed IPs (csf.allow)
+                            <span class="badge" id="allow-badge">0</span>
+                        </h4>
+                    </div>
+                    <div class="panel-body" style="padding:0">
+                        <div style="padding:8px">
+                            <input type="text" class="form-control input-sm" id="filter-allow" placeholder="Filter allowed IPs...">
+                        </div>
+                        <div style="max-height:450px; overflow-y:auto">
+                            <table class="table table-condensed table-hover" style="margin:0">
+                                <tbody id="allow-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Deny List -->
+            <div class="col-md-6">
+                <div class="panel panel-danger">
+                    <div class="panel-heading">
+                        <h4 class="panel-title" style="margin:0">
+                            <span class="glyphicon glyphicon-ban-circle"></span> Denied IPs (csf.deny)
+                            <span class="badge" id="deny-badge">0</span>
+                        </h4>
+                    </div>
+                    <div class="panel-body" style="padding:0">
+                        <div style="padding:8px">
+                            <input type="text" class="form-control input-sm" id="filter-deny" placeholder="Filter denied IPs...">
+                        </div>
+                        <div style="max-height:450px; overflow-y:auto">
+                            <table class="table table-condensed table-hover" style="margin:0">
+                                <tbody id="deny-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    function loadLists() {
+        $.getJSON('/api/ip-lists', function(data) {
+            renderList('allow', data.allow);
+            renderList('deny', data.deny);
+        });
+    }
+
+    function renderList(type, entries) {
+        var html = '';
+        entries.forEach(function(e) {
+            html += '<tr data-search="' + (e.ip + ' ' + (e.comment || '')).toLowerCase() + '">' +
+                '<td style="width:50%"><code>' + e.ip + '</code></td>' +
+                '<td style="font-size:11px; color:#777">' + (e.comment || '') + '</td>' +
+                '<td style="width:80px; text-align:right">' +
+                '<button class="btn btn-xs btn-default ip-remove" data-type="' + type + '" data-ip="' + e.ip + '" title="Remove"><span class="glyphicon glyphicon-remove text-danger"></span></button> ' +
+                '<a href="/ip-lookup?ip=' + e.ip.split('/')[0] + '" class="btn btn-xs btn-default" title="Lookup"><span class="glyphicon glyphicon-search"></span></a>' +
+                '</td></tr>';
+        });
+        $('#' + type + '-tbody').html(html || '<tr><td colspan="3" class="text-center text-muted" style="padding:20px">Empty</td></tr>');
+        $('#' + type + '-badge').text(entries.length);
+    }
+
+    // Filter
+    $('#filter-allow, #filter-deny').on('input', function() {
+        var q = $(this).val().toLowerCase();
+        var target = $(this).attr('id') === 'filter-allow' ? '#allow-tbody' : '#deny-tbody';
+        $(target + ' tr').each(function() {
+            $(this).toggle(!q || ($(this).data('search') || '').indexOf(q) >= 0);
+        });
+    });
+
+    // Quick add
+    function quickAdd(action) {
+        var ip = $('#qa-ip').val().trim();
+        var comment = $('#qa-comment').val().trim();
+        if (!ip) { showToast('Enter an IP address', 'warning'); return; }
+        $.ajax({
+            url: '/api/ip-lists/' + action,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ip: ip, comment: comment}),
+            success: function(r) {
+                if (r.success) {
+                    showToast(r.message || 'Done', 'success');
+                    $('#qa-ip').val('');
+                    $('#qa-comment').val('');
+                    loadLists();
+                } else {
+                    showToast(r.error || 'Failed', 'danger');
+                }
+            }
+        });
+    }
+    $('#qa-allow').on('click', function() { quickAdd('allow'); });
+    $('#qa-deny').on('click', function() { quickAdd('deny'); });
+
+    // Remove
+    $(document).on('click', '.ip-remove', function() {
+        var btn = $(this);
+        var type = btn.data('type');
+        var ip = btn.data('ip');
+        if (!confirm('Remove ' + ip + ' from csf.' + type + '?')) return;
+        btn.prop('disabled', true);
+        $.ajax({
+            url: '/api/ip-lists/remove',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({list: type, ip: ip}),
+            success: function(r) {
+                if (r.success) {
+                    showToast(r.message || 'Removed', 'success');
+                    btn.closest('tr').fadeOut(300, function() { $(this).remove(); });
+                } else {
+                    showToast(r.error || 'Failed', 'danger');
+                    btn.prop('disabled', false);
+                }
+            }
+        });
+    });
+
+    loadLists();
+});
+</script>
+{% endblock %}

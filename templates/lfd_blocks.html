@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block page_title %}LFD Block Log{% endblock %}
+
+{% block content %}
+<div class="row" id="stats-row">
+            <div class="col-md-3">
+                <div class="panel panel-danger">
+                    <div class="panel-body text-center">
+                        <h2 id="stat-blocks" style="margin:0">-</h2>
+                        <small class="text-muted">Total Blocks</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="panel panel-warning">
+                    <div class="panel-body text-center">
+                        <h2 id="stat-alerts" style="margin:0">-</h2>
+                        <small class="text-muted">Alerts</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="panel panel-info">
+                    <div class="panel-body text-center">
+                        <h2 id="stat-top-ip" style="margin:0;font-size:16px">-</h2>
+                        <small class="text-muted">Top Blocked IP</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="panel panel-default">
+                    <div class="panel-body text-center">
+                        <h2 id="stat-top-reason" style="margin:0;font-size:14px">-</h2>
+                        <small class="text-muted">Top Reason</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <div class="pull-right">
+                    <button class="btn btn-xs btn-default" id="btn-refresh">
+                        <span class="glyphicon glyphicon-refresh"></span> Refresh
+                    </button>
+                </div>
+                <h4 class="panel-title" style="margin:0">Recent LFD Events</h4>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-condensed table-hover" style="font-size:12px">
+                    <thead><tr><th>Time</th><th>Type</th><th>IP / Detail</th><th>Reason</th></tr></thead>
+                    <tbody id="block-table"></tbody>
+                </table>
+            </div>
+        </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    function load() {
+        $.getJSON('/api/lfd-blocks', function(r) {
+            var html = '';
+            r.forEach(function(e) {
+                var typeCls = e.type === 'block' ? 'danger' : 'warning';
+                var detail = e.ip || e.detail || '';
+                html += '<tr>' +
+                    '<td style="white-space:nowrap">' + (e.time || '') + '</td>' +
+                    '<td><span class="label label-' + typeCls + '">' + e.type + '</span></td>' +
+                    '<td><code>' + detail + '</code></td>' +
+                    '<td>' + (e.reason || '') + '</td>' +
+                    '</tr>';
+            });
+            $('#block-table').html(html || '<tr><td colspan="4" class="text-muted">No LFD events found</td></tr>');
+        });
+        $.getJSON('/api/lfd-blocks/stats', function(s) {
+            $('#stat-blocks').text(s.total_blocks);
+            $('#stat-alerts').text(s.total_alerts);
+            if (s.top_ips.length) $('#stat-top-ip').text(s.top_ips[0].ip + ' (' + s.top_ips[0].count + ')');
+            if (s.top_reasons.length) $('#stat-top-reason').text(s.top_reasons[0].reason.substring(0,30));
+        });
+    }
+    load();
+    $('#btn-refresh').on('click', load);
+});
+</script>
+{% endblock %}

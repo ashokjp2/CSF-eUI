@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block page_title %}GeoIP Map{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<style>
+    #map { height: 500px; width: 100%; border-radius: 4px; }
+    .marker-cluster { background: rgba(255,82,82,0.3); border-radius: 50%; text-align: center; color: #fff; font-weight: bold; }
+    .marker-cluster div { background: rgba(255,82,82,0.7); border-radius: 50%; margin: 5px; width: 30px; height: 30px; line-height: 30px; }
+</style>
+<div class="row" id="stats-row">
+            <div class="col-md-4">
+                <div class="panel panel-danger">
+                    <div class="panel-body text-center">
+                        <h2 id="stat-total" style="margin:0">-</h2>
+                        <small class="text-muted">Blocked IPs</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="panel panel-info">
+                    <div class="panel-body text-center">
+                        <h2 id="stat-mapped" style="margin:0">-</h2>
+                        <small class="text-muted">Geo-Located</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="panel panel-warning">
+                    <div class="panel-body text-center">
+                        <h2 id="stat-countries" style="margin:0">-</h2>
+                        <small class="text-muted">Countries</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <div class="pull-right">
+                    <button class="btn btn-xs btn-primary" id="btn-load-map">
+                        <span class="glyphicon glyphicon-globe"></span> Load Map
+                    </button>
+                </div>
+                <h4 class="panel-title" style="margin:0">World Map</h4>
+            </div>
+            <div class="panel-body" style="padding:0">
+                <div id="map"></div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="panel panel-default">
+                    <div class="panel-heading"><h4 class="panel-title" style="margin:0">Top Countries</h4></div>
+                    <div class="panel-body" id="country-list">
+                        <p class="text-muted">Load map to see data</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="panel panel-default">
+                    <div class="panel-heading"><h4 class="panel-title" style="margin:0">Blocked IPs</h4></div>
+                    <div class="table-responsive" style="max-height:400px;overflow-y:auto">
+                        <table class="table table-condensed" style="font-size:12px">
+                            <thead><tr><th>IP</th><th>Country</th><th>City</th><th>ISP</th></tr></thead>
+                            <tbody id="ip-table"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+$(function() {
+    var map = L.map('map', { scrollWheelZoom: true }).setView([20, 0], 2);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19
+    }).addTo(map);
+
+    var markersLayer = L.layerGroup().addTo(map);
+
+    $('#btn-load-map').on('click', function() {
+        var btn = $(this);
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Loading...');
+        $.getJSON('/api/geoip-map', function(data) {
+            $('#stat-total').text(data.total_ips);
+            $('#stat-mapped').text(data.mapped);
+            $('#stat-countries').text(data.top_countries.length);
+
+            var chtml = '';
+            data.top_countries.forEach(function(c) {
+                chtml += '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #eee">' +
+                    '<span>' + c.country + '</span>' +
+                    '<span class="badge">' + c.count + '</span></div>';
+            });
+            $('#country-list').html(chtml || '<p class="text-muted">No data</p>');
+
+            var thtml = '';
+            data.markers.forEach(function(m) {
+                thtml += '<tr><td><code>' + m.ip + '</code></td><td>' + m.country + '</td>' +
+                    '<td>' + (m.city || '-') + '</td><td>' + (m.isp || '-') + '</td></tr>';
+            });
+            $('#ip-table').html(thtml || '<tr><td colspan="4" class="text-muted">No data</td></tr>');
+
+            markersLayer.clearLayers();
+            data.markers.forEach(function(m) {
+                var circle = L.circleMarker([m.lat, m.lon], {
+                    radius: 6,
+                    fillColor: '#ff5252',
+                    color: '#ff1744',
+                    weight: 1,
+                    opacity: 0.8,
+                    fillOpacity: 0.6
+                });
+                circle.bindPopup(
+                    '<strong>' + m.ip + '</strong><br>' +
+                    m.country + (m.city ? ', ' + m.city : '') +
+                    (m.isp ? '<br><small>' + m.isp + '</small>' : '')
+                );
+                markersLayer.addLayer(circle);
+            });
+
+            if (data.markers.length > 0) {
+                var bounds = L.latLngBounds(data.markers.map(function(m) { return [m.lat, m.lon]; }));
+                map.fitBounds(bounds, { padding: [30, 30] });
+            }
+
+            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-globe"></span> Reload');
+        }).fail(function() {
+            showToast('Failed to load GeoIP data', 'danger');
+            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-globe"></span> Load Map');
+        });
+    });
+});
+</script>
+{% endblock %}

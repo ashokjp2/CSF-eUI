@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block page_title %}Backup &amp; Restore{% endblock %}
+
+{% block content %}
+<p class="text-muted" style="margin-bottom:15px">Back up your CSF configuration files and restore from previous snapshots</p>
+
+        <!-- Create backup -->
+        <div class="panel panel-primary">
+            <div class="panel-heading">
+                <h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-plus"></span> Create New Backup</h4>
+            </div>
+            <div class="panel-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="backup-label" placeholder="Optional label (e.g. before-port-change)">
+                            <span class="input-group-btn">
+                                <button class="btn btn-primary" id="btn-backup">
+                                    <span class="glyphicon glyphicon-floppy-save"></span> Create Backup
+                                </button>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <p class="text-muted" style="margin:6px 0 0">
+                            Backs up: csf.conf, csf.allow, csf.deny, csf.ignore, and {{ file_count }} other config files
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Existing backups -->
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <h4 class="panel-title" style="margin:0">
+                    <span class="glyphicon glyphicon-folder-open"></span> Saved Backups
+                    <span class="badge pull-right">{{ backups|length }}</span>
+                </h4>
+            </div>
+            {% if backups %}
+            <table class="table table-striped" style="margin:0">
+                <thead>
+                    <tr>
+                        <th>Created</th>
+                        <th>Label</th>
+                        <th>Files</th>
+                        <th>Size</th>
+                        <th style="width:200px">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in backups %}
+                    <tr>
+                        <td><span class="glyphicon glyphicon-time"></span> {{ b.created }}</td>
+                        <td>{{ b.label or '—' }}</td>
+                        <td>{{ b.files }}</td>
+                        <td>{{ b.size_human }}</td>
+                        <td>
+                            <button class="btn btn-warning btn-xs btn-restore" data-file="{{ b.filename }}"
+                                    title="Restore this backup (creates a safety backup first)">
+                                <span class="glyphicon glyphicon-repeat"></span> Restore
+                            </button>
+                            <button class="btn btn-danger btn-xs btn-delete-backup" data-file="{{ b.filename }}"
+                                    title="Delete this backup permanently">
+                                <span class="glyphicon glyphicon-trash"></span>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="panel-body text-center text-muted" style="padding:30px">
+                <span class="glyphicon glyphicon-floppy-disk" style="font-size:32px; opacity:0.3"></span>
+                <p style="margin-top:10px">No backups yet. Create one to get started.</p>
+            </div>
+            {% endif %}
+        </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    $('#btn-backup').on('click', function() {
+        var btn = $(this);
+        var label = $('#backup-label').val().trim();
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Creating...');
+        $.ajax({
+            url: '/api/backup/create',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({label: label}),
+            success: function(r) {
+                if (r.success) {
+                    showToast('Backup created: ' + r.filename, 'success');
+                    setTimeout(function(){ location.reload(); }, 1000);
+                } else {
+                    showToast(r.error || 'Backup failed', 'danger');
+                    btn.prop('disabled', false).html('<span class="glyphicon glyphicon-floppy-save"></span> Create Backup');
+                }
+            },
+            error: function() {
+                showToast('Backup failed', 'danger');
+                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-floppy-save"></span> Create Backup');
+            }
+        });
+    });
+
+    $('.btn-restore').on('click', function() {
+        var file = $(this).data('file');
+        if (!confirm('Restore from "' + file + '"?\n\nA safety backup of your current config will be created first.')) return;
+        var btn = $(this);
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span>');
+        $.ajax({
+            url: '/api/backup/restore',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({filename: file}),
+            success: function(r) {
+                if (r.success) {
+                    showToast(r.message, 'success');
+                    setTimeout(function(){ location.reload(); }, 1500);
+                } else {
+                    showToast(r.error || 'Restore failed', 'danger');
+                    btn.prop('disabled', false).html('<span class="glyphicon glyphicon-repeat"></span> Restore');
+                }
+            },
+            error: function() {
+                showToast('Restore failed', 'danger');
+                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-repeat"></span> Restore');
+            }
+        });
+    });
+
+    $('.btn-delete-backup').on('click', function() {
+        var file = $(this).data('file');
+        if (!confirm('Delete backup "' + file + '"? This cannot be undone.')) return;
+        var btn = $(this);
+        $.ajax({
+            url: '/api/backup/delete',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({filename: file}),
+            success: function(r) {
+                if (r.success) {
+                    btn.closest('tr').fadeOut(300, function(){ $(this).remove(); });
+                    showToast('Backup deleted', 'success');
+                } else {
+                    showToast(r.error, 'danger');
+                }
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

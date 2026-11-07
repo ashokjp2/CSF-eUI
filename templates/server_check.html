@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block page_title %}Server Check{% endblock %}
+
+{% block content %}
+        <!-- Summary -->
+        {% if report %}
+        <div class="row" style="margin-bottom:15px">
+            <div class="col-xs-3">
+                <div class="well well-sm text-center" style="margin-bottom:0; border-left:4px solid #5cb85c">
+                    <span class="text-success" style="font-size:24px; font-weight:bold">{{ report.summary.pass }}</span>
+                    <br><small>Passed</small>
+                </div>
+            </div>
+            <div class="col-xs-3">
+                <div class="well well-sm text-center" style="margin-bottom:0; border-left:4px solid #f0ad4e">
+                    <span class="text-warning" style="font-size:24px; font-weight:bold">{{ report.summary.warn }}</span>
+                    <br><small>Warnings</small>
+                </div>
+            </div>
+            <div class="col-xs-3">
+                <div class="well well-sm text-center" style="margin-bottom:0; border-left:4px solid #d9534f">
+                    <span class="text-danger" style="font-size:24px; font-weight:bold">{{ report.summary.fail }}</span>
+                    <br><small>Failed</small>
+                </div>
+            </div>
+            <div class="col-xs-3">
+                <div class="well well-sm text-center" style="margin-bottom:0; border-left:4px solid #5bc0de">
+                    <span class="text-info" style="font-size:24px; font-weight:bold">{{ report.summary.info }}</span>
+                    <br><small>Info</small>
+                </div>
+            </div>
+        </div>
+
+        {% for category in report.checks %}
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <h4 class="panel-title" style="margin:0">
+                    {% if category.category == 'SSH Hardening' %}
+                    <span class="glyphicon glyphicon-lock"></span>
+                    {% elif category.category == 'CSF Firewall Settings' %}
+                    <span class="glyphicon glyphicon-fire"></span>
+                    {% elif category.category == 'System Security' %}
+                    <span class="glyphicon glyphicon-shield"></span>
+                    {% else %}
+                    <span class="glyphicon glyphicon-cog"></span>
+                    {% endif %}
+                    {{ category.category }}
+                    <span class="badge pull-right">{{ category["items"]|length }}</span>
+                </h4>
+            </div>
+            <div class="panel-body" style="padding:0">
+                {% for item in category["items"] %}
+                <div class="security-check-item" style="padding:10px 15px; border-bottom:1px solid #eee;
+                    {% if item.status == 'fail' %}border-left:4px solid #d9534f; background:#fdf2f2{% elif item.status == 'warn' %}border-left:4px solid #f0ad4e; background:#fef9f0{% elif item.status == 'pass' %}border-left:4px solid #5cb85c{% elif item.status == 'info' %}border-left:4px solid #5bc0de; background:#f0f9ff{% endif %}">
+                    <div>
+                        {% if item.status == 'pass' %}
+                        <span class="glyphicon glyphicon-ok-sign text-success"></span>
+                        {% elif item.status == 'warn' %}
+                        <span class="glyphicon glyphicon-warning-sign text-warning"></span>
+                        {% elif item.status == 'fail' %}
+                        <span class="glyphicon glyphicon-remove-sign text-danger"></span>
+                        {% else %}
+                        <span class="glyphicon glyphicon-info-sign text-info"></span>
+                        {% endif %}
+                        <strong>{{ item.title }}</strong>
+                    </div>
+                    {% if item.detail %}
+                    <div style="margin-top:4px; padding-left:22px; font-size:12px" class="text-muted">
+                        {{ item.detail }}
+                    </div>
+                    {% endif %}
+                    {% if item.setting or item.current or item.recommended %}
+                    <div style="margin-top:6px; padding-left:22px; font-size:12px">
+                        {% if item.current is defined %}
+                        <span class="label label-default">Current: {{ item.current }}</span>
+                        {% endif %}
+                        {% if item.recommended is defined %}
+                        <span class="label label-info">Recommended: {{ item.recommended }}</span>
+                        {% endif %}
+                        {% if item.setting is defined %}
+                            {% if category.category == 'SSH Hardening' %}
+                            <button class="btn btn-xs btn-warning sshd-apply" style="margin-left:8px"
+                                data-key="{{ item.setting }}" data-recommended="{{ item.recommended }}">
+                                <span class="glyphicon glyphicon-flash"></span> Apply Recommended
+                            </button>
+                            {% if item.setting == 'Port' %}
+                            <div class="input-group input-group-sm" style="display:inline-table; width:180px; margin-left:6px; vertical-align:middle">
+                                <input type="number" class="form-control" id="sshd-port-input" placeholder="e.g. 2222" min="1" max="65535">
+                                <span class="input-group-btn">
+                                    <button class="btn btn-primary sshd-apply-custom" data-key="Port"><span class="glyphicon glyphicon-ok"></span></button>
+                                </span>
+                            </div>
+                            {% endif %}
+                            {% else %}
+                            <a href="/config" class="btn btn-xs btn-default" style="margin-left:8px">
+                                <span class="glyphicon glyphicon-cog"></span> Edit {{ item.setting }}
+                            </a>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                {% if not category.items %}
+                <div class="text-center text-muted" style="padding:20px">No checks in this category</div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+
+        {% elif result and result.success %}
+        <!-- Fallback: old-style csftest output -->
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4 class="panel-title">Kernel Module Check</h4></div>
+            <div class="panel-body">
+                {% set lines = result.stdout.split('\n') %}
+                {% for line in lines if line.strip() %}
+                {% if 'FATAL' in line or 'FAILED' in line %}
+                <div class="alert alert-danger" style="padding:8px 12px; margin-bottom:4px">
+                    <span class="glyphicon glyphicon-remove-sign"></span> {{ line }}
+                </div>
+                {% elif 'WARNING' in line or 'WARN' in line %}
+                <div class="alert alert-warning" style="padding:8px 12px; margin-bottom:4px">
+                    <span class="glyphicon glyphicon-warning-sign"></span> {{ line }}
+                </div>
+                {% elif 'OK' in line %}
+                <div class="alert alert-success" style="padding:8px 12px; margin-bottom:4px">
+                    <span class="glyphicon glyphicon-ok-sign"></span> {{ line }}
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% elif result %}
+        <div class="alert alert-danger">
+            <strong>Check failed:</strong> {{ result.stderr or 'Unknown error' }}
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    var RECOMMENDED_MAP = {
+        'Port': '2222',
+        'PermitRootLogin': 'prohibit-password',
+        'PasswordAuthentication': 'no',
+        'X11Forwarding': 'no',
+        'MaxAuthTries': '3'
+    };
+
+    $('.sshd-apply').on('click', function() {
+        var key = $(this).data('key');
+        var value = RECOMMENDED_MAP[key];
+        if (!value) { showToast('Unknown setting', 'danger'); return; }
+
+        var msg = 'Apply ' + key + ' = ' + value + '?\n\nThis will edit /etc/ssh/sshd_config and restart sshd.';
+        if (key === 'Port') msg += '\n\nWARNING: Make sure the new port is allowed in your firewall (TCP_IN) BEFORE applying, or you may lose SSH access!';
+        if (key === 'PermitRootLogin' || key === 'PasswordAuthentication') msg += '\n\nWARNING: Make sure you have SSH key access configured before disabling this, or you may lock yourself out!';
+
+        if (!confirm(msg)) return;
+
+        var btn = $(this);
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Applying...');
+
+        $.post('/action/sshd_edit', {key: key, value: value}, function(r) {
+            if (r.success) {
+                showToast(r.message, 'success');
+                btn.html('<span class="glyphicon glyphicon-ok"></span> Applied').removeClass('btn-warning').addClass('btn-success');
+                setTimeout(function() { location.reload(); }, 1500);
+            } else {
+                showToast(r.error || 'Failed', 'danger');
+                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-flash"></span> Apply Recommended');
+            }
+        }, 'json').fail(function() {
+            showToast('Request failed', 'danger');
+            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-flash"></span> Apply Recommended');
+        });
+    });
+
+    $('.sshd-apply-custom').on('click', function() {
+        var key = $(this).data('key');
+        var value = $('#sshd-port-input').val();
+        if (!value) { showToast('Enter a port number', 'warning'); return; }
+        if (!confirm('Change SSH port to ' + value + '?\n\nMake sure port ' + value + ' is in TCP_IN first, or you will lose SSH access!')) return;
+
+        var btn = $(this);
+        btn.prop('disabled', true);
+
+        $.post('/action/sshd_edit', {key: key, value: value}, function(r) {
+            if (r.success) {
+                showToast(r.message, 'success');
+                setTimeout(function() { location.reload(); }, 1500);
+            } else {
+                showToast(r.error || 'Failed', 'danger');
+                btn.prop('disabled', false);
+            }
+        }, 'json').fail(function() {
+            showToast('Request failed', 'danger');
+            btn.prop('disabled', false);
+        });
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block page_title %}Country Blocks{% endblock %}
+
+{% block content %}
+<p class="text-muted" style="margin-bottom:15px">Block or allow entire countries. Changes require a CSF restart to take effect.</p>
+
+        <div class="row">
+            <!-- Blocked Countries -->
+            <div class="col-md-6">
+                <div class="panel panel-danger">
+                    <div class="panel-heading">
+                        <h4 class="panel-title" style="margin:0">
+                            <span class="glyphicon glyphicon-ban-circle"></span> Blocked Countries (CC_DENY)
+                            <span class="badge" id="deny-count">{{ countries.denied|length }}</span>
+                        </h4>
+                    </div>
+                    <div class="panel-body" style="padding:8px">
+                        <div class="input-group" style="margin-bottom:8px">
+                            <select class="form-control" id="add-deny-select">
+                                <option value="">-- Add a country to block --</option>
+                                {% for c in countries.all_countries %}
+                                <option value="{{ c.code }}">{{ c.name }} ({{ c.code }})</option>
+                                {% endfor %}
+                            </select>
+                            <span class="input-group-btn">
+                                <button class="btn btn-danger" id="add-deny-btn">
+                                    <span class="glyphicon glyphicon-plus"></span> Block
+                                </button>
+                            </span>
+                        </div>
+                        <div id="deny-list" style="max-height:400px; overflow-y:auto">
+                            {% if countries.denied %}
+                            {% for c in countries.denied %}
+                            <div class="country-item" data-code="{{ c.code }}" style="display:flex; align-items:center; padding:6px 8px; border-bottom:1px solid #eee">
+                                <img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/7.2.3/flags/4x3/{{ c.code|lower }}.svg" style="height:16px; width:24px; margin-right:8px" alt="{{ c.code }}">
+                                <span style="flex:1">{{ c.name }}</span>
+                                <span class="label label-default" style="margin-right:8px">{{ c.code }}</span>
+                                <button class="btn btn-xs btn-success remove-country" data-list="deny" data-code="{{ c.code }}" title="Unblock">
+                                    <span class="glyphicon glyphicon-ok"></span>
+                                </button>
+                            </div>
+                            {% endfor %}
+                            {% else %}
+                            <p class="text-center text-muted" style="padding:20px">No countries blocked</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Block Presets -->
+                <div class="panel panel-default">
+                    <div class="panel-heading"><h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-flash"></span> Quick Presets</h4></div>
+                    <div class="panel-body" style="padding:10px">
+                        <button class="btn btn-sm btn-warning preset-btn" data-codes="CN,RU,KP,IR" data-list="deny" style="margin:2px">
+                            Block Common Threats (CN, RU, KP, IR)
+                        </button>
+                        <button class="btn btn-sm btn-warning preset-btn" data-codes="CN,RU,KP,IR,VN,BR,IN,ID,PK,NG,UA,RO,BD,TH" data-list="deny" style="margin:2px">
+                            Block Extended List (14 countries)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Allowed Countries -->
+            <div class="col-md-6">
+                <div class="panel panel-success">
+                    <div class="panel-heading">
+                        <h4 class="panel-title" style="margin:0">
+                            <span class="glyphicon glyphicon-ok-circle"></span> Allowed Countries (CC_ALLOW)
+                            <span class="badge" id="allow-count">{{ countries.allowed|length }}</span>
+                        </h4>
+                    </div>
+                    <div class="panel-body" style="padding:8px">
+                        <div class="input-group" style="margin-bottom:8px">
+                            <select class="form-control" id="add-allow-select">
+                                <option value="">-- Add a country to allow --</option>
+                                {% for c in countries.all_countries %}
+                                <option value="{{ c.code }}">{{ c.name }} ({{ c.code }})</option>
+                                {% endfor %}
+                            </select>
+                            <span class="input-group-btn">
+                                <button class="btn btn-success" id="add-allow-btn">
+                                    <span class="glyphicon glyphicon-plus"></span> Allow
+                                </button>
+                            </span>
+                        </div>
+                        <div id="allow-list" style="max-height:400px; overflow-y:auto">
+                            {% if countries.allowed %}
+                            {% for c in countries.allowed %}
+                            <div class="country-item" data-code="{{ c.code }}" style="display:flex; align-items:center; padding:6px 8px; border-bottom:1px solid #eee">
+                                <img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/7.2.3/flags/4x3/{{ c.code|lower }}.svg" style="height:16px; width:24px; margin-right:8px" alt="{{ c.code }}">
+                                <span style="flex:1">{{ c.name }}</span>
+                                <span class="label label-default" style="margin-right:8px">{{ c.code }}</span>
+                                <button class="btn btn-xs btn-danger remove-country" data-list="allow" data-code="{{ c.code }}" title="Remove">
+                                    <span class="glyphicon glyphicon-remove"></span>
+                                </button>
+                            </div>
+                            {% endfor %}
+                            {% else %}
+                            <p class="text-center text-muted" style="padding:20px">No countries in allow list</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Info -->
+                <div class="panel panel-info">
+                    <div class="panel-heading"><h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-info-sign"></span> How It Works</h4></div>
+                    <div class="panel-body" style="font-size:12px">
+                        <p><strong>CC_DENY:</strong> All traffic from these countries is blocked. Use this to stop attacks from countries you don't expect traffic from.</p>
+                        <p><strong>CC_ALLOW:</strong> Only traffic from these countries is allowed. Use this if your service is for a specific region only.</p>
+                        <p class="text-warning" style="margin:0"><span class="glyphicon glyphicon-warning-sign"></span> <strong>Warning:</strong> Using CC_ALLOW blocks ALL other countries. Be careful not to lock yourself out!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    function countryAction(url, data) {
+        $.ajax({
+            url: url,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(data),
+            success: function(r) {
+                if (r.success) {
+                    showToast(r.message, 'success');
+                    setTimeout(function() { location.reload(); }, 1000);
+                } else {
+                    showToast(r.error || 'Failed', 'danger');
+                }
+            }
+        });
+    }
+
+    $('#add-deny-btn').on('click', function() {
+        var code = $('#add-deny-select').val();
+        if (!code) return;
+        countryAction('/api/country/add', {list: 'deny', code: code});
+    });
+
+    $('#add-allow-btn').on('click', function() {
+        var code = $('#add-allow-select').val();
+        if (!code) return;
+        countryAction('/api/country/add', {list: 'allow', code: code});
+    });
+
+    $(document).on('click', '.remove-country', function() {
+        var code = $(this).data('code');
+        var list = $(this).data('list');
+        countryAction('/api/country/remove', {list: list, code: code});
+    });
+
+    $('.preset-btn').on('click', function() {
+        var codes = $(this).data('codes').split(',');
+        var list = $(this).data('list');
+        if (!confirm('This will set ' + list.toUpperCase() + ' to: ' + codes.join(', ') + '. Continue?')) return;
+        countryAction('/api/country/set', {list: list, codes: codes});
+    });
+});
+</script>
+{% endblock %}

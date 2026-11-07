@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block page_title %}IP Lookup{% endblock %}
+
+{% block content %}
+<p class="text-muted" style="margin-bottom:15px">Check any IP address: WHOIS, reverse DNS, CSF status, and log activity</p>
+
+        <div class="input-group input-group-lg" style="margin-bottom:20px">
+            <input type="text" class="form-control" id="ip-input" placeholder="Enter IP address (e.g. 192.168.1.1)" value="{{ ip or '' }}">
+            <span class="input-group-btn">
+                <button class="btn btn-primary" id="btn-lookup">
+                    <span class="glyphicon glyphicon-search"></span> Lookup
+                </button>
+            </span>
+        </div>
+
+        <div id="lookup-results" style="display:none">
+            <div id="lookup-loading" class="text-center" style="padding:40px; display:none">
+                <span class="glyphicon glyphicon-hourglass" style="font-size:24px"></span>
+                <p class="text-muted">Looking up IP information...</p>
+            </div>
+            <div id="lookup-content"></div>
+        </div>
+
+        {% if ip and result %}
+        <div id="initial-results">
+            {% for section in result.sections %}
+            <div class="panel panel-{{ 'danger' if section.status == 'blocked' else 'success' if section.status == 'allowed' else 'warning' if section.status == 'temp_blocked' else 'default' }}">
+                <div class="panel-heading">
+                    <h4 class="panel-title" style="margin:0">
+                        <span class="glyphicon glyphicon-{{ section.icon }}"></span> {{ section.title }}
+                    </h4>
+                </div>
+                <div class="panel-body">
+                    <table class="table table-condensed" style="margin:0">
+                        {% for item in section.items %}
+                        <tr>
+                            <td style="width:150px; font-weight:bold">{{ item.key }}</td>
+                            <td>{{ item.value }}</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                    {% if section.log_lines %}
+                    <hr style="margin:10px 0">
+                    <p class="text-muted" style="font-size:11px; margin-bottom:5px"><strong>Recent log entries:</strong></p>
+                    {% for line in section.log_lines %}
+                    <div style="font-family:monospace; font-size:11px; padding:2px 0; border-bottom:1px solid #f5f5f5">{{ line }}</div>
+                    {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+
+            <div class="well well-sm">
+                <strong>Quick Actions for {{ ip }}:</strong>
+                <form method="POST" action="/quick/allow" style="display:inline; margin-left:10px">
+                    <input type="hidden" name="ip" value="{{ ip }}">
+                    <button class="btn btn-success btn-xs"><span class="glyphicon glyphicon-ok"></span> Allow</button>
+                </form>
+                <form method="POST" action="/quick/deny" style="display:inline; margin-left:5px">
+                    <input type="hidden" name="ip" value="{{ ip }}">
+                    <button class="btn btn-danger btn-xs"><span class="glyphicon glyphicon-ban-circle"></span> Block</button>
+                </form>
+                <a href="/logs?search={{ ip }}" class="btn btn-default btn-xs" style="margin-left:5px">
+                    <span class="glyphicon glyphicon-list-alt"></span> View in Logs
+                </a>
+            </div>
+        </div>
+        {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    function doLookup() {
+        var ip = $('#ip-input').val().trim();
+        if (!ip) return;
+        $('#initial-results').hide();
+        $('#lookup-results').show();
+        $('#lookup-loading').show();
+        $('#lookup-content').empty();
+
+        $.getJSON('/api/ip/lookup', {ip: ip}, function(data) {
+            $('#lookup-loading').hide();
+            if (data.error) {
+                $('#lookup-content').html('<div class="alert alert-danger">' + data.error + '</div>');
+                return;
+            }
+            var html = '';
+            data.sections.forEach(function(s) {
+                var panelClass = s.status === 'blocked' ? 'danger' : s.status === 'allowed' ? 'success' : s.status === 'temp_blocked' ? 'warning' : 'default';
+                html += '<div class="panel panel-' + panelClass + '">';
+                html += '<div class="panel-heading"><h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-' + s.icon + '"></span> ' + s.title + '</h4></div>';
+                html += '<div class="panel-body"><table class="table table-condensed" style="margin:0">';
+                s.items.forEach(function(item) {
+                    html += '<tr><td style="width:150px;font-weight:bold">' + item.key + '</td><td>' + $('<span>').text(item.value).html() + '</td></tr>';
+                });
+                html += '</table>';
+                if (s.log_lines && s.log_lines.length) {
+                    html += '<hr style="margin:10px 0"><p class="text-muted" style="font-size:11px;margin-bottom:5px"><strong>Recent log entries:</strong></p>';
+                    s.log_lines.forEach(function(l) {
+                        html += '<div style="font-family:monospace;font-size:11px;padding:2px 0;border-bottom:1px solid #f5f5f5">' + $('<span>').text(l).html() + '</div>';
+                    });
+                }
+                html += '</div></div>';
+            });
+            html += '<div class="well well-sm"><strong>Quick Actions for ' + $('<span>').text(ip).html() + ':</strong>';
+            html += ' <form method="POST" action="/quick/allow" style="display:inline;margin-left:10px"><input type="hidden" name="ip" value="' + ip + '"><button class="btn btn-success btn-xs"><span class="glyphicon glyphicon-ok"></span> Allow</button></form>';
+            html += ' <form method="POST" action="/quick/deny" style="display:inline;margin-left:5px"><input type="hidden" name="ip" value="' + ip + '"><button class="btn btn-danger btn-xs"><span class="glyphicon glyphicon-ban-circle"></span> Block</button></form>';
+            html += ' <a href="/logs?search=' + encodeURIComponent(ip) + '" class="btn btn-default btn-xs" style="margin-left:5px"><span class="glyphicon glyphicon-list-alt"></span> View in Logs</a>';
+            html += '</div>';
+            $('#lookup-content').html(html);
+        }).fail(function() {
+            $('#lookup-loading').hide();
+            $('#lookup-content').html('<div class="alert alert-danger">Lookup failed</div>');
+        });
+    }
+
+    $('#btn-lookup').on('click', doLookup);
+    $('#ip-input').on('keypress', function(e) {
+        if (e.which === 13) doLookup();
+    });
+});
+</script>
+{% endblock %}

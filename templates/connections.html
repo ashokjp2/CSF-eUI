@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block page_title %}Connections{% endblock %}
+
+{% block content %}
+<p class="text-muted" style="margin-bottom:15px">Live view of established network connections</p>
+
+<button class="btn btn-info btn-sm" id="conn-refresh" style="margin-bottom:15px">
+    <span class="glyphicon glyphicon-refresh"></span> Refresh
+</button>
+
+<!-- Summary -->
+<div class="stat-row">
+    <div class="stat-card stat-accent">
+        <span class="stat-icon glyphicon glyphicon-transfer"></span>
+        <div class="stat-value" id="conn-total">-</div>
+        <div class="stat-label">Total Connections</div>
+    </div>
+    <div class="stat-card stat-info">
+        <span class="stat-icon glyphicon glyphicon-globe"></span>
+        <div class="stat-value" id="conn-ips">-</div>
+        <div class="stat-label">Unique Remote IPs</div>
+    </div>
+    <div class="stat-card stat-warning" style="min-width:220px">
+        <div class="stat-label" style="margin-top:0; margin-bottom:6px">Top Ports</div>
+        <div id="conn-ports" style="font-size:12px"></div>
+    </div>
+    <div class="stat-card stat-danger" style="min-width:220px">
+        <div class="stat-label" style="margin-top:0; margin-bottom:6px">Top Remote IPs</div>
+        <div id="conn-top-ips" style="font-size:12px"></div>
+    </div>
+</div>
+
+<!-- Connection Table -->
+<div class="panel panel-default">
+    <div class="panel-heading">
+        <div class="row">
+            <div class="col-md-6"><h4 class="panel-title" style="margin:4px 0">Connections</h4></div>
+            <div class="col-md-6"><input type="text" class="form-control input-sm" id="conn-filter" placeholder="Filter by IP or port..."></div>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-condensed table-hover" style="margin:0; font-size:12px">
+            <thead><tr><th>Proto</th><th>Local Address</th><th>Local Port</th><th>Remote IP</th><th>Remote Port</th><th>Actions</th></tr></thead>
+            <tbody id="conn-tbody"></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    function loadConnections() {
+        $.getJSON('/api/connections', function(d) {
+            $('#conn-total').text(d.total);
+            $('#conn-ips').text(d.unique_ips);
+
+            // Top ports
+            var html = '';
+            d.port_distribution.slice(0, 5).forEach(function(p) {
+                html += '<div style="font-size:12px"><code>' + p.port + '</code> <span class="badge">' + p.count + '</span></div>';
+            });
+            $('#conn-ports').html(html || '<span class="text-muted">None</span>');
+
+            // Top IPs
+            html = '';
+            d.top_ips.slice(0, 5).forEach(function(ip) {
+                html += '<div style="font-size:12px"><code>' + ip.ip + '</code> <span class="badge">' + ip.count + '</span></div>';
+            });
+            $('#conn-top-ips').html(html || '<span class="text-muted">None</span>');
+
+            // Table
+            html = '';
+            d.connections.forEach(function(c) {
+                html += '<tr data-search="' + (c.remote_ip + ' ' + c.local_port + ' ' + c.remote_port).toLowerCase() + '">' +
+                    '<td>' + c.proto + '</td>' +
+                    '<td><code>' + c.local_ip + '</code></td>' +
+                    '<td><strong>' + c.local_port + '</strong></td>' +
+                    '<td><code>' + c.remote_ip + '</code></td>' +
+                    '<td>' + c.remote_port + '</td>' +
+                    '<td>' +
+                    '<a href="/ip-lookup?ip=' + c.remote_ip + '" class="btn btn-xs btn-info" title="Lookup"><span class="glyphicon glyphicon-search"></span></a> ' +
+                    '<button class="btn btn-xs btn-danger conn-block" data-ip="' + c.remote_ip + '" title="Block"><span class="glyphicon glyphicon-ban-circle"></span></button>' +
+                    '</td></tr>';
+            });
+            $('#conn-tbody').html(html || '<tr><td colspan="6" class="text-center text-muted">No active connections</td></tr>');
+        });
+    }
+
+    $('#conn-refresh').on('click', loadConnections);
+
+    $('#conn-filter').on('input', function() {
+        var q = $(this).val().toLowerCase();
+        $('#conn-tbody tr').each(function() {
+            $(this).toggle(!q || ($(this).data('search') || '').indexOf(q) >= 0);
+        });
+    });
+
+    $(document).on('click', '.conn-block', function() {
+        var ip = $(this).data('ip');
+        if (!confirm('Block ' + ip + '?')) return;
+        $.post('/quick/deny', {ip: ip}, function(r) {
+            showToast(r.success ? ip + ' blocked' : (r.error || 'Failed'), r.success ? 'success' : 'danger');
+        });
+    });
+
+    loadConnections();
+});
+</script>
+{% endblock %}

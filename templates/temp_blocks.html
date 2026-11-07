@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block page_title %}Temp Blocks{% endblock %}
+
+{% block content %}
+<div class="panel panel-default">
+    <div class="panel-heading">
+        <h4 class="panel-title" style="margin:0">
+            <span class="glyphicon glyphicon-time"></span> Temporary IP Entries
+            <form method="POST" action="/action/flushtemp" class="pull-right" style="display:inline">
+                <button type="submit" class="btn btn-warning btn-sm confirmButton"
+                        data-query="Flush all temporary entries?"
+                        data-action="/action/flushtemp">
+                    <span class="glyphicon glyphicon-trash"></span> Flush All Temp
+                </button>
+            </form>
+        </h4>
+    </div>
+    <div class="panel-body">
+        {% if entries %}
+        <table class="table table-bordered table-striped">
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>IP Address</th>
+                    <th>Port</th>
+                    <th>Direction</th>
+                    <th>Remaining</th>
+                    <th>Comment</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in entries %}
+                <tr class="{{ 'danger' if entry.type == 'DENY' else 'success' }}">
+                    <td>
+                        <span class="label label-{{ 'danger' if entry.type == 'DENY' else 'success' }}">
+                            {{ entry.type }}
+                        </span>
+                    </td>
+                    <td class="geo-ip" data-ip="{{ entry.ip }}">{{ entry.ip }}</td>
+                    <td>{{ entry.port }}</td>
+                    <td>{{ entry.direction }}</td>
+                    <td>{{ entry.remaining_str }}</td>
+                    <td>{{ entry.comment }}</td>
+                    <td>
+                        <form method="POST"
+                              action="/temp/remove/{{ 'deny' if entry.type == 'DENY' else 'allow' }}/{{ entry.ip }}"
+                              style="display:inline">
+                            <button type="submit" class="btn btn-xs btn-warning">
+                                <span class="glyphicon glyphicon-remove"></span> Remove
+                            </button>
+                        </form>
+                        {% if entry.type == 'DENY' %}
+                        <form method="POST" action="/temp/toperm/{{ entry.ip }}" style="display:inline">
+                            <button type="submit" class="btn btn-xs btn-danger">
+                                <span class="glyphicon glyphicon-ban-circle"></span> Make Permanent
+                            </button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="bs-callout bs-callout-info">
+            <p>No temporary entries.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    var ips = [];
+    $('.geo-ip').each(function() { ips.push($(this).data('ip')); });
+    if (ips.length === 0) return;
+    $.ajax({
+        url: '/api/geoip/batch',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ips: ips}),
+        success: function(data) {
+            $('.geo-ip').each(function() {
+                var ip = $(this).data('ip');
+                var geo = data[ip];
+                if (geo && geo.country_code && geo.country_code !== 'XX') {
+                    var flag = '<img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/7.2.3/flags/4x3/' +
+                        geo.country_code.toLowerCase() + '.svg" style="height:12px;margin-right:4px" title="' +
+                        geo.country + ' - ' + (geo.city || '') + '">';
+                    $(this).prepend(flag);
+                }
+            });
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block page_title %}Process Monitor{% endblock %}
+
+{% block content %}
+        <div style="margin-bottom:15px">
+            <div class="btn-group">
+                <button class="btn btn-default pm-sort active" data-sort="cpu">Sort by CPU</button>
+                <button class="btn btn-default pm-sort" data-sort="rss">Sort by Memory</button>
+            </div>
+            <button class="btn btn-info" id="pm-refresh" style="margin-left:8px">
+                <span class="glyphicon glyphicon-refresh"></span> Refresh
+            </button>
+            <div class="pull-right">
+                <input type="text" class="form-control" id="pm-filter" placeholder="Filter processes..." style="width:250px; display:inline-block">
+            </div>
+        </div>
+
+        <!-- Listening Ports -->
+        <div class="panel panel-info">
+            <div class="panel-heading" data-toggle="collapse" data-target="#ports-body" style="cursor:pointer">
+                <h4 class="panel-title" style="margin:0">
+                    <span class="glyphicon glyphicon-transfer"></span> Listening Ports
+                    <span class="glyphicon glyphicon-chevron-down pull-right"></span>
+                </h4>
+            </div>
+            <div id="ports-body" class="panel-collapse collapse in">
+                <table class="table table-condensed table-hover" style="margin:0">
+                    <thead><tr><th>Port</th><th>Bind</th><th>Process</th><th>State</th></tr></thead>
+                    <tbody id="ports-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Process Table -->
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-th-list"></span> Running Processes <span class="badge" id="pm-count">0</span></h4>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-condensed table-hover" style="margin:0; font-size:12px">
+                    <thead><tr><th>PID</th><th>User</th><th>CPU%</th><th>Mem%</th><th>Status</th><th>Started</th><th>Time</th><th>Command</th><th></th></tr></thead>
+                    <tbody id="pm-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    var currentSort = 'cpu';
+
+    function loadProcesses() {
+        $.getJSON('/api/processes', {sort: currentSort}, function(d) {
+            var html = '';
+            d.processes.forEach(function(p) {
+                var cpuCls = p.cpu > 50 ? 'danger' : p.cpu > 20 ? 'warning' : '';
+                var memCls = p.mem > 50 ? 'danger' : p.mem > 20 ? 'warning' : '';
+                html += '<tr class="' + cpuCls + '" data-search="' + (p.user + ' ' + p.command).toLowerCase() + '">' +
+                    '<td><code>' + p.pid + '</code></td>' +
+                    '<td>' + p.user + '</td>' +
+                    '<td><strong>' + p.cpu + '%</strong></td>' +
+                    '<td>' + p.mem + '%</td>' +
+                    '<td><span class="label label-default">' + p.stat + '</span></td>' +
+                    '<td>' + p.start + '</td>' +
+                    '<td>' + p.time + '</td>' +
+                    '<td style="max-width:400px; word-break:break-all; font-family:monospace">' + $('<span>').text(p.command).html() + '</td>' +
+                    '<td><button class="btn btn-xs btn-danger pm-kill" data-pid="' + p.pid + '" title="Kill"><span class="glyphicon glyphicon-off"></span></button></td>' +
+                    '</tr>';
+            });
+            $('#pm-tbody').html(html);
+            $('#pm-count').text(d.processes.length);
+        });
+
+        $.getJSON('/api/processes/ports', function(ports) {
+            var html = '';
+            ports.forEach(function(p) {
+                html += '<tr><td><strong>' + p.port + '</strong></td><td><code>' + p.bind + '</code></td><td>' + p.process + '</td><td><span class="label label-success">' + p.state + '</span></td></tr>';
+            });
+            $('#ports-tbody').html(html || '<tr><td colspan="4" class="text-muted">No listening ports found</td></tr>');
+        });
+    }
+
+    $('.pm-sort').on('click', function() {
+        $('.pm-sort').removeClass('active');
+        $(this).addClass('active');
+        currentSort = $(this).data('sort');
+        loadProcesses();
+    });
+
+    $('#pm-refresh').on('click', loadProcesses);
+
+    $('#pm-filter').on('input', function() {
+        var q = $(this).val().toLowerCase();
+        $('#pm-tbody tr').each(function() {
+            $(this).toggle(!q || ($(this).data('search') || '').indexOf(q) >= 0);
+        });
+    });
+
+    $(document).on('click', '.pm-kill', function() {
+        var pid = $(this).data('pid');
+        if (!confirm('Kill process ' + pid + '?')) return;
+        $.ajax({
+            url: '/api/processes/kill',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({pid: pid}),
+            success: function(r) {
+                showToast(r.message || r.error, r.success ? 'success' : 'danger');
+                if (r.success) setTimeout(loadProcesses, 1000);
+            }
+        });
+    });
+
+    loadProcesses();
+});
+</script>
+{% endblock %}

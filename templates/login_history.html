@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block page_title %}Login History{% endblock %}
+
+{% block content %}
+<div class="row">
+            <div class="col-md-4">
+                <div class="panel panel-success">
+                    <div class="panel-body text-center">
+                        <h2 id="stat-success" style="margin:0">-</h2>
+                        <small class="text-muted">Successful</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="panel panel-danger">
+                    <div class="panel-body text-center">
+                        <h2 id="stat-failed" style="margin:0">-</h2>
+                        <small class="text-muted">Failed</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="panel panel-info">
+                    <div class="panel-body text-center">
+                        <h2 id="stat-ips" style="margin:0">-</h2>
+                        <small class="text-muted">Unique IPs</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <div class="pull-right">
+                    <button class="btn btn-xs btn-default" id="btn-refresh">
+                        <span class="glyphicon glyphicon-refresh"></span> Refresh
+                    </button>
+                </div>
+                <h4 class="panel-title" style="margin:0">Recent Logins</h4>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-condensed table-hover" style="font-size:12px">
+                    <thead><tr><th>Time</th><th>Status</th><th>Username</th><th>IP Address</th></tr></thead>
+                    <tbody id="login-table"></tbody>
+                </table>
+            </div>
+        </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    function load() {
+        $.getJSON('/api/login-history', function(data) {
+            var html = '';
+            data.entries.forEach(function(e) {
+                var cls = e.success ? 'success' : 'danger';
+                var label = e.success ? 'Success' : 'Failed';
+                html += '<tr class="' + cls + '">' +
+                    '<td style="white-space:nowrap">' + e.time + '</td>' +
+                    '<td><span class="label label-' + cls + '">' + label + '</span></td>' +
+                    '<td>' + (e.username || '-') + '</td>' +
+                    '<td><code>' + (e.ip || '-') + '</code></td></tr>';
+            });
+            $('#login-table').html(html || '<tr><td colspan="4" class="text-muted">No login history</td></tr>');
+        });
+        $.getJSON('/api/login-history/stats', function(s) {
+            $('#stat-success').text(s.successful);
+            $('#stat-failed').text(s.failed);
+            $('#stat-ips').text(s.unique_ips);
+        });
+    }
+    load();
+    $('#btn-refresh').on('click', load);
+});
+</script>
+{% endblock %}

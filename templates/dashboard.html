@@ -1,0 +1,597 @@
+{% extends "base.html" %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- Status Banner -->
+{% if status.enabled %}
+    {% if status.testing %}
+    <div class="bs-callout bs-callout-warning text-center">
+        <h4><span class="glyphicon glyphicon-warning-sign"></span> Firewall Status: Enabled — Test Mode</h4>
+        <p>CSF is running in TESTING mode. <strong>Blocks are suppressed</strong> — no IPs are actually blocked until TESTING = 0.</p>
+        <a href="/config" class="btn btn-warning btn-sm"><span class="glyphicon glyphicon-cog"></span> Set TESTING = 0 in Config</a>
+    </div>
+    {% elif not status.lfd_running %}
+    <div class="bs-callout bs-callout-danger text-center" style="border-left-color:#c0392b">
+        <h4 style="color:#c0392b">
+            <span class="glyphicon glyphicon-exclamation-sign"></span>
+            &nbsp;Firewall Active — LFD is DOWN
+        </h4>
+        <p style="font-size:14px; margin-bottom:12px">
+            CSF firewall rules are loaded, but <strong>LFD (Login Failure Daemon) is not running</strong>.<br>
+            <strong>Automatic blocking is completely disabled</strong> — attacks will not be detected or blocked.
+        </p>
+        <form method="POST" action="/action/lfdstart" style="display:inline; margin-right:8px">
+            <button type="submit" class="btn btn-danger btn-sm">
+                <span class="glyphicon glyphicon-play"></span> Start LFD Now
+            </button>
+        </form>
+        <form method="POST" action="/action/lfdrestart" style="display:inline">
+            <button type="submit" class="btn btn-default btn-sm">
+                <span class="glyphicon glyphicon-refresh"></span> Restart LFD
+            </button>
+        </form>
+    </div>
+    {% else %}
+    <div class="bs-callout bs-callout-success text-center">
+        <h4><span class="glyphicon glyphicon-ok-circle"></span> Firewall Status: Enabled and Running</h4>
+        <small class="text-muted">CSF rules active &bull; LFD monitoring</small>
+    </div>
+    {% endif %}
+{% else %}
+    <div class="bs-callout bs-callout-danger text-center">
+        <h4><span class="glyphicon glyphicon-remove-circle"></span> Firewall Status: Disabled</h4>
+        <form method="POST" action="/action/enable" style="display:inline">
+            <button type="submit" class="btn btn-success btn-lg">
+                <span class="glyphicon glyphicon-play"></span> Enable Firewall
+            </button>
+        </form>
+    </div>
+{% endif %}
+
+<!-- System Stats -->
+{% if system %}
+<div class="stat-row">
+    <div class="stat-card stat-accent stat-clickable" data-metric="cpu" title="Click for top CPU processes">
+        <span class="stat-icon glyphicon glyphicon-tasks"></span>
+        <div class="stat-value" id="stat-cpu">{{ system.cpu_usage }}%</div>
+        <div class="stat-label">CPU Usage</div>
+        <div class="stat-sub">{{ system.cpu_cores }} cores &middot; Load: {{ system.load['1min'] }}</div>
+        <div class="stat-progress">
+            <div class="stat-progress-bar {{ 'green' if system.cpu_usage < 60 else 'yellow' if system.cpu_usage < 85 else 'red' }}"
+                 id="prog-cpu" style="width:{{ system.cpu_usage }}%"></div>
+        </div>
+    </div>
+    <div class="stat-card stat-info stat-clickable" data-metric="memory" title="Click for memory details">
+        <span class="stat-icon glyphicon glyphicon-equalizer"></span>
+        <div class="stat-value" id="stat-mem">{{ system.memory.percent }}%</div>
+        <div class="stat-label">Memory</div>
+        <div class="stat-sub" id="stat-mem-detail">{{ system.memory.used_mb }} / {{ system.memory.total_mb }} MB</div>
+        <div class="stat-progress">
+            <div class="stat-progress-bar {{ 'green' if system.memory.percent < 60 else 'yellow' if system.memory.percent < 85 else 'red' }}"
+                 id="prog-mem" style="width:{{ system.memory.percent }}%"></div>
+        </div>
+    </div>
+    <div class="stat-card stat-success stat-clickable" data-metric="uptime" title="Click for uptime details">
+        <span class="stat-icon glyphicon glyphicon-time"></span>
+        <div class="stat-value">{{ system.uptime.formatted }}</div>
+        <div class="stat-label">Uptime</div>
+        <div class="stat-sub">{{ system.hostname }}</div>
+    </div>
+    <div class="stat-card stat-warning stat-clickable" data-metric="connections" title="Click for active connections">
+        <span class="stat-icon glyphicon glyphicon-transfer"></span>
+        <div class="stat-value" id="stat-conn">{{ system.connections.established }}</div>
+        <div class="stat-label">Connections</div>
+        <div class="stat-sub">TCP total: {{ system.connections.tcp_total }}</div>
+    </div>
+    <div class="stat-card stat-danger stat-clickable" data-metric="blocked" title="Click for blocked IP list">
+        <span class="stat-icon glyphicon glyphicon-ban-circle"></span>
+        <div class="stat-value" id="stat-blocked">{{ system.blocked_ips }}</div>
+        <div class="stat-label">Blocked IPs</div>
+        <div class="stat-sub">Permanent + temporary</div>
+    </div>
+</div>
+
+<!-- Disk Usage (compact) -->
+{% if system.disks %}
+<div class="panel panel-default">
+    <div class="panel-heading"><h4><span class="glyphicon glyphicon-hdd"></span> Disk Usage</h4></div>
+    <div class="panel-body" style="padding:10px 15px">
+        {% for disk in system.disks %}
+        <div style="margin-bottom:8px">
+            <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:3px">
+                <span><strong>{{ disk.mount }}</strong> <span class="text-muted">({{ disk.filesystem }})</span></span>
+                <span>{{ disk.used }} / {{ disk.size }} ({{ disk.percent }}%)</span>
+            </div>
+            <div class="stat-progress">
+                <div class="stat-progress-bar {{ 'green' if disk.percent < 70 else 'yellow' if disk.percent < 90 else 'red' }}"
+                     style="width:{{ disk.percent }}%"></div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endif %}
+
+<!-- Quick Actions -->
+<div class="row">
+    <div class="col-md-6">
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4><span class="glyphicon glyphicon-flash"></span> Quick Actions</h4></div>
+            <div class="panel-body">
+                <form method="POST" action="/quick/allow" data-ajax="true" data-success-msg="IP allowed successfully" style="margin-bottom:12px">
+                    <label class="control-label"><span class="glyphicon glyphicon-ok-circle text-success"></span> Quick Allow</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control input-sm" name="ip" placeholder="IP Address" required>
+                        <span class="input-group-btn">
+                            <button class="btn btn-sm btn-success" type="submit">Allow</button>
+                        </span>
+                    </div>
+                    <input type="text" class="form-control input-sm" name="comment" placeholder="Comment (optional)" style="margin-top:4px">
+                </form>
+                <form method="POST" action="/quick/deny" data-ajax="true" data-success-msg="IP denied successfully" style="margin-bottom:12px">
+                    <label class="control-label"><span class="glyphicon glyphicon-ban-circle text-danger"></span> Quick Deny</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control input-sm" name="ip" placeholder="IP Address" required>
+                        <span class="input-group-btn">
+                            <button class="btn btn-sm btn-danger" type="submit">Deny</button>
+                        </span>
+                    </div>
+                    <input type="text" class="form-control input-sm" name="comment" placeholder="Comment (optional)" style="margin-top:4px">
+                </form>
+                <form method="POST" action="/quick/ignore" data-ajax="true" data-success-msg="IP added to ignore list" style="margin-bottom:12px">
+                    <label class="control-label"><span class="glyphicon glyphicon-eye-close text-info"></span> Quick Ignore</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control input-sm" name="ip" placeholder="IP Address" required>
+                        <span class="input-group-btn">
+                            <button class="btn btn-sm btn-info" type="submit">Ignore</button>
+                        </span>
+                    </div>
+                </form>
+                <form method="POST" action="/quick/unblock" data-ajax="true" data-success-msg="IP unblocked successfully" style="margin-bottom:12px">
+                    <label class="control-label"><span class="glyphicon glyphicon-remove-circle text-warning"></span> Quick Unblock</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control input-sm" name="ip" placeholder="IP Address" required>
+                        <span class="input-group-btn">
+                            <button class="btn btn-sm btn-warning" type="submit">Unblock</button>
+                        </span>
+                    </div>
+                </form>
+                <form method="POST" action="/quick/search">
+                    <label class="control-label"><span class="glyphicon glyphicon-search"></span> Search for IP</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control input-sm" name="ip" placeholder="IP Address to search" required>
+                        <span class="input-group-btn">
+                            <button class="btn btn-sm btn-primary" type="submit">Search</button>
+                        </span>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <!-- Firewall Controls -->
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4><span class="glyphicon glyphicon-cog"></span> Firewall Controls</h4></div>
+            <div class="panel-body">
+                <div class="dash-btn-grid">
+                    <form method="POST" action="/action/restartboth">
+                        <button type="submit" class="btn btn-primary btn-block" style="margin-bottom:8px">
+                            <span class="glyphicon glyphicon-refresh"></span> Restart csf+lfd
+                        </button>
+                    </form>
+                    <form method="POST" action="/action/restartq">
+                        <button type="submit" class="btn btn-default btn-block" style="margin-bottom:8px">
+                            <span class="glyphicon glyphicon-time"></span> Quick Restart
+                        </button>
+                    </form>
+                    <button type="button" class="btn btn-danger btn-block confirmButton" style="margin-bottom:8px"
+                            data-query="Are you sure you want to stop the firewall?"
+                            data-action="/action/stop">
+                        <span class="glyphicon glyphicon-stop"></span> Stop csf
+                    </button>
+                    <button type="button" class="btn btn-warning btn-block confirmButton" style="margin-bottom:8px"
+                            data-query="Flush ALL permanent and temporary blocks?"
+                            data-action="/action/flushall">
+                        <span class="glyphicon glyphicon-trash"></span> Flush All Blocks
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- LFD Controls -->
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4><span class="glyphicon glyphicon-eye-open"></span> LFD Controls</h4></div>
+            <div class="panel-body">
+                <div class="row">
+                    <div class="col-xs-4">
+                        <form method="POST" action="/action/lfdrestart">
+                            <button type="submit" class="btn btn-primary btn-block btn-sm">
+                                <span class="glyphicon glyphicon-refresh"></span> Restart
+                            </button>
+                        </form>
+                    </div>
+                    <div class="col-xs-4">
+                        <form method="POST" action="/action/lfdstop">
+                            <button type="submit" class="btn btn-danger btn-block btn-sm">
+                                <span class="glyphicon glyphicon-stop"></span> Stop
+                            </button>
+                        </form>
+                    </div>
+                    <div class="col-xs-4">
+                        <form method="POST" action="/action/lfdstart">
+                            <button type="submit" class="btn btn-success btn-block btn-sm">
+                                <span class="glyphicon glyphicon-play"></span> Start
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Temp Allow/Deny -->
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4><span class="glyphicon glyphicon-time"></span> Temporary Allow/Deny</h4></div>
+            <div class="panel-body">
+                <form method="POST" action="/temp/add">
+                    <div class="form-group" style="margin-bottom:8px">
+                        <input type="text" class="form-control input-sm" name="ip" placeholder="IP Address" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-xs-4">
+                            <input type="number" class="form-control input-sm" name="timeout" value="1" min="1" placeholder="Timeout">
+                        </div>
+                        <div class="col-xs-4">
+                            <select class="form-control input-sm" name="dur">
+                                <option value="seconds">Sec</option>
+                                <option value="minutes">Min</option>
+                                <option value="hours" selected>Hours</option>
+                                <option value="days">Days</option>
+                            </select>
+                        </div>
+                        <div class="col-xs-4">
+                            <input type="text" class="form-control input-sm" name="ports" placeholder="Ports (*)">
+                        </div>
+                    </div>
+                    <input type="text" class="form-control input-sm" name="comment" placeholder="Comment" style="margin-top:6px">
+                    <div class="btn-group btn-group-justified" style="margin-top:8px">
+                        <div class="btn-group">
+                            <button type="submit" name="do" value="block" class="btn btn-sm btn-danger">
+                                <span class="glyphicon glyphicon-ban-circle"></span> Temp Block
+                            </button>
+                        </div>
+                        <div class="btn-group">
+                            <button type="submit" name="do" value="allow" class="btn btn-sm btn-success">
+                                <span class="glyphicon glyphicon-ok-circle"></span> Temp Allow
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Server Information -->
+<div class="panel panel-default">
+    <div class="panel-heading"><h4><span class="glyphicon glyphicon-info-sign"></span> Server Information</h4></div>
+    <div class="panel-body">
+        <div class="row">
+            <div class="col-md-3" style="margin-bottom:8px">
+                <form method="POST" action="/action/csftest">
+                    <button type="submit" class="btn btn-default btn-block">
+                        <span class="glyphicon glyphicon-check"></span> Check Server Security
+                    </button>
+                </form>
+            </div>
+            <div class="col-md-3" style="margin-bottom:8px">
+                <a href="/status" class="btn btn-default btn-block">
+                    <span class="glyphicon glyphicon-list"></span> Firewall Information
+                </a>
+            </div>
+            <div class="col-md-3" style="margin-bottom:8px">
+                <a href="/ports" class="btn btn-default btn-block">
+                    <span class="glyphicon glyphicon-transfer"></span> View Listening Ports
+                </a>
+            </div>
+            <div class="col-md-3" style="margin-bottom:8px">
+                <a href="/health" class="btn btn-default btn-block">
+                    <span class="glyphicon glyphicon-heart"></span> Security Health Score
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- LFD Configuration Files -->
+<div class="panel panel-default">
+    <div class="panel-heading"><h4><span class="glyphicon glyphicon-file"></span> LFD Configuration Files</h4></div>
+    <div class="panel-body">
+        <div class="row">
+            {% set lfd_files = [
+                ('ignore', 'csf.ignore', 'eye-close'),
+                ('dirwatch', 'csf.dirwatch', 'folder-open'),
+                ('dyndns', 'csf.dyndns', 'globe'),
+                ('blocklists', 'csf.blocklists', 'list'),
+                ('syslogusers', 'csf.syslogusers', 'user'),
+                ('logfiles', 'csf.logfiles', 'file'),
+            ] %}
+            {% for key, name, icon in lfd_files %}
+            <div class="col-md-3 col-sm-4" style="margin-bottom:8px">
+                <a href="/lfd/{{ key }}" class="btn btn-default btn-block">
+                    <span class="glyphicon glyphicon-{{ icon }}"></span> {{ name }}
+                </a>
+            </div>
+            {% endfor %}
+            <div class="col-md-3 col-sm-4" style="margin-bottom:8px">
+                <a href="/templates" class="btn btn-default btn-block">
+                    <span class="glyphicon glyphicon-envelope"></span> Email Alert Templates
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Other Settings -->
+<div class="panel panel-default">
+    <div class="panel-heading"><h4><span class="glyphicon glyphicon-option-horizontal"></span> Other Settings</h4></div>
+    <div class="panel-body">
+        <div class="row">
+            {% if conf.get('CF_ENABLE', '0') == '1' %}
+            <div class="col-md-3 col-sm-4" style="margin-bottom:8px">
+                <a href="/files/cloudflare" class="btn btn-default btn-block">
+                    <span class="glyphicon glyphicon-cloud"></span> CloudFlare
+                </a>
+            </div>
+            {% endif %}
+            {% if conf.get('SMTPAUTH_RESTRICT', '0') != '0' %}
+            <div class="col-md-3 col-sm-4" style="margin-bottom:8px">
+                <a href="/files/smtpauth" class="btn btn-default btn-block">
+                    <span class="glyphicon glyphicon-envelope"></span> SMTP AUTH Restrict
+                </a>
+            </div>
+            {% endif %}
+            <div class="col-md-3 col-sm-4" style="margin-bottom:8px">
+                <a href="/files/redirect" class="btn btn-default btn-block">
+                    <span class="glyphicon glyphicon-random"></span> Port/IP Redirect
+                </a>
+            </div>
+            <div class="col-md-3 col-sm-4" style="margin-bottom:8px">
+                <a href="/files/resellers" class="btn btn-default btn-block">
+                    <span class="glyphicon glyphicon-user"></span> Reseller Config
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if has_cluster %}
+<!-- Cluster Controls -->
+<div class="panel panel-default">
+    <div class="panel-heading"><h4><span class="glyphicon glyphicon-link"></span> LFD Cluster</h4></div>
+    <div class="panel-body">
+        <div class="row">
+            <div class="col-md-3">
+                <form method="POST" action="/cluster/ping">
+                    <button type="submit" class="btn btn-default btn-block" style="margin-bottom:8px">
+                        <span class="glyphicon glyphicon-signal"></span> Cluster Ping
+                    </button>
+                </form>
+            </div>
+            <div class="col-md-3">
+                <form method="POST" action="/cluster/restart">
+                    <button type="submit" class="btn btn-warning btn-block" style="margin-bottom:8px">
+                        <span class="glyphicon glyphicon-refresh"></span> Cluster Restart
+                    </button>
+                </form>
+            </div>
+            <div class="col-md-3">
+                <form method="POST" action="/cluster/allow" data-ajax="true" data-success-msg="Cluster allow sent">
+                    <div class="input-group">
+                        <input type="text" class="form-control input-sm" name="ip" placeholder="IP to allow" required>
+                        <span class="input-group-btn">
+                            <button class="btn btn-sm btn-success" type="submit">Cluster Allow</button>
+                        </span>
+                    </div>
+                </form>
+            </div>
+            <div class="col-md-3">
+                <form method="POST" action="/cluster/deny" data-ajax="true" data-success-msg="Cluster deny sent">
+                    <div class="input-group">
+                        <input type="text" class="form-control input-sm" name="ip" placeholder="IP to deny" required>
+                        <span class="input-group-btn">
+                            <button class="btn btn-sm btn-danger" type="submit">Cluster Deny</button>
+                        </span>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- LFD Event Feed -->
+<div class="panel panel-default">
+    <div class="panel-heading">
+        <h4 style="margin:0">
+            <span class="glyphicon glyphicon-bell"></span> Recent Firewall Events
+            <button class="btn btn-xs btn-default pull-right" id="refreshEvents">
+                <span class="glyphicon glyphicon-refresh"></span>
+            </button>
+        </h4>
+    </div>
+    <div class="panel-body" style="padding:0">
+        <div id="eventFeed" style="max-height:300px; overflow-y:auto">
+            <div class="text-center text-muted" style="padding:20px">Loading events...</div>
+        </div>
+    </div>
+</div>
+
+<div class="well well-sm text-center">
+    csf: v{{ status.version }}
+    {% if system %}
+     | {{ system.hostname }} | Kernel: {{ system.kernel }}
+    {% endif %}
+</div>
+
+<!-- Stat Detail Modal -->
+<div class="modal fade" id="statDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                <h4 class="modal-title" id="statDetailTitle">Details</h4>
+            </div>
+            <div class="modal-body">
+                <pre id="statDetailBody" style="max-height:400px; overflow-y:auto; font-size:12px; white-space:pre-wrap">Loading...</pre>
+                <div id="statDetailExtra" style="display:none; margin-top:10px">
+                    <hr>
+                    <pre style="font-size:12px; white-space:pre-wrap" id="statDetailExtraBody"></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <span id="statDetailLink"></span>
+                <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    // Clickable stat tiles
+    $('.stat-clickable').css('cursor', 'pointer').on('click', function() {
+        var metric = $(this).data('metric');
+        $('#statDetailBody').text('Loading...').show();
+        $('#statDetailExtra').hide();
+        $('#statDetailLink').empty();
+        $('#statDetailModal').modal('show');
+        $.getJSON('/api/system/detail/' + metric, function(data) {
+            $('#statDetailTitle').text(data.title || 'Details');
+
+            if (data.format === 'blocked_table') {
+                var html = '';
+                html += '<div class="input-group" style="margin-bottom:10px">' +
+                    '<input type="text" class="form-control" id="blocked-search" placeholder="Search IPs...">' +
+                    '<span class="input-group-btn">' +
+                    '<button class="btn btn-default" id="blocked-search-btn"><span class="glyphicon glyphicon-search"></span></button>' +
+                    '</span></div>';
+
+                html += '<ul class="nav nav-tabs" style="margin-bottom:10px">' +
+                    '<li class="active"><a href="#" data-filter="all">All (' + (data.perm_count + data.temp_count) + ')</a></li>' +
+                    '<li><a href="#" data-filter="permanent">Permanent (' + data.perm_count + ')</a></li>' +
+                    '<li><a href="#" data-filter="temporary">Temporary (' + data.temp_count + ')</a></li>' +
+                    '</ul>';
+
+                html += '<div style="max-height:350px; overflow-y:auto">' +
+                    '<table class="table table-condensed table-hover" id="blocked-table">' +
+                    '<thead><tr><th>IP Address</th><th>Country</th><th>Type</th><th>Reason</th><th style="width:100px">Actions</th></tr></thead><tbody>';
+
+                var allEntries = data.permanent.concat(data.temporary);
+                allEntries.forEach(function(e) {
+                    var flag = e.country ? '<img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/7.2.3/flags/4x3/' + e.country.toLowerCase() + '.svg" style="height:14px; margin-right:4px" alt="' + e.country + '">' + e.country : '-';
+                    var typeBadge = e.type === 'permanent'
+                        ? '<span class="label label-danger">Permanent</span>'
+                        : '<span class="label label-warning">Temporary</span>';
+                    var reason = e.comment || '-';
+                    if (reason.length > 60) reason = reason.substring(0, 60) + '...';
+                    html += '<tr data-type="' + e.type + '" data-ip="' + e.ip + '">' +
+                        '<td><code>' + e.ip + '</code></td>' +
+                        '<td>' + flag + '</td>' +
+                        '<td>' + typeBadge + '</td>' +
+                        '<td style="font-size:11px" title="' + (e.comment || '').replace(/"/g, '&quot;') + '">' + reason + '</td>' +
+                        '<td>' +
+                        '<button class="btn btn-xs btn-success blocked-unblock" data-ip="' + e.ip + '" title="Unblock"><span class="glyphicon glyphicon-ok"></span></button> ' +
+                        '<a href="/ip-lookup?ip=' + e.ip + '" class="btn btn-xs btn-info" title="Lookup"><span class="glyphicon glyphicon-search"></span></a>' +
+                        '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+
+                $('#statDetailBody').html(html).show();
+
+                $('#statDetailBody .nav-tabs a').on('click', function(e) {
+                    e.preventDefault();
+                    $(this).closest('ul').find('li').removeClass('active');
+                    $(this).parent().addClass('active');
+                    var filter = $(this).data('filter');
+                    $('#blocked-table tbody tr').each(function() {
+                        if (filter === 'all' || $(this).data('type') === filter) {
+                            $(this).show();
+                        } else {
+                            $(this).hide();
+                        }
+                    });
+                });
+
+                function filterBlocked() {
+                    var q = $('#blocked-search').val().toLowerCase();
+                    $('#blocked-table tbody tr').each(function() {
+                        $(this).toggle($(this).data('ip').toLowerCase().indexOf(q) >= 0 || $(this).text().toLowerCase().indexOf(q) >= 0);
+                    });
+                }
+                $('#blocked-search').on('input', filterBlocked);
+                $('#blocked-search-btn').on('click', filterBlocked);
+
+                $(document).off('click', '.blocked-unblock').on('click', '.blocked-unblock', function() {
+                    var btn = $(this);
+                    var ip = btn.data('ip');
+                    if (!confirm('Unblock ' + ip + '?')) return;
+                    btn.prop('disabled', true);
+                    $.post('/quick/unblock', {ip: ip}, function(r) {
+                        if (r.success) {
+                            btn.closest('tr').fadeOut(300, function() { $(this).remove(); });
+                            showToast(ip + ' unblocked', 'success');
+                        } else {
+                            showToast(r.error || 'Failed', 'danger');
+                            btn.prop('disabled', false);
+                        }
+                    });
+                });
+            } else {
+                $('#statDetailBody').text(data.lines ? data.lines.join('\n') : 'No data');
+            }
+
+            if (data.extra) {
+                $('#statDetailExtraBody').text(data.extra);
+                $('#statDetailExtra').show();
+            }
+            var links = {
+                connections: '<a href="/status" class="btn btn-sm btn-primary"><span class="glyphicon glyphicon-list-alt"></span> Full Status</a>',
+                blocked: '<a href="/temp" class="btn btn-sm btn-primary"><span class="glyphicon glyphicon-time"></span> Temp Blocks</a>'
+            };
+            if (links[metric]) $('#statDetailLink').html(links[metric]);
+        }).fail(function() {
+            $('#statDetailBody').text('Failed to load details');
+        });
+    });
+
+    // LFD Event Feed
+    function loadEvents() {
+        $.getJSON('/api/lfd/events?lines=30', function(events) {
+            if (!events || events.length === 0) {
+                $('#eventFeed').html('<div class="text-center text-muted" style="padding:20px">No recent events</div>');
+                return;
+            }
+            var html = '<table class="table table-condensed table-hover" style="margin:0; font-size:12px">';
+            events.forEach(function(e) {
+                var typeClass = {block:'danger', allow:'success', warning:'warning', service:'info'}[e.type] || '';
+                var ipBtn = e.ip ? ' <a href="/ip-lookup?ip=' + e.ip + '" class="btn btn-xs btn-default" title="Lookup"><span class="glyphicon glyphicon-search"></span></a>' : '';
+                html += '<tr class="' + typeClass + '">' +
+                    '<td style="width:140px"><small>' + (e.timestamp || '') + '</small></td>' +
+                    '<td><span class="glyphicon glyphicon-' + e.icon + '"></span> ' +
+                    (e.ip ? '<strong>' + e.ip + '</strong>' + ipBtn + ' ' : '') +
+                    '</td><td>' + e.raw.substring(0, 120) + '</td></tr>';
+            });
+            html += '</table>';
+            $('#eventFeed').html(html);
+        });
+    }
+
+    loadEvents();
+    setInterval(loadEvents, 15000);
+    $('#refreshEvents').on('click', loadEvents);
+});
+</script>
+{% endblock %}

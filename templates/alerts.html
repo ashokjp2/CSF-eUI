@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block page_title %}Alert History{% endblock %}
+
+{% block content %}
+<p class="text-muted" style="margin-bottom:15px">Recent LFD alerts and firewall events</p>
+
+        <!-- Summary -->
+        <div class="row" id="alert-summary">
+            <div class="col-md-3 col-xs-6">
+                <div class="panel panel-danger"><div class="panel-body text-center"><h3 id="al-blocks" style="margin:0">-</h3><small>Blocks</small></div></div>
+            </div>
+            <div class="col-md-3 col-xs-6">
+                <div class="panel panel-warning"><div class="panel-body text-center"><h3 id="al-fails" style="margin:0">-</h3><small>Login Failures</small></div></div>
+            </div>
+            <div class="col-md-3 col-xs-6">
+                <div class="panel panel-info"><div class="panel-body text-center"><h3 id="al-floods" style="margin:0">-</h3><small>Floods</small></div></div>
+            </div>
+            <div class="col-md-3 col-xs-6">
+                <div class="panel panel-default"><div class="panel-body text-center"><h3 id="al-total" style="margin:0">-</h3><small>Total Events</small></div></div>
+            </div>
+        </div>
+
+        <!-- Filter -->
+        <div class="row" style="margin-bottom:10px">
+            <div class="col-md-4">
+                <input type="text" class="form-control" id="al-filter" placeholder="Filter by IP, country, or keyword...">
+            </div>
+            <div class="col-md-4">
+                <div class="btn-group">
+                    <button class="btn btn-default al-cat active" data-cat="">All</button>
+                    <button class="btn btn-default al-cat" data-cat="block">Blocks</button>
+                    <button class="btn btn-default al-cat" data-cat="login_fail">Fails</button>
+                    <button class="btn btn-default al-cat" data-cat="flood">Floods</button>
+                    <button class="btn btn-default al-cat" data-cat="service">Service</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alerts list -->
+        <div class="list-group" id="al-list"></div>
+        <div id="al-loading" style="text-align:center; padding:30px">
+            <span class="glyphicon glyphicon-hourglass" style="font-size:24px"></span>
+        </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    var allAlerts = [];
+
+    function loadAlerts() {
+        $('#al-loading').show();
+        $.getJSON('/api/alerts', function(d) {
+            $('#al-loading').hide();
+            allAlerts = d.alerts;
+
+            $('#al-blocks').text(d.summary.blocks);
+            $('#al-fails').text(d.summary.login_fails);
+            $('#al-floods').text(d.summary.floods);
+            $('#al-total').text(d.summary.total);
+
+            renderAlerts(allAlerts);
+        });
+    }
+
+    function renderAlerts(alerts) {
+        var html = '';
+        alerts.forEach(function(a) {
+            var cls = '';
+            if (a.severity === 'danger') cls = 'list-group-item-danger';
+            else if (a.severity === 'warning') cls = 'list-group-item-warning';
+            else if (a.severity === 'success') cls = 'list-group-item-success';
+            else if (a.severity === 'info') cls = 'list-group-item-info';
+
+            var flag = a.country ? '<img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/7.2.3/flags/4x3/' + a.country.toLowerCase() + '.svg" style="height:12px; margin:0 4px"> ' : '';
+            var ipLink = a.ip ? '<a href="/ip-lookup?ip=' + a.ip + '" class="label label-default">' + a.ip + '</a> ' : '';
+
+            html += '<div class="list-group-item ' + cls + '" style="padding:6px 12px; font-size:12px" data-cat="' + a.category + '" data-search="' + a.line.toLowerCase() + '">' +
+                '<span class="glyphicon glyphicon-' + a.icon + '"></span> ' +
+                flag + ipLink +
+                '<span class="label label-' + a.severity + '" style="margin-right:4px">' + a.category + '</span> ' +
+                '<span style="font-family:monospace; word-break:break-all">' + $('<span>').text(a.line.substring(0, 150)).html() + '</span>' +
+                '</div>';
+        });
+        $('#al-list').html(html || '<div class="text-center text-muted" style="padding:30px">No alerts found</div>');
+    }
+
+    $('.al-cat').on('click', function() {
+        $('.al-cat').removeClass('active');
+        $(this).addClass('active');
+        var cat = $(this).data('cat');
+        var filtered = cat ? allAlerts.filter(function(a) { return a.category === cat; }) : allAlerts;
+        renderAlerts(filtered);
+    });
+
+    $('#al-filter').on('input', function() {
+        var q = $(this).val().toLowerCase();
+        $('#al-list .list-group-item').each(function() {
+            $(this).toggle(!q || ($(this).data('search') || '').indexOf(q) >= 0);
+        });
+    });
+
+    loadAlerts();
+});
+</script>
+{% endblock %}

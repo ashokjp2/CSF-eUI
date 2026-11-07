@@ -1,0 +1,413 @@
+{% extends "base.html" %}
+{% block page_title %}LFD Config{% endblock %}
+
+{% block title %}{{ info.title }} - CSFv2{% endblock %}
+
+{% block content %}
+<!-- Header -->
+        <div class="panel panel-primary">
+            <div class="panel-heading">
+                <h4 class="panel-title">
+                    <span class="glyphicon glyphicon-{{ icon }}"></span>
+                    {{ info.title }}
+                    <small style="color:rgba(255,255,255,.7)">({{ info.path }})</small>
+                </h3>
+            </div>
+            <div class="panel-body">
+                <p class="lead" style="margin-bottom:5px;font-size:14px">{{ info.description }}</p>
+                <p class="text-muted" style="margin:0;font-size:12px">
+                    {% if info.restart == 'lfd' %}
+                    <span class="glyphicon glyphicon-info-sign"></span> Changes require an LFD restart to take effect.
+                    {% elif info.restart == 'both' %}
+                    <span class="glyphicon glyphicon-info-sign"></span> Changes require a CSF + LFD restart to take effect.
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+
+        {% if filetype == 'blocklists' %}
+        <!-- Add blocklist (on top) -->
+        <div class="panel panel-success">
+            <div class="panel-heading"><h4 class="panel-title"><span class="glyphicon glyphicon-plus"></span> Add Block List</h4></div>
+            <div class="panel-body">
+                <form id="add-form" class="form-horizontal">
+                    <div class="form-group">
+                        <label class="col-sm-3 control-label">List Name</label>
+                        <div class="col-sm-9">
+                            <input type="text" class="form-control" id="add-name" placeholder="e.g. SPAMHAUS_DROP">
+                            <p class="help-block">A short identifier (no spaces). Used in iptables chain names.</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="col-sm-3 control-label">Download URL</label>
+                        <div class="col-sm-9">
+                            <input type="url" class="form-control" id="add-url" placeholder="https://www.spamhaus.org/drop/drop.txt">
+                            <p class="help-block">Direct URL to the text file containing IP addresses (one per line).</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="col-sm-3 control-label">Refresh Interval</label>
+                        <div class="col-sm-9">
+                            <select class="form-control" id="add-interval">
+                                <option value="3600">Every 1 hour</option>
+                                <option value="21600">Every 6 hours</option>
+                                <option value="43200">Every 12 hours</option>
+                                <option value="86400" selected>Every 24 hours (recommended)</option>
+                                <option value="604800">Every 7 days</option>
+                            </select>
+                            <p class="help-block">How often CSF should re-download this list.</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="col-sm-3 control-label">Max Entries</label>
+                        <div class="col-sm-9">
+                            <input type="number" class="form-control" id="add-max" value="0" min="0">
+                            <p class="help-block">Maximum IPs to import from this list. 0 = unlimited.</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="col-sm-offset-3 col-sm-9">
+                            <button type="submit" class="btn btn-success"><span class="glyphicon glyphicon-plus"></span> Add Block List</button>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Popular lists -->
+                <hr>
+                <h5><span class="glyphicon glyphicon-star"></span> Popular Threat Intelligence Lists</h5>
+                <div class="row" style="margin-top:10px">
+                    <div class="col-md-6">
+                        <div class="well well-sm" style="margin-bottom:8px">
+                            <strong>Spamhaus DROP</strong><br>
+                            <small class="text-muted">IPs hijacked by spammers &amp; cyber-criminals</small><br>
+                            <button class="btn btn-xs btn-info quick-add" data-name="SPAMDROP" data-url="https://www.spamhaus.org/drop/drop.txt" data-interval="86400" data-max="0">
+                                <span class="glyphicon glyphicon-plus"></span> Quick Add
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="well well-sm" style="margin-bottom:8px">
+                            <strong>Spamhaus EDROP</strong><br>
+                            <small class="text-muted">Extended DROP list — suballocated hijacked IPs</small><br>
+                            <button class="btn btn-xs btn-info quick-add" data-name="SPAMEDROP" data-url="https://www.spamhaus.org/drop/edrop.txt" data-interval="86400" data-max="0">
+                                <span class="glyphicon glyphicon-plus"></span> Quick Add
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="well well-sm" style="margin-bottom:8px">
+                            <strong>DShield Top 20</strong><br>
+                            <small class="text-muted">Most active attacking IPs reported to DShield</small><br>
+                            <button class="btn btn-xs btn-info quick-add" data-name="DSHIELD" data-url="https://feeds.dshield.org/block.txt" data-interval="86400" data-max="0">
+                                <span class="glyphicon glyphicon-plus"></span> Quick Add
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="well well-sm" style="margin-bottom:8px">
+                            <strong>Blocklist.de All</strong><br>
+                            <small class="text-muted">IPs reported for attacks (SSH, FTP, mail, etc.)</small><br>
+                            <button class="btn btn-xs btn-info quick-add" data-name="BLOCKLIST_DE" data-url="https://lists.blocklist.de/lists/all.txt" data-interval="86400" data-max="0">
+                                <span class="glyphicon glyphicon-plus"></span> Quick Add
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- BLOCKLIST TABLE -->
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <h4 class="panel-title">
+                    <span class="glyphicon glyphicon-list"></span> Active Block Lists
+                    <span class="badge" id="entry-count">{{ info.entries|length }}</span>
+                </h4>
+            </div>
+            <div class="panel-body" style="padding:0">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" style="margin:0" id="entries-table">
+                        <thead>
+                            <tr>
+                                <th style="width:180px">Name</th>
+                                <th style="width:120px">Refresh Interval</th>
+                                <th style="width:100px">Max Entries</th>
+                                <th>URL</th>
+                                <th style="width:60px"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in info.entries %}
+                            <tr data-idx="{{ loop.index0 }}">
+                                <td><code>{{ entry.name }}</code></td>
+                                <td>{{ entry.interval }} sec</td>
+                                <td>{{ entry.max }}</td>
+                                <td><small class="text-muted" style="word-break:break-all">{{ entry.url }}</small></td>
+                                <td>
+                                    <button class="btn btn-xs btn-danger remove-entry" data-idx="{{ loop.index0 }}" title="Remove">
+                                        <span class="glyphicon glyphicon-trash"></span>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% if not info.entries %}
+                            <tr id="empty-row"><td colspan="5" class="text-center text-muted">No block lists configured</td></tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        {% else %}
+        <!-- Add entry (on top) -->
+        <div class="panel panel-success">
+            <div class="panel-heading"><h4 class="panel-title"><span class="glyphicon glyphicon-plus"></span> Add Entry</h4></div>
+            <div class="panel-body">
+                <form id="add-form" class="form-inline">
+                    <div class="form-group" style="margin-right:10px">
+                        <input type="text" class="form-control" id="add-value" placeholder="{{ info.placeholder }}" style="width:300px" required>
+                    </div>
+                    <div class="form-group" style="margin-right:10px">
+                        <input type="text" class="form-control" id="add-comment" placeholder="Optional note" style="width:200px">
+                    </div>
+                    <button type="submit" class="btn btn-success"><span class="glyphicon glyphicon-plus"></span> Add</button>
+                </form>
+
+                {% if info.examples %}
+                <div style="margin-top:12px">
+                    <span class="text-muted" style="font-size:12px">
+                        <span class="glyphicon glyphicon-info-sign"></span>
+                        Examples:
+                        {% for ex in info.examples %}
+                        <button class="btn btn-xs btn-default example-fill" data-value="{{ ex }}" style="margin-left:4px">{{ ex }}</button>
+                        {% endfor %}
+                    </span>
+                </div>
+                {% endif %}
+
+                {% if filetype == 'ignore' %}
+                <div class="alert alert-info" style="margin-top:12px;margin-bottom:0">
+                    <span class="glyphicon glyphicon-info-sign"></span>
+                    <strong>Tip:</strong> Use the
+                    <a href="/qconfig#services">Service Integration</a>
+                    panel to auto-detect and whitelist Docker, WireGuard, and Netbird networks.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- SIMPLE LIST TABLE (ignore, dirwatch, syslogusers, logfiles) -->
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <h4 class="panel-title">
+                    <span class="glyphicon glyphicon-th-list"></span> Current Entries
+                    <span class="badge" id="entry-count">{{ info.entries|length }}</span>
+                </h4>
+            </div>
+            <div class="panel-body" style="padding:0">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" style="margin:0" id="entries-table">
+                        <thead>
+                            <tr>
+                                <th>
+                                    {% if info.format == 'ip' %}IP / CIDR
+                                    {% elif info.format == 'path' %}Path
+                                    {% elif info.format == 'user' %}Username
+                                    {% else %}Value{% endif %}
+                                </th>
+                                <th style="width:250px">Comment</th>
+                                <th style="width:60px"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in info.entries %}
+                            <tr data-idx="{{ loop.index0 }}">
+                                <td><code>{{ entry.value }}</code></td>
+                                <td><small class="text-muted">{{ entry.comment }}</small></td>
+                                <td>
+                                    <button class="btn btn-xs btn-danger remove-entry" data-idx="{{ loop.index0 }}" title="Remove">
+                                        <span class="glyphicon glyphicon-trash"></span>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% if not info.entries %}
+                            <tr id="empty-row"><td colspan="3" class="text-center text-muted">No entries configured</td></tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Actions -->
+        <div class="row">
+            <div class="col-md-6">
+                <a href="/files/{{ filetype }}" class="btn btn-default" title="Raw file editor"><span class="glyphicon glyphicon-pencil"></span> Raw Editor</a>
+            </div>
+            <div class="col-md-6 text-right">
+                <button class="btn btn-warning" id="restart-btn">
+                    <span class="glyphicon glyphicon-refresh"></span>
+                    {% if info.restart == 'both' %}Restart CSF + LFD{% else %}Restart LFD{% endif %}
+                </button>
+            </div>
+        </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+    var entries = {{ info.entries | tojson }};
+    var filetype = '{{ filetype }}';
+    var isBlocklist = filetype === 'blocklists';
+
+    function renderTable() {
+        var tbody = $('#entries-table tbody');
+        tbody.empty();
+        $('#entry-count').text(entries.length);
+
+        if (entries.length === 0) {
+            var cols = isBlocklist ? 5 : 3;
+            tbody.append('<tr id="empty-row"><td colspan="'+cols+'" class="text-center text-muted">No entries configured</td></tr>');
+            return;
+        }
+
+        entries.forEach(function(e, i) {
+            var tr;
+            if (isBlocklist) {
+                tr = '<tr data-idx="'+i+'">' +
+                    '<td><code>'+esc(e.name)+'</code></td>' +
+                    '<td>'+esc(e.interval)+' sec</td>' +
+                    '<td>'+esc(e.max)+'</td>' +
+                    '<td><small class="text-muted" style="word-break:break-all">'+esc(e.url)+'</small></td>' +
+                    '<td><button class="btn btn-xs btn-danger remove-entry" data-idx="'+i+'" title="Remove"><span class="glyphicon glyphicon-trash"></span></button></td>' +
+                    '</tr>';
+            } else {
+                tr = '<tr data-idx="'+i+'">' +
+                    '<td><code>'+esc(e.value)+'</code></td>' +
+                    '<td><small class="text-muted">'+esc(e.comment || '')+'</small></td>' +
+                    '<td><button class="btn btn-xs btn-danger remove-entry" data-idx="'+i+'" title="Remove"><span class="glyphicon glyphicon-trash"></span></button></td>' +
+                    '</tr>';
+            }
+            tbody.append(tr);
+        });
+    }
+
+    function esc(s) {
+        return $('<span>').text(s || '').html();
+    }
+
+    function saveEntries(callback) {
+        $.ajax({
+            url: '/lfd/' + filetype + '/save',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({entries: entries}),
+            success: function(resp) {
+                if (resp.success) {
+                    showAlert('success', resp.message || 'Saved');
+                } else {
+                    showAlert('danger', resp.error || 'Save failed');
+                }
+                if (callback) callback(resp);
+            },
+            error: function() { showAlert('danger', 'Request failed'); }
+        });
+    }
+
+    function showAlert(type, msg) {
+        var icon = type === 'success' ? 'ok-sign' : type === 'danger' ? 'exclamation-sign' : 'info-sign';
+        var html = '<div class="alert alert-'+type+' alert-dismissible" style="margin-bottom:10px">' +
+            '<button type="button" class="close" data-dismiss="alert">&times;</button>' +
+            '<span class="glyphicon glyphicon-'+icon+'"></span> '+msg+'</div>';
+        $('.main-content').prepend(html);
+        setTimeout(function(){ $('.main-content .alert').first().fadeOut(); }, 5000);
+    }
+
+    /* Remove entry */
+    $(document).on('click', '.remove-entry', function() {
+        var idx = $(this).data('idx');
+        var item = entries[idx];
+        var label = isBlocklist ? item.name : item.value;
+        if (!confirm('Remove "' + label + '"?')) return;
+        entries.splice(idx, 1);
+        renderTable();
+        saveEntries();
+    });
+
+    /* Add entry */
+    $('#add-form').on('submit', function(e) {
+        e.preventDefault();
+        if (isBlocklist) {
+            var name = $('#add-name').val().trim();
+            var url = $('#add-url').val().trim();
+            var interval = $('#add-interval').val();
+            var max = $('#add-max').val().trim() || '0';
+            if (!name || !url) { showAlert('danger', 'Name and URL are required'); return; }
+            for (var i=0; i<entries.length; i++) {
+                if (entries[i].name.toUpperCase() === name.toUpperCase()) {
+                    showAlert('danger', 'A list named "'+name+'" already exists'); return;
+                }
+            }
+            entries.push({name: name, interval: interval, max: max, url: url});
+            $('#add-name, #add-url').val('');
+            $('#add-max').val('0');
+        } else {
+            var val = $('#add-value').val().trim();
+            var comment = $('#add-comment').val().trim();
+            if (!val) return;
+            for (var i=0; i<entries.length; i++) {
+                if (entries[i].value === val) {
+                    showAlert('danger', '"'+val+'" already exists'); return;
+                }
+            }
+            entries.push({value: val, comment: comment});
+            $('#add-value, #add-comment').val('');
+        }
+        renderTable();
+        saveEntries();
+    });
+
+    /* Quick-add popular blocklists */
+    $(document).on('click', '.quick-add', function() {
+        var name = $(this).data('name');
+        var url = $(this).data('url');
+        var interval = String($(this).data('interval'));
+        var max = String($(this).data('max'));
+        for (var i=0; i<entries.length; i++) {
+            if (entries[i].name.toUpperCase() === name.toUpperCase()) {
+                showAlert('warning', name + ' is already in the list'); return;
+            }
+        }
+        entries.push({name: name, interval: interval, max: max, url: url});
+        renderTable();
+        saveEntries();
+        $(this).prop('disabled', true).text('Added');
+    });
+
+    /* Example fill buttons */
+    $(document).on('click', '.example-fill', function() {
+        $('#add-value').val($(this).data('value')).focus();
+    });
+
+    /* Restart */
+    $('#restart-btn').on('click', function() {
+        var btn = $(this);
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh spinning"></span> Restarting...');
+        $.post('/api/restart', function(resp) {
+            if (resp.success) {
+                showAlert('success', 'Restart completed');
+            } else {
+                showAlert('danger', 'Restart failed: ' + (resp.error || 'Unknown'));
+            }
+            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-refresh"></span> Restart');
+        }).fail(function() {
+            showAlert('danger', 'Restart request failed');
+            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-refresh"></span> Restart');
+        });
+    });
+})();
+</script>
+{% endblock %}

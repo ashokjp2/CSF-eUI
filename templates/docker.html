@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% block page_title %}Docker{% endblock %}
+
+{% block content %}
+<div class="panel panel-info">
+    <div class="panel-heading">
+        <h4 style="margin:0">
+            <span class="glyphicon glyphicon-cloud"></span>
+            Docker{% if is_coolify %} / Coolify{% endif %} Management
+            <span class="pull-right text-muted" style="font-size:14px">{{ docker_version }}</span>
+        </h4>
+    </div>
+</div>
+
+<ul class="nav nav-tabs" style="margin-bottom:15px">
+    <li class="active"><a data-toggle="tab" href="#containers">Containers</a></li>
+    <li><a data-toggle="tab" href="#networks">Networks</a></li>
+    <li><a data-toggle="tab" href="#ports">Port Mappings</a></li>
+    <li><a data-toggle="tab" href="#firewall-rules">Docker Firewall Rules</a></li>
+    {% if is_coolify %}
+    <li><a data-toggle="tab" href="#coolify">Coolify</a></li>
+    {% endif %}
+    <li><a data-toggle="tab" href="#integration">CSF Integration</a></li>
+</ul>
+
+<div class="tab-content">
+    <!-- Containers -->
+    <div class="tab-pane active" id="containers">
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4>Docker Containers</h4></div>
+            <div class="panel-body">
+                {% if containers %}
+                <table class="table table-bordered table-striped">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Image</th>
+                            <th>Status</th>
+                            <th>Ports</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in containers %}
+                        <tr class="{{ 'success' if 'Up' in c.get('Status', '') else 'default' }}">
+                            <td><code>{{ c.get('ID', '')[:12] }}</code></td>
+                            <td>{{ c.get('Names', '') }}</td>
+                            <td>{{ c.get('Image', '') }}</td>
+                            <td>
+                                {% if 'Up' in c.get('Status', '') %}
+                                <span class="label label-success">{{ c.get('Status', '') }}</span>
+                                {% else %}
+                                <span class="label label-default">{{ c.get('Status', '') }}</span>
+                                {% endif %}
+                            </td>
+                            <td><small>{{ c.get('Ports', '') }}</small></td>
+                            <td>
+                                <div class="btn-group">
+                                    <a href="/docker/container/{{ c.get('ID', '') }}" class="btn btn-xs btn-info">
+                                        <span class="glyphicon glyphicon-eye-open"></span>
+                                    </a>
+                                    {% if 'Up' in c.get('Status', '') %}
+                                    <button class="btn btn-xs btn-warning docker-ctl" data-id="{{ c.get('ID', '') }}" data-action="restart" title="Restart">
+                                        <span class="glyphicon glyphicon-refresh"></span>
+                                    </button>
+                                    <button class="btn btn-xs btn-danger docker-ctl" data-id="{{ c.get('ID', '') }}" data-action="stop" title="Stop">
+                                        <span class="glyphicon glyphicon-stop"></span>
+                                    </button>
+                                    {% else %}
+                                    <button class="btn btn-xs btn-success docker-ctl" data-id="{{ c.get('ID', '') }}" data-action="start" title="Start">
+                                        <span class="glyphicon glyphicon-play"></span>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="bs-callout bs-callout-info">No containers found.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Networks -->
+    <div class="tab-pane" id="networks">
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4>Docker Networks</h4></div>
+            <div class="panel-body">
+                {% if networks %}
+                <table class="table table-bordered table-striped">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Driver</th>
+                            <th>Scope</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for n in networks %}
+                        <tr>
+                            <td><code>{{ n.get('ID', '')[:12] }}</code></td>
+                            <td>{{ n.get('Name', '') }}</td>
+                            <td>{{ n.get('Driver', '') }}</td>
+                            <td>{{ n.get('Scope', '') }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="bs-callout bs-callout-info">No networks found.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Port Mappings -->
+    <div class="tab-pane" id="ports">
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4>Container Port Mappings</h4></div>
+            <div class="panel-body">
+                {% if port_mappings %}
+                <table class="table table-bordered table-striped">
+                    <thead>
+                        <tr>
+                            <th>Container</th>
+                            <th>Container ID</th>
+                            <th>Port Mapping</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pm in port_mappings %}
+                        <tr>
+                            <td>{{ pm.container }}</td>
+                            <td><code>{{ pm.container_id }}</code></td>
+                            <td>{{ pm.mapping }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="bs-callout bs-callout-info">No port mappings found.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Docker Firewall Rules -->
+    <div class="tab-pane" id="firewall-rules">
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4>Docker iptables Rules</h4></div>
+            <div class="panel-body">
+                <h5>DOCKER Chain</h5>
+                <pre class="comment" style="font-size:11px">{{ docker_rules }}</pre>
+                <h5 style="margin-top:15px">DOCKER NAT Rules</h5>
+                <pre class="comment" style="font-size:11px">{{ nat_rules }}</pre>
+            </div>
+        </div>
+    </div>
+
+    {% if is_coolify %}
+    <!-- Coolify -->
+    <div class="tab-pane" id="coolify">
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4><span class="glyphicon glyphicon-cloud"></span> Coolify Managed Containers</h4></div>
+            <div class="panel-body">
+                {% if coolify_containers %}
+                <table class="table table-bordered table-striped">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Image</th>
+                            <th>Status</th>
+                            <th>Ports</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in coolify_containers %}
+                        <tr>
+                            <td><code>{{ c.get('ID', '')[:12] }}</code></td>
+                            <td>{{ c.get('Names', '') }}</td>
+                            <td>{{ c.get('Image', '') }}</td>
+                            <td><span class="label label-success">{{ c.get('Status', '') }}</span></td>
+                            <td><small>{{ c.get('Ports', '') }}</small></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="bs-callout bs-callout-info">No Coolify containers found.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- CSF Integration -->
+    <div class="tab-pane" id="integration">
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4>CSF Docker Integration</h4></div>
+            <div class="panel-body">
+                <div class="bs-callout bs-callout-warning">
+                    <h5>Docker and CSF Firewall Coexistence</h5>
+                    <p>Docker manages its own iptables rules. When CSF restarts, Docker rules may be lost.
+                    Use the DOCKER_IPTABLES setting in csf.conf or add custom rules to csf.allow.</p>
+                </div>
+
+                <button type="button" class="btn btn-primary" id="generateRules">
+                    <span class="glyphicon glyphicon-cog"></span> Generate CSF Rules for Docker
+                </button>
+
+                <pre class="comment" id="generatedRules" style="margin-top:15px; display:none; font-size:12px"></pre>
+
+                <div id="applyRulesBtn" style="display:none; margin-top:10px">
+                    <p class="text-info">Copy these rules to <code>csf.allow</code> to ensure Docker ports remain accessible after CSF restarts.</p>
+                    <a href="/files/allow" class="btn btn-success">
+                        <span class="glyphicon glyphicon-edit"></span> Edit csf.allow
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+$('#generateRules').on('click', function() {
+    $.post('/docker/rules', function(data) {
+        if (data.rules) {
+            $('#generatedRules').text(data.rules).show();
+            $('#applyRulesBtn').show();
+        }
+    });
+});
+
+$(document).on('click', '.docker-ctl', function() {
+    var btn = $(this);
+    var id = btn.data('id');
+    var action = btn.data('action');
+    btn.prop('disabled', true);
+    CSFv2.toast('Container ' + action + '...', 'info', 2000);
+    $.ajax({
+        url: '/docker/container/' + id + '/' + action,
+        method: 'POST',
+        headers: {'X-Requested-With': 'XMLHttpRequest'},
+        success: function(resp) {
+            if (resp.success) {
+                CSFv2.toast('Container ' + action + ' successful', 'success');
+                setTimeout(function() { location.reload(); }, 1000);
+            } else {
+                CSFv2.toast(resp.stderr || 'Failed', 'danger', 6000);
+                btn.prop('disabled', false);
+            }
+        },
+        error: function() {
+            CSFv2.toast('Request failed', 'danger');
+            btn.prop('disabled', false);
+        }
+    });
+});
+</script>
+{% endblock %}

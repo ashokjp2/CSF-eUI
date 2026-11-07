@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CSF-eUI{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 5L92 22v33Q92 82 50 95Q8 82 8 55V22Z' fill='%232980b9'/%3E%3Ctext x='50' y='70' font-size='46' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3Ee%3C/text%3E%3C/svg%3E">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.4.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/csfv2.css') }}">
+    <script>
+        (function(){
+            var t = localStorage.getItem('csfv2-theme');
+            if (t === 'dark') document.documentElement.setAttribute('data-theme','dark');
+        })();
+    </script>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-logo">
+            <div class="sidebar-logo-icon" style="font-size:18px;line-height:1">🛡</div>
+            <span class="sidebar-logo-text">CSF-eUI</span>
+            <button class="sidebar-close-btn" id="sidebar-close" title="Close menu">
+                <span class="glyphicon glyphicon-remove"></span>
+            </button>
+        </div>
+
+        {% if status is defined %}
+        <div class="sidebar-status-bar">
+            <span class="pulse {{ 'pulse-green' if status.enabled and not status.testing else 'pulse-yellow' if status.testing else 'pulse-red' }}"></span>
+            <span>CSF {{ 'Active' if status.enabled and not status.testing else 'Testing' if status.testing else 'Inactive' }}</span>
+            <span class="sidebar-status-version">v{{ status.version }}</span>
+        </div>
+        {% endif %}
+
+        <div class="sidebar-nav">
+            <div class="nav-section">
+                <div class="nav-section-label">Main</div>
+                <a class="nav-item{{ ' active' if request.path == '/' }}" href="/">
+                    <span class="glyphicon glyphicon-dashboard"></span> Dashboard
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/status' }}" href="/status">
+                    <span class="glyphicon glyphicon-list-alt"></span> Firewall Status
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/config' }}" href="/config">
+                    <span class="glyphicon glyphicon-cog"></span> Configuration
+                </a>
+                <a class="nav-item{{ ' active' if '/qconfig' in request.path }}" href="/qconfig">
+                    <span class="glyphicon glyphicon-wrench"></span> Quick Config
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/temp' }}" href="/temp">
+                    <span class="glyphicon glyphicon-time"></span> Temp Blocks
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/wizard' }}" href="/wizard">
+                    <span class="glyphicon glyphicon-education"></span> Setup Wizard
+                </a>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-label">Rules</div>
+                <a class="nav-item{{ ' active' if request.path == '/rules/builder' }}" href="/rules/builder">
+                    <span class="glyphicon glyphicon-comment"></span> Rule Builder
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/ip-lists' }}" href="/ip-lists">
+                    <span class="glyphicon glyphicon-list"></span> Allow / Deny Lists
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/countries' }}" href="/countries">
+                    <span class="glyphicon glyphicon-globe"></span> Country Blocks
+                </a>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-label">Logs &amp; Security</div>
+                <a class="nav-item{{ ' active' if request.path == '/logs' }}" href="/logs">
+                    <span class="glyphicon glyphicon-list-alt"></span> Log Viewer
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/logs/search' }}" href="/logs/search">
+                    <span class="glyphicon glyphicon-search"></span> Log Search
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/timeline' }}" href="/timeline">
+                    <span class="glyphicon glyphicon-stats"></span> Firewall Timeline
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/analytics' }}" href="/analytics">
+                    <span class="glyphicon glyphicon-fire"></span> Attack Analytics
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/lfd-blocks' }}" href="/lfd-blocks">
+                    <span class="glyphicon glyphicon-eye-open"></span> LFD Block Log
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/geoip-map' }}" href="/geoip-map">
+                    <span class="glyphicon glyphicon-map-marker"></span> GeoIP Map
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/alerts' }}" href="/alerts">
+                    <span class="glyphicon glyphicon-bell"></span> Alert History
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/audit' }}" href="/audit">
+                    <span class="glyphicon glyphicon-book"></span> Audit Log
+                </a>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-label">Tools</div>
+                <a class="nav-item{{ ' active' if request.path == '/processes' }}" href="/processes">
+                    <span class="glyphicon glyphicon-tasks"></span> Process Monitor
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/connections' }}" href="/connections">
+                    <span class="glyphicon glyphicon-transfer"></span> Connections
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/port-scan' }}" href="/port-scan">
+                    <span class="glyphicon glyphicon-screenshot"></span> Port Scanner
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/ip-lookup' }}" href="/ip-lookup">
+                    <span class="glyphicon glyphicon-search"></span> IP Lookup
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/bandwidth' }}" href="/bandwidth">
+                    <span class="glyphicon glyphicon-signal"></span> Bandwidth
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/scheduled-tasks' }}" href="/scheduled-tasks">
+                    <span class="glyphicon glyphicon-calendar"></span> Scheduled Tasks
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/login-history' }}" href="/login-history">
+                    <span class="glyphicon glyphicon-log-in"></span> Login History
+                </a>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-label">Files</div>
+                <a class="nav-item{{ ' active' if request.path == '/files/allow' }}" href="/files/allow">
+                    <span class="glyphicon glyphicon-ok text-success-icon"></span> csf.allow
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/files/deny' }}" href="/files/deny">
+                    <span class="glyphicon glyphicon-ban-circle text-danger-icon"></span> csf.deny
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/lfd/ignore' }}" href="/lfd/ignore">
+                    <span class="glyphicon glyphicon-eye-close"></span> csf.ignore
+                </a>
+                <a class="nav-item{{ ' active' if '/files/redirect' in request.path }}" href="/files/redirect">
+                    <span class="glyphicon glyphicon-random"></span> csf.redirect
+                </a>
+                <a class="nav-item{{ ' active' if '/lfd/blocklists' in request.path }}" href="/lfd/blocklists">
+                    <span class="glyphicon glyphicon-ban-circle"></span> csf.blocklists
+                </a>
+                <a class="nav-item{{ ' active' if '/files/smtpauth' in request.path }}" href="/files/smtpauth">
+                    <span class="glyphicon glyphicon-envelope"></span> csf.smtpauth
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/templates' }}" href="/templates">
+                    <span class="glyphicon glyphicon-file"></span> Email Templates
+                </a>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-label">System</div>
+                <a class="nav-item{{ ' active' if request.path == '/backup-restore' or request.path == '/backups' }}" href="/backup-restore">
+                    <span class="glyphicon glyphicon-floppy-disk"></span> Backup &amp; Restore
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/email-alerts' }}" href="/email-alerts">
+                    <span class="glyphicon glyphicon-envelope"></span> Email Alerts
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/ssl' }}" href="/ssl">
+                    <span class="glyphicon glyphicon-lock"></span> SSL Certificates
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/health' }}" href="/health">
+                    <span class="glyphicon glyphicon-heart"></span> Health Check
+                </a>
+                {% if has_docker is defined and has_docker %}
+                <a class="nav-item{{ ' active' if '/docker' in request.path }}" href="/docker">
+                    <span class="glyphicon glyphicon-cloud"></span> Docker
+                </a>
+                {% endif %}
+                {% if has_wireguard is defined and has_wireguard %}
+                <a class="nav-item{{ ' active' if '/wireguard' in request.path }}" href="/wireguard">
+                    <span class="glyphicon glyphicon-lock"></span> WireGuard
+                </a>
+                {% endif %}
+                <a class="nav-item{{ ' active' if request.path == '/profiles' }}" href="/profiles">
+                    <span class="glyphicon glyphicon-briefcase"></span> Profiles
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/settings' }}" href="/settings">
+                    <span class="glyphicon glyphicon-cog"></span> Settings
+                </a>
+                <a class="nav-item{{ ' active' if request.path == '/updates' }}" href="/updates" id="nav-updates">
+                    <span class="glyphicon glyphicon-cloud-download"></span> Updates
+                    <span class="badge" id="update-badge" style="display:none; background:#e67e22; margin-left:4px">!</span>
+                </a>
+            </div>
+        </div>
+
+        <div class="sidebar-footer">
+            <div class="sidebar-server-info">
+                <span class="pulse pulse-green" style="animation:none"></span>
+                <div>
+                    <div class="sidebar-server-ip">{{ status.ip if status is defined else '---' }}</div>
+                    <div class="sidebar-server-uptime">
+                        CSF v{{ status.version if status is defined else 'N/A' }}
+                        &nbsp;&bull;&nbsp;
+                        <a href="/updates" style="color:inherit; text-decoration:none" title="CSF-eUI version">
+                            eUI v{{ app_version }}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Sidebar overlay for mobile -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+    <!-- Main content area -->
+    <div class="main-wrapper" id="main-wrapper">
+        <!-- Top bar -->
+        <div class="topbar">
+            <div class="topbar-left">
+                <button class="topbar-menu-btn" id="sidebar-toggle" title="Toggle sidebar">
+                    <span class="glyphicon glyphicon-menu-hamburger"></span>
+                </button>
+                <h1 class="topbar-title">{% block page_title %}Dashboard{% endblock %}</h1>
+            </div>
+            <div class="topbar-right">
+                <a href="#" class="topbar-btn theme-toggle" title="Toggle dark mode (Ctrl+Shift+D)">
+                    <span class="glyphicon glyphicon-moon"></span>
+                </a>
+                <a href="#" class="topbar-btn" id="btn-restart-csfv2" title="Restart CSF-eUI">
+                    <span class="glyphicon glyphicon-refresh"></span>
+                </a>
+                <a href="/logout" class="topbar-btn" title="Logout">
+                    <span class="glyphicon glyphicon-log-out"></span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Page content -->
+        <div class="main-content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible" style="margin-bottom:10px">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                {% if category == 'success' %}<span class="glyphicon glyphicon-ok-sign"></span>
+                {% elif category == 'danger' %}<span class="glyphicon glyphicon-exclamation-sign"></span>
+                {% elif category == 'warning' %}<span class="glyphicon glyphicon-warning-sign"></span>
+                {% else %}<span class="glyphicon glyphicon-info-sign"></span>{% endif %}
+                {{ message }}
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div class="modal fade" id="confirmModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                    <h4 class="modal-title"><span class="glyphicon glyphicon-warning-sign text-warning"></span> Confirm Action</h4>
+                </div>
+                <div class="modal-body">
+                    <p id="modal-text"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                    <form id="modal-form" method="POST" style="display:inline">
+                        <button type="submit" class="btn btn-danger" id="modal-submit">Confirm</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.4.1/js/bootstrap.min.js"></script>
+    <script src="{{ url_for('static', filename='js/csfv2.js') }}"></script>
+    <script>
+    var _toasts = [];
+    var TOAST_MAX = 4;
+    var TOAST_RIGHT = 20;
+    var TOAST_TOP_START = 70;
+    var TOAST_GAP = 8;
+
+    function _restack() {
+        var top = TOAST_TOP_START;
+        _toasts.forEach(function(t) {
+            if (t.is(':visible')) {
+                t.css('top', top + 'px');
+                top += t.outerHeight(true) + TOAST_GAP;
+            }
+        });
+        /* Show dismiss-all button when 2+ toasts visible */
+        var visible = _toasts.filter(function(t){ return t.is(':visible'); });
+        $('#toast-dismiss-all').remove();
+        if (visible.length >= 2) {
+            var btn = $('<button id="toast-dismiss-all" class="btn btn-xs btn-default" ' +
+                'style="position:fixed;top:' + TOAST_TOP_START + 'px;left:50%;transform:translateX(-50%);' +
+                'z-index:10000;box-shadow:0 2px 6px rgba(0,0,0,0.3)">✕ Dismiss all notifications</button>');
+            btn.on('click', function() {
+                _toasts.forEach(function(t){ t.alert('close'); });
+                btn.remove();
+            });
+            $('body').append(btn);
+        }
+    }
+
+    function showToast(msg, type) {
+        type = type || 'info';
+        /* Drop oldest if at cap */
+        while (_toasts.length >= TOAST_MAX) {
+            _toasts.shift().alert('close');
+        }
+        var autoMs = (type === 'success') ? 4000 : (type === 'info') ? 5000 : 8000;
+        var toast = $('<div class="alert alert-' + type + ' alert-dismissible" ' +
+            'style="position:fixed;right:' + TOAST_RIGHT + 'px;z-index:9999;' +
+            'min-width:280px;max-width:420px;box-shadow:0 4px 12px rgba(0,0,0,0.25);' +
+            'transition:top 0.2s ease">' +
+            '<button type="button" class="close" data-dismiss="alert">&times;</button>' +
+            msg + '</div>');
+        _toasts.push(toast);
+        $('body').append(toast);
+        _restack();
+        toast.on('closed.bs.alert', function() {
+            _toasts = _toasts.filter(function(t){ return t[0] !== toast[0]; });
+            _restack();
+        });
+        setTimeout(function() { toast.alert('close'); }, autoMs);
+    }
+
+    // Sidebar toggle
+    (function() {
+        var sidebar = document.getElementById('sidebar');
+        var overlay = document.getElementById('sidebar-overlay');
+        var toggle = document.getElementById('sidebar-toggle');
+        var closeBtn = document.getElementById('sidebar-close');
+
+        function openSidebar() {
+            sidebar.classList.add('open');
+            overlay.classList.add('show');
+        }
+        function closeSidebar() {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('show');
+        }
+
+        // Desktop: toggle collapsed state
+        toggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (window.innerWidth <= 768) {
+                openSidebar();
+            } else {
+                sidebar.classList.toggle('collapsed');
+                document.getElementById('main-wrapper').classList.toggle('sidebar-collapsed');
+                localStorage.setItem('csfv2-sidebar', sidebar.classList.contains('collapsed') ? 'collapsed' : 'expanded');
+            }
+        });
+
+        closeBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            closeSidebar();
+        });
+
+        overlay.addEventListener('click', closeSidebar);
+
+        // Restore sidebar state
+        if (window.innerWidth > 768) {
+            var saved = localStorage.getItem('csfv2-sidebar');
+            if (saved === 'collapsed') {
+                sidebar.classList.add('collapsed');
+                document.getElementById('main-wrapper').classList.add('sidebar-collapsed');
+            }
+        }
+    })();
+
+    // Check for available updates and light the sidebar badge
+    (function checkUpdateBadge() {
+        var checked = sessionStorage.getItem('csfv2-update-checked');
+        if (checked) {
+            if (sessionStorage.getItem('csfv2-update-available') === '1') {
+                $('#update-badge').show();
+            }
+            return;
+        }
+        $.getJSON('/api/version/check', function(r) {
+            sessionStorage.setItem('csfv2-update-checked', '1');
+            if (r.update_available) {
+                sessionStorage.setItem('csfv2-update-available', '1');
+                $('#update-badge').show();
+                if (window.location.pathname !== '/updates') {
+                    showToast('CSF-eUI v' + r.latest + ' is available. <a href="/updates" style="color:#fff; text-decoration:underline">Update now</a>', 'warning', 8000);
+                }
+            } else {
+                sessionStorage.setItem('csfv2-update-available', '0');
+            }
+        });
+    })();
+
+    $('#btn-restart-csfv2').on('click', function(e) {
+        e.preventDefault();
+        if (!confirm('Restart CSF-eUI? You will be briefly disconnected.')) return;
+        $.post('/api/restart-csfv2', function(r) {
+            if (r.success) {
+                showToast('Restarting CSF-eUI... Reloading in 5 seconds.', 'info');
+                setTimeout(function() { location.reload(); }, 5000);
+            } else {
+                showToast(r.error || 'Restart failed', 'danger');
+            }
+        }).fail(function() {
+            showToast('Restarting... Reloading in 5 seconds.', 'info');
+            setTimeout(function() { location.reload(); }, 5000);
+        });
+    });
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
