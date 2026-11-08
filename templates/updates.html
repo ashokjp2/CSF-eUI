@@ -98,20 +98,76 @@
     </div>
 </div>
 
-<!-- Auto-update status -->
+<!-- Auto-update settings -->
 <div class="panel panel-default">
     <div class="panel-heading">
         <h4 class="panel-title" style="margin:0">
-            <span class="glyphicon glyphicon-time"></span> Automatic Update Checks
+            <span class="glyphicon glyphicon-cog"></span> Auto-Update Settings
+            <span class="pull-right" id="autoupdate-save-status"></span>
         </h4>
     </div>
     <div class="panel-body">
-        <p class="text-muted" style="margin-bottom:8px">
-            A systemd timer checks for new versions every 12 hours and caches the result.
-            The app shows a notification when an update is available — it never auto-installs without your action.
-        </p>
-        <div id="timer-status">
-            <span class="label label-default">Checking timer status...</span>
+        <div id="autoupdate-loading" class="text-muted">Loading settings...</div>
+        <div id="autoupdate-form" style="display:none">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group" style="margin-bottom:16px">
+                        <label style="font-weight:600">
+                            <span class="glyphicon glyphicon-search"></span> Version Checks
+                        </label>
+                        <div class="checkbox" style="margin-top:4px">
+                            <label>
+                                <input type="checkbox" id="au-auto-check">
+                                Automatically check for new versions
+                            </label>
+                        </div>
+                        <div id="au-interval-row" style="margin-top:8px; padding-left:20px">
+                            <label class="text-muted" style="font-weight:normal">Check every</label>
+                            <div class="input-group" style="width:160px; display:inline-flex; margin-left:8px">
+                                <input type="number" class="form-control input-sm" id="au-interval" min="1" max="168" style="width:70px">
+                                <span class="input-group-addon" style="padding:4px 8px">hours</span>
+                            </div>
+                        </div>
+                        <p class="text-muted" style="font-size:12px; margin-top:6px; padding-left:20px">
+                            A systemd timer runs the check in the background and caches the result.
+                        </p>
+                        <div class="checkbox" style="padding-left:20px; margin-top:0">
+                            <label>
+                                <span class="glyphicon glyphicon-time" style="margin-right:4px"></span>
+                                <span id="timer-status-inline" class="text-muted">Checking timer...</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group" style="margin-bottom:16px">
+                        <label style="font-weight:600">
+                            <span class="glyphicon glyphicon-cloud-download"></span> Installation
+                        </label>
+                        <div style="margin-top:4px">
+                            <div class="radio" style="margin-top:4px">
+                                <label>
+                                    <input type="radio" name="au-install-mode" value="manual" id="au-manual">
+                                    <strong>Notify only</strong> — show update badge; I'll install manually
+                                </label>
+                            </div>
+                            <div class="radio">
+                                <label>
+                                    <input type="radio" name="au-install-mode" value="auto" id="au-auto">
+                                    <strong>Auto-install</strong> — install and restart when update is available
+                                </label>
+                            </div>
+                        </div>
+                        <div id="au-auto-warning" class="alert alert-warning" style="padding:8px 12px; font-size:12px; margin-top:8px; display:none">
+                            <span class="glyphicon glyphicon-warning-sign"></span>
+                            Auto-install restarts the app without warning. Only enable this if the server is not production-critical.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button class="btn btn-primary btn-sm" id="au-save">
+                <span class="glyphicon glyphicon-floppy-disk"></span> Save Settings
+            </button>
         </div>
     </div>
 </div>
@@ -174,14 +230,77 @@ $(function() {
         };
     });
 
-    // Check systemd timer status
+    // Auto-update settings
+    function loadAutoUpdateConfig() {
+        $.getJSON('/api/version/auto-update-config', function(cfg) {
+            $('#au-auto-check').prop('checked', cfg.auto_check);
+            $('#au-interval').val(cfg.check_interval_hours);
+            if (cfg.auto_install) {
+                $('#au-auto').prop('checked', true);
+                $('#au-auto-warning').show();
+            } else {
+                $('#au-manual').prop('checked', true);
+                $('#au-auto-warning').hide();
+            }
+            toggleIntervalRow();
+            $('#autoupdate-loading').hide();
+            $('#autoupdate-form').show();
+        }).fail(function() {
+            $('#autoupdate-loading').text('Could not load settings.');
+        });
+    }
+
+    function toggleIntervalRow() {
+        if ($('#au-auto-check').is(':checked')) {
+            $('#au-interval-row').show();
+        } else {
+            $('#au-interval-row').hide();
+        }
+    }
+
+    $('#au-auto-check').on('change', toggleIntervalRow);
+
+    $('input[name="au-install-mode"]').on('change', function() {
+        $('#au-auto-warning').toggle($('#au-auto').is(':checked'));
+    });
+
+    $('#au-save').on('click', function() {
+        var btn = $(this);
+        btn.prop('disabled', true);
+        var payload = {
+            auto_check: $('#au-auto-check').is(':checked'),
+            check_interval_hours: parseInt($('#au-interval').val(), 10) || 12,
+            auto_install: $('#au-auto').is(':checked')
+        };
+        $.ajax({
+            url: '/api/version/auto-update-config',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(payload),
+            success: function(r) {
+                if (r.ok) {
+                    showToast('Auto-update settings saved.', 'success');
+                    $('#autoupdate-save-status').html('<span class="label label-success">Saved</span>');
+                    setTimeout(function(){ $('#autoupdate-save-status').html(''); }, 3000);
+                } else {
+                    showToast('Save failed: ' + (r.error || 'unknown error'), 'danger');
+                }
+            },
+            error: function() { showToast('Save failed.', 'danger'); },
+            complete: function() { btn.prop('disabled', false); }
+        });
+    });
+
+    loadAutoUpdateConfig();
+
+    // Timer status (shown inline in auto-update panel)
     $.getJSON('/api/version/timer-status', function(r) {
-        var label = r.active
-            ? '<span class="label label-success"><span class="glyphicon glyphicon-ok"></span> Timer active — checks every 12 h</span>'
-            : '<span class="label label-warning"><span class="glyphicon glyphicon-warning-sign"></span> Timer not found — run install.sh to enable</span>';
-        $('#timer-status').html(label);
+        var txt = r.active
+            ? '<span class="text-success"><span class="glyphicon glyphicon-ok"></span> Timer active</span>'
+            : '<span class="text-warning"><span class="glyphicon glyphicon-warning-sign"></span> Timer not running — run install.sh to enable</span>';
+        $('#timer-status-inline').html(txt);
     }).fail(function() {
-        $('#timer-status').html('<span class="label label-default">Could not check timer</span>');
+        $('#timer-status-inline').text('Could not check timer');
     });
 });
 </script>

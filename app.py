@@ -30,6 +30,7 @@ from csf_backend import health_score
 from csf_backend import setting_help
 from csf_backend import ssl_manager
 from csf_backend import updater as app_updater
+from csf_backend import auto_update as auto_update_cfg
 from csf_backend import setup_wizard
 from csf_backend import log_search
 from csf_backend import plain_rules
@@ -1608,6 +1609,19 @@ def api_version_update_stream():
         mimetype="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.route("/api/version/auto-update-config", methods=["GET", "POST"])
+@login_required
+def api_auto_update_config():
+    if request.method == "GET":
+        return jsonify(auto_update_cfg.load())
+    data = request.get_json(force=True)
+    try:
+        saved = auto_update_cfg.save(data)
+        return jsonify({"ok": True, "config": saved})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
 
 
 @app.route("/api/version/timer-status")
