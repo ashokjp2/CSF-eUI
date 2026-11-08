@@ -148,6 +148,9 @@
                 <a class="nav-item{{ ' active' if request.path == '/templates' }}" href="/templates">
                     <span class="glyphicon glyphicon-file"></span> Email Templates
                 </a>
+                <a class="nav-item{{ ' active' if request.path == '/csfpost' }}" href="/csfpost">
+                    <span class="glyphicon glyphicon-wrench"></span> csfpost.sh
+                </a>
             </div>
 
             <div class="nav-section">
@@ -264,6 +267,7 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
                     <form id="modal-form" method="POST" style="display:inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                         <button type="submit" class="btn btn-danger" id="modal-submit">Confirm</button>
                     </form>
                 </div>

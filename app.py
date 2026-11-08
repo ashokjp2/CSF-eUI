@@ -22,6 +22,7 @@ from csf_backend import quick_config
 from csf_backend import docker_log_monitor
 from csf_backend import service_integration
 from csf_backend import lfd_files
+from csf_backend import csfpost_editor
 from csf_backend import security_check
 from csf_backend import port_defaults
 from csf_backend import log_viewer
@@ -556,6 +557,65 @@ def csf_file_save_api(filetype):
     entries = data.get("entries", [])
     result = lfd_files.save_csf_file_entries(filetype, entries)
     return jsonify(result)
+
+
+# --- csfpost.sh / csfpre.sh editor ---
+
+@app.route("/csfpost")
+@login_required
+def csfpost_view():
+    script = request.args.get("script", "csfpost")
+    if script not in ("csfpost", "csfpre"):
+        script = "csfpost"
+    info = csfpost_editor.get_script_info(script)
+    return render_template(
+        "csfpost.html",
+        info=info,
+        script=script,
+        templates=csfpost_editor.RULE_TEMPLATES,
+        status=get_firewall_status(),
+    )
+
+
+@app.route("/api/csfpost/save", methods=["POST"])
+@login_required
+def csfpost_save():
+    data = request.get_json(silent=True) or {}
+    content = data.get("content", "")
+    script = data.get("script", "csfpost")
+    if script not in ("csfpost", "csfpre"):
+        script = "csfpost"
+    result = csfpost_editor.save_script(content, script)
+    if result["success"]:
+        result["message"] = "Saved. Restart CSF+LFD to apply changes."
+    return jsonify(result)
+
+
+@app.route("/api/csfpost/check", methods=["POST"])
+@login_required
+def csfpost_check():
+    data = request.get_json(silent=True) or {}
+    content = data.get("content", "")
+    return jsonify(csfpost_editor.check_syntax(content))
+
+
+@app.route("/api/csfpost/build-rule", methods=["POST"])
+@login_required
+def csfpost_build_rule():
+    data = request.get_json(silent=True) or {}
+    template_id = data.get("template_id", "")
+    params = data.get("params", {})
+    return jsonify(csfpost_editor.build_rule(template_id, params))
+
+
+@app.route("/api/csfpost/parse")
+@login_required
+def csfpost_parse():
+    script = request.args.get("script", "csfpost")
+    if script not in ("csfpost", "csfpre"):
+        script = "csfpost"
+    info = csfpost_editor.get_script_info(script)
+    return jsonify({"rules": info["rules"]})
 
 
 # --- Templates ---

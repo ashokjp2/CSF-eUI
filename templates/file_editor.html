@@ -34,12 +34,14 @@
 <div class="text-center" style="margin-bottom:15px">
     {% if restart_type == 'both' %}
     <form method="POST" action="/action/restartboth" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="btn btn-warning">
             <span class="glyphicon glyphicon-refresh"></span> Restart csf+lfd
         </button>
     </form>
     {% elif restart_type == 'lfd' %}
     <form method="POST" action="/action/lfdrestart" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="btn btn-warning">
             <span class="glyphicon glyphicon-refresh"></span> Restart lfd
         </button>

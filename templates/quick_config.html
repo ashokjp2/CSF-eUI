@@ -816,6 +816,7 @@
 
 <div class="text-center" style="margin-top:15px">
     <form method="POST" action="/action/restart" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="redirect_to" value="/qconfig">
         <button type="submit" class="btn btn-warning confirmButton" data-query="Restart CSF to apply changes?" data-action="/action/restart">
             <span class="glyphicon glyphicon-refresh"></span> Restart CSF &amp; Apply

@@ -7,6 +7,7 @@
         <h4 class="panel-title" style="margin:0">
             <span class="glyphicon glyphicon-time"></span> Temporary IP Entries
             <form method="POST" action="/action/flushtemp" class="pull-right" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <button type="submit" class="btn btn-warning btn-sm confirmButton"
                         data-query="Flush all temporary entries?"
                         data-action="/action/flushtemp">
