@@ -88,6 +88,9 @@ def get_version_info(force=False):
     age = time.time() - cache.get("checked_at", 0)
     cache_ttl = _get_cache_ttl()
     if force or age > cache_ttl:
+        if force:
+            _invalidate_cache()
+            cache = {}
         latest = _fetch_latest_version()
         if latest:
             cache = {"checked_at": time.time(), "latest": latest}
@@ -97,9 +100,7 @@ def get_version_info(force=False):
             except Exception:
                 pass
         else:
-            # Fetch failed — keep cached data but update timestamp only if forced
-            if force:
-                cache["checked_at"] = time.time()
+            cache["checked_at"] = time.time()
 
     latest = cache.get("latest")
     update_available = bool(
