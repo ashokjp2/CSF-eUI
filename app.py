@@ -1022,15 +1022,51 @@ def settings_view():
             elif not new_username.replace("_", "").replace("-", "").isalnum():
                 flash("Username may only contain letters, numbers, hyphens, and underscores", "danger")
             else:
-                old_username = session.get("username", "admin")
-                ok, msg = auth.change_username(old_username, new_username, confirm_pass)
-                if ok:
-                    session["username"] = new_username
-                    flash(f"Username changed to '{new_username}'", "success")
+                admin_email = email_alerts.get_admin_email()
+                if not admin_email:
+                    flash("Cannot change username: no admin email configured in LF_ALERT_TO (needed to send verification link)", "danger")
                 else:
-                    flash(f"Username change failed: {msg}", "danger")
+                    old_username = session.get("username", "admin")
+                    ok, token_or_err = auth.create_username_change_token(old_username, new_username, confirm_pass)
+                    if not ok:
+                        flash(f"Username change failed: {token_or_err}", "danger")
+                    else:
+                        link = url_for("confirm_username", token=token_or_err, _external=True)
+                        body = (
+                            f"A username change was requested for the CSFv2 firewall UI.\n\n"
+                            f"  Current username: {old_username}\n"
+                            f"  New username:     {new_username}\n\n"
+                            f"To confirm, click this link (valid for 15 minutes):\n{link}\n\n"
+                            f"If you did not request this, ignore this email — no change will be made.\n"
+                        )
+                        result = email_alerts.send_verification_email(
+                            admin_email,
+                            f"[CSFv2] Confirm username change to '{new_username}'",
+                            body,
+                        )
+                        if result["success"]:
+                            flash(f"Verification email sent to {admin_email}. Click the link in the email to confirm the change.", "info")
+                        else:
+                            flash(f"Could not send verification email: {result['error']}", "danger")
         return redirect(url_for("settings_view"))
-    return render_template("settings.html", status=get_firewall_status())
+    admin_email = email_alerts.get_admin_email()
+    return render_template("settings.html", status=get_firewall_status(), admin_email=admin_email)
+
+
+@app.route("/settings/confirm-username")
+@login_required
+def confirm_username():
+    token = request.args.get("token", "")
+    if not token:
+        flash("Missing verification token", "danger")
+        return redirect(url_for("settings_view"))
+    ok, new_username_or_err = auth.confirm_username_change(token)
+    if ok:
+        session["username"] = new_username_or_err
+        flash(f"Username successfully changed to '{new_username_or_err}'", "success")
+    else:
+        flash(f"Verification failed: {new_username_or_err}", "danger")
+    return redirect(url_for("settings_view"))
 
 
 # --- API endpoints for AJAX ---

@@ -26,7 +26,20 @@
 
         <hr>
         <h4>Change Username</h4>
-        <p class="text-muted" style="font-size:13px">You are currently logged in as <strong>{{ session['username'] if 'username' in session else 'admin' }}</strong>. Enter your current password to confirm the change.</p>
+        <p class="text-muted" style="font-size:13px">
+            You are currently logged in as <strong>{{ session['username'] if 'username' in session else 'admin' }}</strong>.
+            A verification link will be emailed to the admin address before the change is applied.
+        </p>
+        {% if not admin_email %}
+        <div class="alert alert-warning" style="max-width:500px">
+            <span class="glyphicon glyphicon-warning-sign"></span>
+            <strong>Email not configured.</strong>
+            Username change requires an admin email address.
+            Set <code>LF_ALERT_TO</code> in <a href="/config">CSF Settings</a> first.
+        </div>
+        {% else %}
+        <p class="text-muted" style="font-size:12px">Verification email will be sent to: <strong>{{ admin_email }}</strong></p>
+        {% endif %}
         <form method="POST" action="/settings">
             <input type="hidden" name="action" value="change_username">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -35,15 +48,15 @@
                 <input type="text" class="form-control" name="new_username"
                        required minlength="3" maxlength="64"
                        pattern="[A-Za-z0-9_\-]+" title="Letters, numbers, hyphens and underscores only"
-                       style="max-width:400px">
+                       style="max-width:400px" {% if not admin_email %}disabled{% endif %}>
             </div>
             <div class="form-group">
                 <label>Current Password (to confirm)</label>
                 <input type="password" class="form-control" name="current_password"
-                       required style="max-width:400px">
+                       required style="max-width:400px" {% if not admin_email %}disabled{% endif %}>
             </div>
-            <button type="submit" class="btn btn-warning">
-                <span class="glyphicon glyphicon-user"></span> Change Username
+            <button type="submit" class="btn btn-warning" {% if not admin_email %}disabled{% endif %}>
+                <span class="glyphicon glyphicon-envelope"></span> Send Verification Email
             </button>
         </form>
 

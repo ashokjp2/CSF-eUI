@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import os
 import json
+import secrets
 import time
 from pathlib import Path
 
@@ -135,7 +136,11 @@ def is_ip_banned(ip):
     return False
 
 
-def change_username(old_username, new_username, password):
+TOKEN_TTL = 900  # 15 minutes
+
+
+def create_username_change_token(old_username, new_username, password):
+    """Validate password and store a pending token; return (ok, token_or_error)."""
     config = load_auth_config()
     users = config.get("users", {})
     if old_username not in users:
@@ -144,10 +149,41 @@ def change_username(old_username, new_username, password):
         return False, "Username already taken"
     if not verify_password(password, users[old_username]["password"]):
         return False, "Invalid password"
-    users[new_username] = users.pop(old_username)
+    token = secrets.token_urlsafe(32)
+    config["pending_username_change"] = {
+        "token": token,
+        "old": old_username,
+        "new": new_username,
+        "expires": int(time.time()) + TOKEN_TTL,
+    }
     save_auth_config(config)
-    log_event(f"Username changed from '{old_username}' to '{new_username}'")
-    return True, "OK"
+    log_event(f"Username change token issued: '{old_username}' → '{new_username}'")
+    return True, token
+
+
+def confirm_username_change(token):
+    """Apply the pending username change if the token matches and hasn't expired."""
+    config = load_auth_config()
+    pending = config.get("pending_username_change")
+    if not pending:
+        return False, "No pending username change"
+    if time.time() > pending.get("expires", 0):
+        config.pop("pending_username_change", None)
+        save_auth_config(config)
+        return False, "Verification link has expired — please request a new one"
+    if not hmac.compare_digest(token, pending["token"]):
+        return False, "Invalid verification token"
+    old, new = pending["old"], pending["new"]
+    users = config.get("users", {})
+    if old not in users:
+        return False, "Original user no longer exists"
+    if new in users and new != old:
+        return False, "Username already taken"
+    users[new] = users.pop(old)
+    config.pop("pending_username_change", None)
+    save_auth_config(config)
+    log_event(f"Username changed from '{old}' to '{new}' (email confirmed)")
+    return True, new
 
 
 def change_password(username, new_password):

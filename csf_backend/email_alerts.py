@@ -71,6 +71,34 @@ def update_alert_setting(key, value):
     return {"success": True, "message": f"{key} updated to {value}"}
 
 
+def get_admin_email():
+    """Return LF_ALERT_TO from csf.conf, or empty string if not set."""
+    conf = _read_conf()
+    m = re.search(r'^LF_ALERT_TO\s*=\s*"([^"]*)"', conf, re.MULTILINE)
+    return m.group(1).strip() if m else ""
+
+
+def send_verification_email(to_addr, subject, body):
+    """Send a plain-text email using the system mail command."""
+    if not to_addr:
+        return {"success": False, "error": "No admin email configured (LF_ALERT_TO is empty)"}
+    try:
+        r = subprocess.run(
+            ["mail", "-s", subject, to_addr],
+            input=body,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if r.returncode == 0:
+            return {"success": True}
+        return {"success": False, "error": r.stderr.strip() or "mail command failed"}
+    except FileNotFoundError:
+        return {"success": False, "error": "System mail command not available"}
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "Mail send timed out"}
+
+
 def test_email(to_addr):
     """Send a test alert email."""
     if not to_addr:
