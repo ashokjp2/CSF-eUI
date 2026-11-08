@@ -4,8 +4,65 @@
 {% block content %}
 <p class="text-muted" style="margin-bottom:15px">Configure LFD email notifications in csf.conf</p>
 
+        <div class="panel panel-warning">
+            <div class="panel-heading"><h4 class="panel-title" style="margin:0">SMTP Configuration <small class="text-muted">— override system mail</small></h4></div>
+            <div class="panel-body">
+                <p class="text-muted" style="margin-bottom:12px">If set, CSFv2 uses this SMTP server for verification and test emails instead of the system <code>mail</code> command.</p>
+                <form id="smtp-form">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label>SMTP Host</label>
+                            <input type="text" class="form-control" id="SMTP_HOST" placeholder="smtp.gmail.com">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label>Port</label>
+                            <input type="number" class="form-control" id="SMTP_PORT" value="587" placeholder="587">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label>TLS Mode</label>
+                            <select class="form-control" id="SMTP_TLS">
+                                <option value="1">STARTTLS (port 587)</option>
+                                <option value="2">SSL/TLS (port 465)</option>
+                                <option value="0">None (not recommended)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label>Username</label>
+                            <input type="text" class="form-control" id="SMTP_USER" placeholder="you@gmail.com">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label>Password <small class="text-muted">(leave blank to keep existing)</small></label>
+                            <input type="password" class="form-control" id="SMTP_PASSWORD" placeholder="App password">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label>From Address <small class="text-muted">(optional, defaults to username)</small></label>
+                            <input type="text" class="form-control" id="SMTP_FROM" placeholder="CSFv2 Alerts &lt;you@gmail.com&gt;">
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-warning" id="btn-save-smtp">
+                    <span class="glyphicon glyphicon-floppy-disk"></span> Save SMTP Config
+                </button>
+                <span id="smtp-status" style="margin-left:10px"></span>
+                </form>
+            </div>
+        </div>
+
         <div class="panel panel-default">
-            <div class="panel-heading"><h4 class="panel-title" style="margin:0">Alert Settings</h4></div>
+            <div class="panel-heading"><h4 class="panel-title" style="margin:0">LFD Alert Settings</h4></div>
             <div class="panel-body" id="settings-form">
                 <p class="text-muted">Loading...</p>
             </div>
@@ -29,6 +86,33 @@
 {% block scripts %}
 <script>
 $(function() {
+    // Load SMTP config
+    $.getJSON('/api/smtp-config', function(cfg) {
+        ['SMTP_HOST','SMTP_PORT','SMTP_USER','SMTP_FROM','SMTP_TLS'].forEach(function(k) {
+            if (k === 'SMTP_TLS') {
+                $('#' + k).val(cfg[k] || '1');
+            } else {
+                $('#' + k).val(cfg[k] || '');
+            }
+        });
+    });
+
+    $('#smtp-form').on('submit', function(e) {
+        e.preventDefault();
+        var data = {
+            SMTP_HOST: $('#SMTP_HOST').val().trim(),
+            SMTP_PORT: $('#SMTP_PORT').val().trim(),
+            SMTP_USER: $('#SMTP_USER').val().trim(),
+            SMTP_PASSWORD: $('#SMTP_PASSWORD').val(),
+            SMTP_FROM: $('#SMTP_FROM').val().trim(),
+            SMTP_TLS: $('#SMTP_TLS').val()
+        };
+        $.post('/api/smtp-config', JSON.stringify(data), function(r) {
+            showToast(r.message || r.error, r.success ? 'success' : 'danger');
+            $('#SMTP_PASSWORD').val('');
+        }, 'json').fail(function() { showToast('Failed to save SMTP config', 'danger'); });
+    });
+
     function load() {
         $.getJSON('/api/email-alerts', function(data) {
             var html = '';

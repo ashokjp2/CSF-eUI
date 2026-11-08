@@ -2405,6 +2405,27 @@ def api_email_alerts_test():
     data = request.get_json(force=True)
     return jsonify(email_alerts.test_email(data.get("email", "")))
 
+@app.route("/api/smtp-config", methods=["GET"])
+@login_required
+def api_smtp_config_get():
+    cfg = email_alerts.get_smtp_config()
+    cfg.pop("SMTP_PASSWORD", None)  # never send password to browser
+    return jsonify(cfg)
+
+@app.route("/api/smtp-config", methods=["POST"])
+@login_required
+def api_smtp_config_save():
+    data = request.get_json(force=True)
+    email_alerts.save_smtp_config(
+        host=data.get("SMTP_HOST", ""),
+        port=data.get("SMTP_PORT", "587"),
+        user=data.get("SMTP_USER", ""),
+        password=data.get("SMTP_PASSWORD", ""),
+        from_addr=data.get("SMTP_FROM", ""),
+        tls=data.get("SMTP_TLS", "1"),
+    )
+    return jsonify({"success": True, "message": "SMTP configuration saved"})
+
 
 # --- Initialization ---
 
