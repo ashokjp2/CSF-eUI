@@ -8,6 +8,7 @@
         <h4>Change Password</h4>
         <form method="POST" action="/settings">
             <input type="hidden" name="action" value="change_password">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <div class="form-group">
                 <label>New Password</label>
                 <input type="password" class="form-control" name="new_password"
@@ -20,6 +21,29 @@
             </div>
             <button type="submit" class="btn btn-primary">
                 <span class="glyphicon glyphicon-floppy-disk"></span> Change Password
+            </button>
+        </form>
+
+        <hr>
+        <h4>Change Username</h4>
+        <p class="text-muted" style="font-size:13px">You are currently logged in as <strong>{{ session['username'] if 'username' in session else 'admin' }}</strong>. Enter your current password to confirm the change.</p>
+        <form method="POST" action="/settings">
+            <input type="hidden" name="action" value="change_username">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="form-group">
+                <label>New Username</label>
+                <input type="text" class="form-control" name="new_username"
+                       required minlength="3" maxlength="64"
+                       pattern="[A-Za-z0-9_\-]+" title="Letters, numbers, hyphens and underscores only"
+                       style="max-width:400px">
+            </div>
+            <div class="form-group">
+                <label>Current Password (to confirm)</label>
+                <input type="password" class="form-control" name="current_password"
+                       required style="max-width:400px">
+            </div>
+            <button type="submit" class="btn btn-warning">
+                <span class="glyphicon glyphicon-user"></span> Change Username
             </button>
         </form>
 

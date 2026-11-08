@@ -135,6 +135,21 @@ def is_ip_banned(ip):
     return False
 
 
+def change_username(old_username, new_username, password):
+    config = load_auth_config()
+    users = config.get("users", {})
+    if old_username not in users:
+        return False, "User not found"
+    if new_username in users and new_username != old_username:
+        return False, "Username already taken"
+    if not verify_password(password, users[old_username]["password"]):
+        return False, "Invalid password"
+    users[new_username] = users.pop(old_username)
+    save_auth_config(config)
+    log_event(f"Username changed from '{old_username}' to '{new_username}'")
+    return True, "OK"
+
+
 def change_password(username, new_password):
     config = load_auth_config()
     if username not in config.get("users", {}):

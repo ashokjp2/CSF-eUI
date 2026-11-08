@@ -63,7 +63,7 @@ def run_command(cmd, timeout=30):
             capture_output=True,
             text=True,
             timeout=timeout,
-            shell=isinstance(cmd, str),
+            shell=False,
         )
         return {
             "success": result.returncode == 0,

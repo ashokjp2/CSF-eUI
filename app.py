@@ -4,6 +4,7 @@ import sys
 import secrets
 import functools
 import threading
+import hmac
 from flask import (
     Flask, render_template, request, redirect, url_for,
     session, flash, jsonify, Response,
@@ -55,11 +56,59 @@ app.secret_key = (os.environ.get("CSFV2_SECRET_KEY")
                   or secrets.token_hex(32))
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = True
+app.config["PERMANENT_SESSION_LIFETIME"] = 43200  # 12 hours
+
+
+@app.after_request
+def set_security_headers(response):
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://code.jquery.com https://maxcdn.bootstrapcdn.com; "
+        "style-src 'self' 'unsafe-inline' https://maxcdn.bootstrapcdn.com https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
+        "font-src 'self' https://maxcdn.bootstrapcdn.com https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'self';"
+    )
+    return response
 
 
 @app.context_processor
 def inject_app_version():
     return {"app_version": app_updater.get_current_version()}
+
+
+def _get_csrf_token():
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_hex(32)
+    return session["csrf_token"]
+
+
+@app.context_processor
+def inject_csrf_token():
+    return {"csrf_token": _get_csrf_token()}
+
+
+@app.before_request
+def check_csrf():
+    if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
+        return
+    if request.path.startswith("/.well-known/"):
+        return
+    if request.path == "/login":
+        return
+    # Accept token from header (AJAX) or form field
+    token = (request.headers.get("X-CSRFToken")
+             or request.form.get("csrf_token")
+             or (request.get_json(silent=True) or {}).get("csrf_token"))
+    if not token or not hmac.compare_digest(token, session.get("csrf_token", "")):
+        return jsonify({"error": "CSRF validation failed"}), 403
 
 
 def login_required(f):
@@ -596,6 +645,32 @@ def logs_view():
     )
 
 
+_ALLOWED_LOG_DIRS = (
+    "/var/log/",
+    "/var/lib/csf/",
+    "/etc/csf/",
+    "/tmp/csfv2",
+)
+
+_ALLOWED_LOG_FILES = {
+    "/var/log/lfd.log",
+    "/var/log/messages",
+    "/var/log/syslog",
+    "/var/log/auth.log",
+    "/var/log/secure",
+    "/var/log/kern.log",
+    "/var/log/firewall",
+}
+
+
+def _is_allowed_logfile(path):
+    real = os.path.realpath(path)
+    for d in _ALLOWED_LOG_DIRS:
+        if real.startswith(d):
+            return True
+    return real in _ALLOWED_LOG_FILES
+
+
 @app.route("/logs/tail", methods=["POST"])
 @login_required
 def logs_tail():
@@ -603,7 +678,9 @@ def logs_tail():
     lines = int(request.form.get("lines", 50))
     if lines > 5000:
         lines = 5000
-    if not logfile or not os.path.exists(logfile):
+    if not logfile or not _is_allowed_logfile(logfile):
+        return jsonify({"error": "Log file not permitted"})
+    if not os.path.exists(logfile):
         return jsonify({"error": "Log file not found"})
     output = csf.tail_log(logfile, lines)
     return jsonify({"output": output})
@@ -618,6 +695,8 @@ def logs_grep():
     extended = request.form.get("extended") == "1"
     if not logfile or not pattern:
         return jsonify({"error": "Log file and pattern required"})
+    if not _is_allowed_logfile(logfile):
+        return jsonify({"error": "Log file not permitted"})
     if not os.path.exists(logfile):
         return jsonify({"error": "Log file not found"})
     output = csf.grep_log(logfile, pattern, case_i, extended)
@@ -932,9 +1011,24 @@ def settings_view():
             else:
                 username = session.get("username", "admin")
                 if auth.change_password(username, new_pass):
-                    flash("Password changed", "success")
+                    flash("Password changed successfully", "success")
                 else:
                     flash("Password change failed", "danger")
+        elif action == "change_username":
+            new_username = request.form.get("new_username", "").strip()
+            confirm_pass = request.form.get("current_password", "")
+            if not new_username or len(new_username) < 3:
+                flash("Username must be at least 3 characters", "danger")
+            elif not new_username.replace("_", "").replace("-", "").isalnum():
+                flash("Username may only contain letters, numbers, hyphens, and underscores", "danger")
+            else:
+                old_username = session.get("username", "admin")
+                ok, msg = auth.change_username(old_username, new_username, confirm_pass)
+                if ok:
+                    session["username"] = new_username
+                    flash(f"Username changed to '{new_username}'", "success")
+                else:
+                    flash(f"Username change failed: {msg}", "danger")
         return redirect(url_for("settings_view"))
     return render_template("settings.html", status=get_firewall_status())
 
