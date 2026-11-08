@@ -1682,7 +1682,7 @@ def api_ip_preference():
 @app.route("/updates")
 @login_required
 def updates_view():
-    info = app_updater.get_version_info()
+    info = app_updater.get_version_info(force=True)
     return render_template("updates.html", status=get_firewall_status(), info=info)
 
 

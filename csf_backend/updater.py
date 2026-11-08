@@ -8,7 +8,16 @@ GITHUB_REPO = "ashokjp2/CSF-eUI"
 INSTALL_DIR = "/opt/csfv2"
 VERSION_FILE = os.path.join(INSTALL_DIR, "VERSION")
 CACHE_FILE = "/tmp/csfv2_version_cache.json"
-CACHE_TTL = 12 * 3600
+_DEFAULT_CACHE_TTL = 12 * 3600
+
+
+def _get_cache_ttl():
+    try:
+        from csf_backend import auto_update as _au
+        hours = _au.load().get("check_interval_hours", 12)
+        return max(1, int(hours)) * 3600
+    except Exception:
+        return _DEFAULT_CACHE_TTL
 
 
 def get_current_version():
@@ -20,10 +29,16 @@ def get_current_version():
 
 
 def _fetch_latest_version():
+    # Cache-busting: tell GitHub CDN and any proxy not to serve stale content
+    _no_cache_headers = {
+        "User-Agent": "CSF-eUI-updater/1.0",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+    }
     try:
         import urllib.request
         url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/VERSION"
-        req = urllib.request.Request(url, headers={"User-Agent": "CSF-eUI-updater/1.0"})
+        req = urllib.request.Request(url, headers=_no_cache_headers)
         with urllib.request.urlopen(req, timeout=10) as r:
             return r.read().decode().strip()
     except Exception:
@@ -31,7 +46,7 @@ def _fetch_latest_version():
     try:
         import urllib.request, json as _json
         url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-        req = urllib.request.Request(url, headers={"User-Agent": "CSF-eUI-updater/1.0"})
+        req = urllib.request.Request(url, headers=_no_cache_headers)
         with urllib.request.urlopen(req, timeout=10) as r:
             data = _json.loads(r.read())
             tag = data.get("tag_name", "").lstrip("v")
@@ -48,6 +63,13 @@ def _version_tuple(v):
         return (0,)
 
 
+def _invalidate_cache():
+    try:
+        os.unlink(CACHE_FILE)
+    except Exception:
+        pass
+
+
 def get_version_info(force=False):
     current = get_current_version()
     cache = {}
@@ -57,15 +79,27 @@ def get_version_info(force=False):
     except Exception:
         pass
 
+    # If the installed version is newer than what the cache thinks is "latest",
+    # the app was updated out-of-band (e.g. manual git pull) — cache is stale.
+    cached_latest = cache.get("latest")
+    if cached_latest and _version_tuple(current) > _version_tuple(cached_latest):
+        force = True
+
     age = time.time() - cache.get("checked_at", 0)
-    if force or age > CACHE_TTL:
+    cache_ttl = _get_cache_ttl()
+    if force or age > cache_ttl:
         latest = _fetch_latest_version()
-        cache = {"checked_at": time.time(), "latest": latest}
-        try:
-            with open(CACHE_FILE, "w") as f:
-                json.dump(cache, f)
-        except Exception:
-            pass
+        if latest:
+            cache = {"checked_at": time.time(), "latest": latest}
+            try:
+                with open(CACHE_FILE, "w") as f:
+                    json.dump(cache, f)
+            except Exception:
+                pass
+        else:
+            # Fetch failed — keep cached data but update timestamp only if forced
+            if force:
+                cache["checked_at"] = time.time()
 
     latest = cache.get("latest")
     update_available = bool(
