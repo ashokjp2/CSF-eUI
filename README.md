@@ -82,7 +82,7 @@ CSF-eUI is a self-hosted Flask application that gives you:
 - **Python:** 3.9+ (usually pre-installed on modern Ubuntu/Debian)
 - **Root access** (CSF requires root to manage iptables)
 
-The installer handles everything else: Python venv, SSL certificate, systemd service, firewall port.
+The installer handles everything else: Python venv, WHOIS and DNS utilities, SSL certificate, systemd service, and firewall port.
 
 ---
 
@@ -106,7 +106,7 @@ bash install.sh
 
 The installer will:
 
-1. Install Python dependencies into a virtual environment
+1. Install Python dependencies and the `whois`/`dnsutils` system utilities
 2. Generate an SSL certificate (self-signed by default; prompts for a domain if `certbot` is detected)
 3. Create `/etc/csfv2/csfv2.conf` with a random secret key and SSL paths
 4. Prompt you to create an admin username and password

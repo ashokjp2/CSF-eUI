@@ -57,8 +57,8 @@ cd "$INSTALL_DIR"
 
 # ── Python environment ────────────────────────────────────────────────────────
 
-section "Installing Python dependencies"
-apt-get install -y --quiet python3-venv python3-pip
+section "Installing application dependencies"
+apt-get install -y --quiet python3-venv python3-pip whois dnsutils
 $PYTHON -m venv "$INSTALL_DIR/venv"
 "$INSTALL_DIR/venv/bin/pip" install --quiet --upgrade pip
 "$INSTALL_DIR/venv/bin/pip" install --quiet -r "$INSTALL_DIR/requirements.txt"
