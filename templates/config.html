@@ -68,7 +68,8 @@
                                     <div class="setting-help text-muted" style="font-size:11px; margin-top:2px"></div>
                                 </td>
                                 <td>
-                                    {% if setting.value in ['0', '1'] %}
+                                    {% set numeric_threshold_keys = ['PT_FORKBOMB'] %}
+                                    {% if setting.value in ['0', '1'] and setting.key not in numeric_threshold_keys %}
                                     <div class="btn-group" data-toggle="buttons">
                                         <label class="btn btn-default {% if setting.value == '1' %}active btn-success{% endif %}">
                                             <input type="radio" name="cfg_{{ setting.key }}" value="1"
