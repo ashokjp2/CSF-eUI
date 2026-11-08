@@ -82,7 +82,7 @@ def get_version_info(force=False):
     }
 
 
-def run_update_stream():
+def run_update_stream(force=False):
     """Generator yielding SSE lines for a live update log."""
 
     def _sse(msg):
@@ -103,17 +103,20 @@ def run_update_stream():
     yield from _sse(f"Available : {latest or '(could not reach GitHub)'}")
     yield from _sse("")
 
-    if not latest:
+    if not latest and not force:
         yield from _sse("ERROR: Could not reach GitHub. Check network connectivity.")
         yield "data: __DONE_ERROR__\n\n"
         return
 
-    if _version_tuple(latest) <= _version_tuple(current):
+    if not force and latest and _version_tuple(latest) <= _version_tuple(current):
         yield from _sse("Already up to date — nothing to do.")
         yield "data: __DONE_OK__\n\n"
         return
 
-    yield from _sse(f"Updating {current} → {latest} ...")
+    if force:
+        yield from _sse("Force re-install: pulling latest commits from GitHub...")
+    else:
+        yield from _sse(f"Updating {current} → {latest} ...")
     yield from _sse("")
 
     # git pull

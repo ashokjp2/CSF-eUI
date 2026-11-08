@@ -145,7 +145,8 @@ $(function() {
         var log = $('#update-log');
         log.text('');
 
-        var es = new EventSource('/api/version/update-stream');
+        var isForce = !{{ 'true' if info.update_available else 'false' }};
+        var es = new EventSource('/api/version/update-stream' + (isForce ? '?force=1' : ''));
         es.onmessage = function(e) {
             if (e.data === '__DONE_OK__') {
                 es.close();

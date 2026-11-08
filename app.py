@@ -1602,8 +1602,9 @@ def api_version_check():
 @login_required
 def api_version_update_stream():
     from flask import stream_with_context
+    force = request.args.get("force", "0") == "1"
     return Response(
-        stream_with_context(app_updater.run_update_stream()),
+        stream_with_context(app_updater.run_update_stream(force=force)),
         mimetype="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
