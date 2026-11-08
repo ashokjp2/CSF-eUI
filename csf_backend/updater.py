@@ -29,28 +29,28 @@ def get_current_version():
 
 
 def _fetch_latest_version():
-    # Cache-busting: tell GitHub CDN and any proxy not to serve stale content
-    _no_cache_headers = {
+    import urllib.request, json as _json, base64
+    # GitHub CDN caches raw.githubusercontent.com and ignores no-cache headers.
+    # The Contents API bypasses the CDN and always returns the live file.
+    _headers = {
         "User-Agent": "CSF-eUI-updater/1.0",
-        "Cache-Control": "no-cache",
-        "Pragma": "no-cache",
+        "Accept": "application/vnd.github+json",
     }
     try:
-        import urllib.request
-        url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/VERSION"
-        req = urllib.request.Request(url, headers=_no_cache_headers)
-        with urllib.request.urlopen(req, timeout=10) as r:
-            return r.read().decode().strip()
-    except Exception:
-        pass
-    try:
-        import urllib.request, json as _json
-        url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-        req = urllib.request.Request(url, headers=_no_cache_headers)
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/VERSION"
+        req = urllib.request.Request(url, headers=_headers)
         with urllib.request.urlopen(req, timeout=10) as r:
             data = _json.loads(r.read())
-            tag = data.get("tag_name", "").lstrip("v")
-            return tag if tag else None
+            content = base64.b64decode(data["content"]).decode().strip()
+            return content if content else None
+    except Exception:
+        pass
+    # Fallback: raw URL (may be stale due to CDN)
+    try:
+        url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/VERSION"
+        req = urllib.request.Request(url, headers=_headers)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return r.read().decode().strip()
     except Exception:
         pass
     return None
