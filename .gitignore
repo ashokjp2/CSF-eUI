@@ -40,6 +40,7 @@ desktop.ini
 # Local deployment / dev-only scripts (contain server IPs / local paths)
 deploy.sh
 http_redirect.py
+scripts/
 
 # Mockup / design scratch files
 mockup.html

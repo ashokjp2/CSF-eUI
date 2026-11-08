@@ -10,12 +10,17 @@ SESSION_DIR="/var/lib/csfv2/sessions"
 SERVICE_NAME="csfv2"
 PORT=8750
 PYTHON="${PYTHON:-python3}"
+LOG_FILE="/var/log/csfv2-install.log"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
 info()    { echo -e "${GREEN}[+]${NC} $*"; }
 warn()    { echo -e "${YELLOW}[!]${NC} $*"; }
 error()   { echo -e "${RED}[x]${NC} $*"; exit 1; }
 section() { echo -e "\n${CYAN}=== $* ===${NC}"; }
+
+# Tee all output (stdout + stderr) to install log
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "=== CSF-eUI install started at $(date) ==="
 
 # ── Preflight ────────────────────────────────────────────────────────────────
 
@@ -70,27 +75,93 @@ section "SSL certificate"
 
 CERT_FILE="$SSL_DIR/cert.pem"
 KEY_FILE="$SSL_DIR/key.pem"
+DOMAIN=""
 
-if [[ -f "$CERT_FILE" && -f "$KEY_FILE" ]]; then
-    info "Existing SSL certificate found — skipping generation."
-else
-    # Check for Let's Encrypt cert
-    DOMAIN=""
-    if command -v certbot &>/dev/null; then
-        read -r -p "Enter your domain name for Let's Encrypt (or press Enter to use a self-signed cert): " DOMAIN
+# 1. Check if csfv2.conf already points to valid cert files
+if [[ -f "$CONF_DIR/csfv2.conf" ]]; then
+    _conf_cert=$(grep -E '^SSL_CERT=' "$CONF_DIR/csfv2.conf" | head -1 | cut -d= -f2- | tr -d '"')
+    _conf_key=$(grep -E '^SSL_KEY=' "$CONF_DIR/csfv2.conf" | head -1 | cut -d= -f2- | tr -d '"')
+    if [[ -f "$_conf_cert" && -f "$_conf_key" ]]; then
+        CERT_FILE="$_conf_cert"
+        KEY_FILE="$_conf_key"
+        info "SSL already configured in csfv2.conf and cert files exist — skipping."
+        info "  CERT: $CERT_FILE"
+        info "  KEY:  $KEY_FILE"
+    fi
+fi
+
+if [[ ! -f "$CERT_FILE" || ! -f "$KEY_FILE" ]]; then
+    # 2. Auto-detect existing Let's Encrypt certs on this server
+    LE_DOMAINS=()
+    if [[ -d /etc/letsencrypt/live ]]; then
+        while IFS= read -r -d '' d; do
+            dom=$(basename "$d")
+            [[ -f "$d/fullchain.pem" && -f "$d/privkey.pem" ]] && LE_DOMAINS+=("$dom")
+        done < <(find /etc/letsencrypt/live -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null)
     fi
 
-    if [[ -n "$DOMAIN" ]]; then
-        info "Requesting Let's Encrypt certificate for $DOMAIN..."
-        apt-get install -y --quiet certbot
-        certbot certonly --standalone --non-interactive --agree-tos \
-            --register-unsafely-without-email -d "$DOMAIN" \
-            --preferred-challenges http \
-            || error "Let's Encrypt failed. Run certbot manually or use a self-signed cert."
-        CERT_FILE="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
-        KEY_FILE="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
-        info "Let's Encrypt certificate installed for $DOMAIN."
+    if [[ ${#LE_DOMAINS[@]} -gt 0 ]]; then
+        echo ""
+        echo "  Existing Let's Encrypt certificates found on this server:"
+        for i in "${!LE_DOMAINS[@]}"; do
+            echo "    [$((i+1))] ${LE_DOMAINS[$i]}"
+        done
+        echo "    [n] Request a new Let's Encrypt certificate for a different domain"
+        echo "    [s] Generate a self-signed certificate"
+        echo "    [x] Skip — I will configure SSL manually"
+        echo ""
+        read -r -p "  Choose [1-${#LE_DOMAINS[@]}/n/s/x]: " SSL_CHOICE
+
+        if [[ "$SSL_CHOICE" =~ ^[0-9]+$ ]] && (( SSL_CHOICE >= 1 && SSL_CHOICE <= ${#LE_DOMAINS[@]} )); then
+            DOMAIN="${LE_DOMAINS[$((SSL_CHOICE-1))]}"
+            CERT_FILE="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
+            KEY_FILE="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
+            info "Using existing Let's Encrypt certificate for $DOMAIN."
+        elif [[ "${SSL_CHOICE,,}" == "n" ]]; then
+            SSL_CHOICE="new_le"
+        elif [[ "${SSL_CHOICE,,}" == "s" ]]; then
+            SSL_CHOICE="self"
+        elif [[ "${SSL_CHOICE,,}" == "x" ]]; then
+            SSL_CHOICE="skip"
+        else
+            warn "Invalid choice — defaulting to self-signed."
+            SSL_CHOICE="self"
+        fi
     else
+        echo ""
+        echo "  No existing certificates detected. How would you like to handle SSL?"
+        echo "    [1] Request a Let's Encrypt certificate (needs a domain pointing to this server)"
+        echo "    [2] Generate a self-signed certificate (browser will show a warning)"
+        echo "    [3] Skip — I will configure SSL manually"
+        echo ""
+        read -r -p "  Choose [1/2/3]: " SSL_CHOICE
+        case "$SSL_CHOICE" in
+            1) SSL_CHOICE="new_le" ;;
+            3) SSL_CHOICE="skip" ;;
+            *) SSL_CHOICE="self" ;;
+        esac
+    fi
+
+    # Handle new LE request
+    if [[ "${SSL_CHOICE}" == "new_le" ]]; then
+        read -r -p "  Enter your domain name: " DOMAIN
+        if [[ -z "$DOMAIN" ]]; then
+            warn "No domain entered — falling back to self-signed."
+            SSL_CHOICE="self"
+        else
+            info "Requesting Let's Encrypt certificate for $DOMAIN..."
+            apt-get install -y --quiet certbot
+            certbot certonly --standalone --non-interactive --agree-tos \
+                --register-unsafely-without-email -d "$DOMAIN" \
+                --preferred-challenges http \
+                || error "Let's Encrypt failed. Run certbot manually or use a self-signed cert."
+            CERT_FILE="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
+            KEY_FILE="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
+            info "Let's Encrypt certificate installed for $DOMAIN."
+        fi
+    fi
+
+    if [[ "${SSL_CHOICE}" == "self" ]]; then
         info "Generating self-signed SSL certificate (browser will show a warning)..."
         SERVER_IP=$(hostname -I | awk '{print $1}')
         openssl req -x509 -newkey rsa:4096 -days 3650 -nodes \
@@ -99,8 +170,14 @@ else
             -addext "subjectAltName=IP:$SERVER_IP" 2>/dev/null
         chmod 600 "$KEY_FILE"
         info "Self-signed certificate generated."
-        warn "To replace with a real certificate, run: certbot certonly --standalone -d your.domain.com"
+        warn "To replace later: certbot certonly --standalone -d your.domain.com"
         warn "Then update SSL_CERT/SSL_KEY in $CONF_DIR/csfv2.conf and restart: systemctl restart $SERVICE_NAME"
+    fi
+
+    if [[ "${SSL_CHOICE}" == "skip" ]]; then
+        warn "SSL setup skipped. You must set SSL_CERT and SSL_KEY in $CONF_DIR/csfv2.conf before the service will start."
+        CERT_FILE="<path-to-cert.pem>"
+        KEY_FILE="<path-to-key.pem>"
     fi
 fi
 
@@ -171,14 +248,14 @@ User=root
 Group=root
 WorkingDirectory=$INSTALL_DIR
 EnvironmentFile=$CONF_DIR/csfv2.conf
-ExecStart=$INSTALL_DIR/venv/bin/gunicorn \\
-    --bind \${HOST:-0.0.0.0}:\${PORT:-8750} \\
-    --workers 2 \\
-    --timeout 120 \\
-    --keyfile \${SSL_KEY} \\
-    --certfile \${SSL_CERT} \\
-    --access-logfile /var/log/csfv2-access.log \\
-    --error-logfile /var/log/csfv2-error.log \\
+ExecStart=$INSTALL_DIR/venv/bin/gunicorn \
+    --bind \${HOST}:\${PORT} \
+    --workers 2 \
+    --timeout 120 \
+    --keyfile \${SSL_KEY} \
+    --certfile \${SSL_CERT} \
+    --access-logfile /var/log/csfv2-access.log \
+    --error-logfile /var/log/csfv2-error.log \
     app:app
 Restart=on-failure
 RestartSec=5
@@ -236,9 +313,22 @@ WantedBy=timers.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now "${SERVICE_NAME}"
-systemctl enable --now "${SERVICE_NAME}-redirect"
-systemctl enable --now "${SERVICE_NAME}-update-check.timer"
+systemctl enable --now "${SERVICE_NAME}" || true
+systemctl enable --now "${SERVICE_NAME}-redirect" || true
+systemctl enable --now "${SERVICE_NAME}-update-check.timer" || true
+
+# Give gunicorn a moment to bind, then check
+sleep 2
+SERVICE_OK=0
+if systemctl is-active --quiet "${SERVICE_NAME}"; then
+    info "Service ${SERVICE_NAME} is running."
+    SERVICE_OK=1
+else
+    echo -e "\n${RED}[x] Service ${SERVICE_NAME} failed to start. Last journal entries:${NC}"
+    journalctl -u "${SERVICE_NAME}" -n 40 --no-pager
+    echo -e "\n${YELLOW}[!] Fix the error above, then run: systemctl restart ${SERVICE_NAME}${NC}"
+    echo -e "${YELLOW}[!] Full install log saved to: $LOG_FILE${NC}\n"
+fi
 
 # ── CSF firewall: open port 8750 ──────────────────────────────────────────────
 
@@ -257,20 +347,31 @@ fi
 # ── Done ──────────────────────────────────────────────────────────────────────
 
 SERVER_IP=$(hostname -I | awk '{print $1}')
+DISPLAY_HOST="${DOMAIN:-$SERVER_IP}"
+
 echo ""
-echo -e "${GREEN}════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}  CSF-eUI installation complete!${NC}"
-echo -e "${GREEN}════════════════════════════════════════════════${NC}"
+if [[ $SERVICE_OK -eq 1 ]]; then
+    echo -e "${GREEN}════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}  CSF-eUI installation complete!${NC}"
+    echo -e "${GREEN}════════════════════════════════════════════════${NC}"
+else
+    echo -e "${YELLOW}════════════════════════════════════════════════${NC}"
+    echo -e "${YELLOW}  CSF-eUI installed — but service did not start${NC}"
+    echo -e "${YELLOW}════════════════════════════════════════════════${NC}"
+fi
 echo ""
-echo -e "  UI:         ${CYAN}https://$SERVER_IP:$PORT${NC}"
-echo -e "  HTTP redir: http://$SERVER_IP:8080  →  https://$SERVER_IP:$PORT"
+echo -e "  UI:         ${CYAN}https://$DISPLAY_HOST:$PORT${NC}"
+echo -e "  HTTP redir: http://$DISPLAY_HOST:8080  →  https://$DISPLAY_HOST:$PORT"
 echo ""
+echo -e "  Service:    systemctl status $SERVICE_NAME"
 echo -e "  Logs:       journalctl -u $SERVICE_NAME -f"
 echo -e "  Restart:    systemctl restart $SERVICE_NAME"
+echo -e "  Install log: $LOG_FILE"
 echo ""
 if [[ -z "${DOMAIN:-}" ]]; then
     echo -e "${YELLOW}  Note: Self-signed certificate — your browser will show a security warning.${NC}"
     echo -e "${YELLOW}  To get a trusted cert: certbot certonly --standalone -d your.domain.com${NC}"
     echo -e "${YELLOW}  Then update SSL_CERT/SSL_KEY in $CONF_DIR/csfv2.conf${NC}"
 fi
+echo "=== CSF-eUI install finished at $(date) ===" >> "$LOG_FILE"
 echo ""
