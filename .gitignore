@@ -42,6 +42,10 @@ deploy.sh
 http_redirect.py
 scripts/
 
+# AI agent instruction files (local only, not for GitHub)
+CLAUDE.md
+AGENTS.md
+
 # Mockup / design scratch files
 mockup.html
 mockup*.html

@@ -24,25 +24,25 @@
         {% if ip and result %}
         <div id="initial-results">
             {% for section in result.sections %}
-            <div class="panel panel-{{ 'danger' if section.status == 'blocked' else 'success' if section.status == 'allowed' else 'warning' if section.status == 'temp_blocked' else 'default' }}">
+            <div class="panel panel-{{ 'danger' if section['status'] == 'blocked' else 'success' if section['status'] == 'allowed' else 'warning' if section['status'] == 'temp_blocked' else 'default' }}">
                 <div class="panel-heading">
                     <h4 class="panel-title" style="margin:0">
-                        <span class="glyphicon glyphicon-{{ section.icon }}"></span> {{ section.title }}
+                        <span class="glyphicon glyphicon-{{ section['icon'] }}"></span> {{ section['title'] }}
                     </h4>
                 </div>
                 <div class="panel-body">
                     <table class="table table-condensed" style="margin:0">
-                        {% for item in section.items %}
+                        {% for item in section['items'] %}
                         <tr>
                             <td style="width:150px; font-weight:bold">{{ item.key }}</td>
                             <td>{{ item.value }}</td>
                         </tr>
                         {% endfor %}
                     </table>
-                    {% if section.log_lines %}
+                    {% if section['log_lines'] %}
                     <hr style="margin:10px 0">
                     <p class="text-muted" style="font-size:11px; margin-bottom:5px"><strong>Recent log entries:</strong></p>
-                    {% for line in section.log_lines %}
+                    {% for line in section['log_lines'] %}
                     <div style="font-family:monospace; font-size:11px; padding:2px 0; border-bottom:1px solid #f5f5f5">{{ line }}</div>
                     {% endfor %}
                     {% endif %}
