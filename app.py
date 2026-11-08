@@ -51,9 +51,6 @@ from csf_backend import backup_restore
 from csf_backend import email_alerts
 
 app = Flask(__name__)
-# Trust X-Forwarded-Proto/For/Host from nginx (one trusted proxy hop)
-from werkzeug.middleware.proxy_fix import ProxyFix
-app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1, x_for=1)
 app.secret_key = (os.environ.get("CSFV2_SECRET_KEY")
                   or os.environ.get("SECRET_KEY")
                   or secrets.token_hex(32))
