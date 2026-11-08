@@ -813,6 +813,7 @@ $(function() {
         DROP_OUT:            [{v:'DROP',  l:'DROP — Silently discard'},{v:'REJECT',l:'REJECT — Immediate rejection (recommended for outbound — frees resources faster)'}],
         CLUSTER_BLOCK:       [{v:'0',l:'0 — Disabled (no cluster blocking)'},{v:'1',l:'1 — Accept temp blocks from cluster peers'},{v:'2',l:'2 — Accept temp + permanent blocks from cluster'}],
         LF_NETBLOCK_IPV6:    [{v:'',l:'— Disabled (no IPv6 netblocking)'},{v:'/64',l:'/64 — smallest safe range (billions of IPs)'},{v:'/56',l:'/56'},{v:'/48',l:'/48'},{v:'/32',l:'/32'},{v:'/24',l:'/24 — massive; use with extreme caution'}],
+        CC_DROP_CIDR:        [{v:'',l:'— Off (block each IP individually, no CIDR grouping)'},{v:'32',l:'/32 — Group single hosts into their /32'},{v:'24',l:'/24 — Group /24 and larger (256 IPs, recommended)'},{v:'16',l:'/16 — Group /16 and larger (65 K IPs)'},{v:'8',l:'/8 — Group /8 and larger (16 M IPs — use with caution)'}],
     };
 
     function convertToSelects() {
@@ -1216,7 +1217,7 @@ $(function() {
         CC_MESSENGER_ALLOW:  'ISO country codes, e.g. IN,US',
         CC_MESSENGER_DENY:   'ISO country codes, e.g. RU,CN',
         /* ── CIDR / subnet fields ─────────────────────────────────────── */
-        CC_DROP_CIDR:        'CIDR prefix lengths, e.g. 24,32 (no slash)',
+        CC_DROP_CIDR:        'Select CIDR prefix threshold',
         CUSTOM_LOGLEVEL:     'e.g. /24',
         /* ── LF_ failure thresholds (number of login failures) ─────── */
         LF_TRIGGER:          'Number of failures to trigger block, e.g. 20',
@@ -1421,8 +1422,6 @@ $(function() {
         /* ── Email fields ─────────────────────────── */
         LF_ALERT_TO:   {type:'emails'},
         LF_ALERT_FROM: {type:'email'},
-        /* ── CIDR integer list ────────────────────── */
-        CC_DROP_CIDR: {type:'cidr_int'},
         /* ── CT tracked ports ─────────────────────── */
         CT_PORTS:      {type:'ports', allowEmpty:true},
         CT_SKIP_PORTS: {type:'ports', allowEmpty:true},
