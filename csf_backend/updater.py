@@ -70,6 +70,66 @@ def _invalidate_cache():
         pass
 
 
+def _remove_conflicting_untracked_files():
+    """Remove only untracked files that the incoming release will track.
+
+    ``git reset --hard`` does not remove untracked files.  That matters after a
+    quick SCP deployment of a file that is introduced by the next release:
+    ``git pull`` refuses to overwrite it.  Keep unrelated server-local files
+    untouched and only remove explicit path conflicts with ``origin/main``.
+    """
+    fetch = subprocess.run(
+        ["git", "fetch", "origin", "main"],
+        cwd=INSTALL_DIR,
+        capture_output=True,
+        text=True,
+    )
+    if fetch.returncode != 0:
+        detail = (fetch.stderr or fetch.stdout or "fetch failed").strip()
+        return [], f"Could not inspect incoming files: {detail}"
+
+    remote_result = subprocess.run(
+        ["git", "ls-tree", "-r", "--name-only", "FETCH_HEAD"],
+        cwd=INSTALL_DIR,
+        capture_output=True,
+        text=True,
+    )
+    untracked_result = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard"],
+        cwd=INSTALL_DIR,
+        capture_output=True,
+        text=True,
+    )
+    if remote_result.returncode != 0 or untracked_result.returncode != 0:
+        return [], "Could not inspect local/remote file lists"
+
+    remote_files = set(remote_result.stdout.splitlines())
+    untracked_files = set(untracked_result.stdout.splitlines())
+    conflicts = sorted(remote_files & untracked_files)
+    install_root = os.path.abspath(INSTALL_DIR)
+    removed = []
+
+    for relative_path in conflicts:
+        target = os.path.abspath(os.path.join(INSTALL_DIR, relative_path))
+        if os.path.commonpath([install_root, target]) != install_root:
+            continue
+        try:
+            if os.path.islink(target) or os.path.isfile(target):
+                os.unlink(target)
+                removed.append(relative_path)
+            elif os.path.isdir(target):
+                # A directory can also block a tracked file path.  This is an
+                # explicit remote conflict, so remove only that directory.
+                import shutil
+                shutil.rmtree(target)
+                removed.append(relative_path)
+        except OSError:
+            # Leave failures for git pull to report with the exact path.
+            continue
+
+    return removed, None
+
+
 def get_version_info(force=False):
     current = get_current_version()
     cache = {}
@@ -154,10 +214,18 @@ def run_update_stream(force=False):
         yield from _sse(f"Updating {current} → {latest} ...")
     yield from _sse("")
 
-    # Discard any locally SCPed files so git pull can proceed cleanly
+    # Discard tracked edits, then clear only untracked paths that conflict with
+    # files in the incoming release.  reset --hard alone does not do this.
     yield from _sse("Running: git reset --hard HEAD")
     subprocess.run(["git", "reset", "--hard", "HEAD"], cwd=INSTALL_DIR,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    yield from _sse("Checking for untracked files that conflict with the update")
+    removed, cleanup_error = _remove_conflicting_untracked_files()
+    if removed:
+        yield from _sse("Removed conflicting untracked files: " + ", ".join(removed))
+    if cleanup_error:
+        yield from _sse("Warning: " + cleanup_error)
 
     # git pull
     yield from _sse("Running: git pull origin main")
