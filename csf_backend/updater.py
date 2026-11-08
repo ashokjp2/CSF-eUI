@@ -154,6 +154,11 @@ def run_update_stream(force=False):
         yield from _sse(f"Updating {current} → {latest} ...")
     yield from _sse("")
 
+    # Discard any locally SCPed files so git pull can proceed cleanly
+    yield from _sse("Running: git reset --hard HEAD")
+    subprocess.run(["git", "reset", "--hard", "HEAD"], cwd=INSTALL_DIR,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
     # git pull
     yield from _sse("Running: git pull origin main")
     proc = subprocess.Popen(
