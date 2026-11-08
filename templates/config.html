@@ -498,7 +498,7 @@ var HELP = {
     PT_LOAD_SKIP: 'Number of checks to skip after alert (prevents alert flood).',
     PT_APACHESTATUS: 'Include Apache status in load alerts (useful for debugging).',
     PT_LOAD_ACTION: 'Script to run on high load (path to script).',
-    PT_FORKBOMB: 'Detect fork bomb attacks (processes multiplying rapidly).',
+    PT_FORKBOMB: 'Fork bomb detection threshold: 0 to disable, or 100–1000 (number of forked processes that triggers detection).',
     PT_SSHDKILL: 'Kill orphaned SSHD processes.',
     PT_SSHDHUNG: 'Kill hung SSHD sessions after this many seconds.',
 
@@ -1012,7 +1012,7 @@ $(function() {
             PT_DELETED:           {'1':'Alert if running executable is deleted','0':'No deleted-file monitoring'},
             PT_USERKILL:          {'1':'Kill processes that exceed resource limits','0':'Log only — do not kill'},
             PT_USERKILL_ALERT:    {'1':'Email when processes are killed','0':'No kill alert'},
-            PT_FORKBOMB:          {'1':'Detect fork bombs','0':'No fork bomb detection'},
+            /* PT_FORKBOMB is a threshold (0 or 100-1000), not a toggle — handled as numeric input */
             PT_SSHDKILL:          {'1':'Kill dead SSH sessions','0':'Leave dead SSH sessions alone'},
             PT_SSHDHUNG:          {'1':'Detect and kill hung SSH sessions','0':'No hung SSH detection'},
             /* Port scan */
@@ -1274,6 +1274,7 @@ $(function() {
         PT_USERMEM:          'Max RSS memory per user (MB), e.g. 512 (0 = disabled)',
         PT_USERRSS:          'Max RSS memory per user (MB), e.g. 512',
         PT_USERTIME:         'Max process CPU time (seconds), e.g. 1800 (0 = disabled)',
+        PT_FORKBOMB:         '0 to disable, or 100–1000 (e.g. 250)',
         PT_FORKBOMB_ALERT:   'Process count threshold for fork bomb detection, e.g. 250',
         /* ── Port scan ───────────────────────────────────────────────── */
         PS_LIMIT:            'Port scan hit count to trigger block, e.g. 15',
@@ -1399,6 +1400,7 @@ $(function() {
         PT_USERMEM:             {type:'int', min:0},
         PT_USERRSS:             {type:'int', min:0},
         PT_USERTIME:            {type:'int', min:0},
+        PT_FORKBOMB:            {type:'forkbomb'},
         PT_FORKBOMB_ALERT:      {type:'int', min:0},
         PS_LIMIT:               {type:'int', min:0},
         PS_INTERVAL:            {type:'int', min:0},
@@ -1469,6 +1471,12 @@ $(function() {
             for (var j = 0; j < addrs.length; j++) {
                 if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addrs[j])) return 'Invalid email: ' + addrs[j];
             }
+            return null;
+        }
+        if (rule.type === 'forkbomb') {
+            if (!/^\d+$/.test(v)) return 'Must be a whole number. Got: ' + v;
+            var fb = parseInt(v, 10);
+            if (fb !== 0 && (fb < 100 || fb > 1000)) return 'Must be 0 (disabled) or 100–1000. Got: ' + fb;
             return null;
         }
         if (rule.type === 'rate') {
