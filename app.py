@@ -1535,10 +1535,10 @@ def api_health_quick_fix():
         return jsonify(result)
 
     if setting in _CSF_FIX_SETTINGS:
-        save_result = csf_wrapper.save_csf_conf({setting: value})
+        save_result = csf.save_csf_conf({setting: value})
         if not save_result.get("success"):
             return jsonify(save_result)
-        reload_result = csf_wrapper.csf_restart()
+        reload_result = csf.csf_restart()
         audit_log.log_event("config", session.get("username", ""), request.remote_addr,
                             f"Health quick-fix: csf {setting}={value}")
         if reload_result.get("returncode", 1) != 0:

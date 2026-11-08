@@ -159,17 +159,20 @@ $(function () {
                 } else {
                     $btn.prop('disabled', false)
                         .html('<span class="glyphicon glyphicon-wrench"></span> Apply Fix');
+                    $row.find('.js-fix-error').remove();
                     $row.append(
-                        '<div class="text-danger" style="margin-top:4px;font-size:12px">' +
+                        '<div class="text-danger js-fix-error" style="margin-top:4px;font-size:12px">' +
                         '<span class="glyphicon glyphicon-remove"></span> ' +
                         (r.error || 'Fix failed') + '</div>'
                     );
                 }
             },
-            error: function () {
+            error: function (xhr) {
                 $btn.prop('disabled', false)
                     .html('<span class="glyphicon glyphicon-wrench"></span> Apply Fix');
-                $row.append('<div class="text-danger" style="margin-top:4px;font-size:12px">Request failed — check logs.</div>');
+                $row.find('.js-fix-error').remove();
+                var msg = (xhr.responseJSON && xhr.responseJSON.error) ? xhr.responseJSON.error : 'Request failed — check logs (HTTP ' + xhr.status + ').';
+                $row.append('<div class="text-danger js-fix-error" style="margin-top:4px;font-size:12px"><span class="glyphicon glyphicon-remove"></span> ' + msg + '</div>');
             }
         });
     });
