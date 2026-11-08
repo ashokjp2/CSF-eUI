@@ -741,6 +741,22 @@ $(function() {
     /* AJAX save with feedback */
     $('#configForm').on('submit', function(e) {
         e.preventDefault();
+        // Validate all text fields before saving
+        var errors = [];
+        $(this).find('input[type=text]').each(function() {
+            var input = $(this);
+            var key = (input.attr('name') || '').replace(/^cfg_/, '');
+            var val = input.val();
+            var err = _validateValue(key, val);
+            _showFieldError(input, err);
+            if (err) errors.push(key + ': ' + err);
+        });
+        if (errors.length) {
+            showToast('Fix ' + errors.length + ' validation error(s) before saving.', 'danger');
+            var first = $('#configForm .field-val-error').first();
+            if (first.length) $('html,body').animate({scrollTop: first.offset().top - 120}, 300);
+            return;
+        }
         var btn = $(this).find('button[type=submit]');
         btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh spinning"></span> Saving...');
         $.ajax({
@@ -1512,28 +1528,6 @@ $(function() {
         _showFieldError(input, err);
     });
 
-    // Block save if any field has an error
-    $('#configForm').on('submit', function(e) {
-        var errors = [];
-        $(this).find('input[type=text]').each(function() {
-            var input = $(this);
-            var key = (input.attr('name') || '').replace(/^cfg_/, '');
-            var val = input.val();
-            var err = _validateValue(key, val);
-            _showFieldError(input, err);
-            if (err) errors.push(key + ': ' + err);
-        });
-        if (errors.length) {
-            e.preventDefault();
-            showToast('Fix ' + errors.length + ' validation error(s) before saving.', 'danger');
-            // Scroll to first error
-            var first = $('#configForm .field-val-error').first();
-            if (first.length) {
-                $('html,body').animate({scrollTop: first.offset().top - 120}, 300);
-            }
-            return false;
-        }
-    });
 
     // Load contextual help tooltips
     $.getJSON('/api/setting-help', function(helpData) {
