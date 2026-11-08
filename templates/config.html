@@ -1277,7 +1277,7 @@ $(function() {
         /* ── Port scan ───────────────────────────────────────────────── */
         PS_LIMIT:            'Port scan hit count to trigger block, e.g. 15',
         PS_INTERVAL:         'Port scan detection window (seconds), e.g. 300',
-        PS_PORTS:            'Port range to scan for, e.g. 0:65535 or 0:1023',
+        PS_PORTS:            'e.g. 0:65535,ICMP or 0:1023,ICMP,INVALID',
         /* ── Email alerts ────────────────────────────────────────────── */
         LF_ALERT_TO:         'Alert recipient, e.g. admin@example.com',
         LF_ALERT_FROM:       'Sender address, e.g. csf@yourserver.com',
@@ -1286,7 +1286,7 @@ $(function() {
         LOGFLOOD_LIMIT:      'Log lines per second threshold, e.g. 100',
         LOGFLOOD_INTERVAL:   'Log flood detection interval (seconds), e.g. 10',
         /* ── Syslog check interval ───────────────────────────────────── */
-        SYSLOG_CHECK_INTERVAL: 'Seconds between syslog checks, e.g. 300',
+        SYSLOG_CHECK:          'Seconds between syslog integrity checks (0=disabled), e.g. 300',
         /* ── API keys / credentials ──────────────────────────────────── */
         MM_LICENSE_KEY:      'Your MaxMind license key (from maxmind.com/en/my_license_key)',
         CF_KEY:              'CloudFlare Global API key or API Token',
@@ -1377,45 +1377,34 @@ $(function() {
         LF_QOS:             {type:'int', min:0},
         LF_SYMLINK:         {type:'int', min:0},
         LF_WEBMIN:          {type:'int', min:0},
-        LF_DIRECTADMIN:     {type:'int', min:0},
-        LF_DISTFTP_TRIGGER: {type:'int', min:0},
-        LF_DISTSMTP_TRIGGER:{type:'int', min:0},
         LF_PERMBLOCK_COUNT: {type:'int', min:0},
         LF_NETBLOCK_COUNT:  {type:'int', min:0},
         /* ── Time intervals (seconds) ─────────────── */
-        LF_TEMP:                {type:'int', min:0},
-        LF_PERMBLOCK_INTERVAL:  {type:'int', min:0},
-        LF_PERMBLOCK_OVERKILL:  {type:'int', min:0},
-        LF_NETBLOCK_INTERVAL:   {type:'int', min:0},
-        CT_LIMIT:               {type:'int', min:0},
-        CT_INTERVAL:            {type:'int', min:1},
-        LT_POP3D:               {type:'int', min:0},
-        LT_IMAPD:               {type:'int', min:0},
-        LT_INTERVAL:            {type:'int', min:1},
-        PT_LOAD_INTERVAL:       {type:'int', min:0},
-        PT_USERPROC:            {type:'int', min:0},
-        PT_USERPROC_ALERT:      {type:'int', min:0},
-        PT_USERMEM:             {type:'int', min:0},
-        PT_USERRSS:             {type:'int', min:0},
-        PT_USERTIME:            {type:'int', min:0},
-        PT_FORKBOMB_ALERT:      {type:'int', min:0},
-        PS_LIMIT:               {type:'int', min:0},
-        PS_INTERVAL:            {type:'int', min:0},
-        SYNFLOOD_BURST:         {type:'int', min:1},
-        UDPFLOOD_LIMIT:         {type:'rate'},
-        UDPFLOOD_BURST:         {type:'int', min:0},
-        LOGFLOOD_INTERVAL:      {type:'int', min:1},
-        SYSLOG_CHECK_INTERVAL:  {type:'int', min:0},
-        PORTKNOCKING_TIMEOUT:   {type:'int', min:0},
-        CLUSTER_PORT:           {type:'int', min:1, max:65535},
-        CLUSTER_TIMEOUT:        {type:'int', min:1},
-        UI_PORT:                {type:'int', min:1, max:65535},
+        LF_TEMP:               {type:'int', min:0},
+        LF_PERMBLOCK_INTERVAL: {type:'int', min:0},
+        LF_NETBLOCK_INTERVAL:  {type:'int', min:0},
+        CT_LIMIT:              {type:'int', min:0},
+        CT_INTERVAL:           {type:'int', min:1},
+        LT_POP3D:              {type:'int', min:0},
+        LT_IMAPD:              {type:'int', min:0},
+        PT_USERPROC:           {type:'int', min:0},
+        PT_USERMEM:            {type:'int', min:0},
+        PT_USERRSS:            {type:'int', min:0},
+        PT_USERTIME:           {type:'int', min:0},
+        PS_LIMIT:              {type:'int', min:0},
+        PS_INTERVAL:           {type:'int', min:0},
+        SYNFLOOD_BURST:        {type:'int', min:1},
+        UDPFLOOD_LIMIT:        {type:'rate'},
+        UDPFLOOD_BURST:        {type:'int', min:0},
+        SYSLOG_CHECK:          {type:'int', min:0},
+        CLUSTER_PORT:          {type:'int', min:1, max:65535},
+        UI_PORT:               {type:'int', min:1, max:65535},
         /* ── Float fields ─────────────────────────── */
         PT_LOAD_LEVEL: {type:'float', min:0},
         /* ── Composite formats ────────────────────── */
-        CONNLIMIT:   {type:'connlimit'},
-        PORTFLOOD:   {type:'portflood'},
-        PS_PORTS:    {type:'portrange'},
+        CONNLIMIT:      {type:'connlimit'},
+        PORTFLOOD:      {type:'portflood'},
+        PS_PORTS:       {type:'psports'},
         SYNFLOOD_RATE:  {type:'rate'},
         MESSENGER_RATE: {type:'rate'},
         /* ── Email fields ─────────────────────────── */
@@ -1424,8 +1413,7 @@ $(function() {
         /* ── CIDR integer list ────────────────────── */
         CC_DROP_CIDR: {type:'cidr_int'},
         /* ── CT tracked ports ─────────────────────── */
-        CT_PORTS:      {type:'ports', allowEmpty:true},
-        CT_SKIP_PORTS: {type:'ports', allowEmpty:true},
+        CT_PORTS: {type:'ports', allowEmpty:true},
     };
 
     function _validateValue(key, val) {
@@ -1500,6 +1488,24 @@ $(function() {
             if (!/^\d+:\d+$/.test(v)) return 'Format: start:end (e.g. 0:65535). Got: ' + v;
             var range = v.split(':');
             if (parseInt(range[0], 10) > parseInt(range[1], 10)) return 'Start port must be ≤ end port.';
+            return null;
+        }
+        if (rule.type === 'psports') {
+            // Port Scan ports: comma-separated port ranges (N:M), port numbers, or keywords
+            var psKeywords = /^(ICMP|INVALID|OPEN|BRD)$/i;
+            var psParts = v.split(',');
+            for (var psi = 0; psi < psParts.length; psi++) {
+                var psp = psParts[psi].trim();
+                if (!psp) continue;
+                if (psKeywords.test(psp)) continue;
+                if (/^\d+:\d+$/.test(psp)) continue;
+                if (/^\d+$/.test(psp)) {
+                    var psn = parseInt(psp, 10);
+                    if (psn < 0 || psn > 65535) return 'Port ' + psp + ' out of range (0–65535).';
+                    continue;
+                }
+                return 'Invalid entry "' + psp + '". Use port ranges (e.g. 0:65535), port numbers, or keywords: ICMP, INVALID, OPEN, BRD.';
+            }
             return null;
         }
         if (rule.type === 'cidr_int') {
