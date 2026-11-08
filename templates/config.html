@@ -1263,7 +1263,7 @@ $(function() {
         /* ── SYN / UDP flood rates ───────────────────────────────────── */
         SYNFLOOD_RATE:       'iptables rate, e.g. 100/s',
         SYNFLOOD_BURST:      'Burst allowance, e.g. 150',
-        UDPFLOOD_LIMIT:      'UDP packets per second limit, e.g. 50',
+        UDPFLOOD_LIMIT:      'Rate limit, e.g. 100/s',
         UDPFLOOD_BURST:      'UDP burst allowance, e.g. 500',
         /* ── Process tracking ────────────────────────────────────────── */
         PT_LOAD_LEVEL:       'CPU load average to alert on, e.g. 20.0',
@@ -1400,11 +1400,10 @@ $(function() {
         PT_USERTIME:            {type:'int', min:0},
         PT_FORKBOMB_ALERT:      {type:'int', min:0},
         PS_LIMIT:               {type:'int', min:0},
-        PS_INTERVAL:            {type:'int', min:1},
+        PS_INTERVAL:            {type:'int', min:0},
         SYNFLOOD_BURST:         {type:'int', min:1},
-        UDPFLOOD_LIMIT:         {type:'int', min:0},
+        UDPFLOOD_LIMIT:         {type:'rate'},
         UDPFLOOD_BURST:         {type:'int', min:0},
-        LOGFLOOD_LIMIT:         {type:'int', min:0},
         LOGFLOOD_INTERVAL:      {type:'int', min:1},
         SYSLOG_CHECK_INTERVAL:  {type:'int', min:0},
         PORTKNOCKING_TIMEOUT:   {type:'int', min:0},
@@ -1417,7 +1416,8 @@ $(function() {
         CONNLIMIT:   {type:'connlimit'},
         PORTFLOOD:   {type:'portflood'},
         PS_PORTS:    {type:'portrange'},
-        SYNFLOOD_RATE:{type:'rate'},
+        SYNFLOOD_RATE:  {type:'rate'},
+        MESSENGER_RATE: {type:'rate'},
         /* ── Email fields ─────────────────────────── */
         LF_ALERT_TO:   {type:'emails'},
         LF_ALERT_FROM: {type:'email'},
