@@ -73,6 +73,8 @@ def run_command(cmd, timeout=30):
         }
     except subprocess.TimeoutExpired:
         return {"success": False, "stdout": "", "stderr": "Command timed out", "returncode": -1}
+    except FileNotFoundError:
+        return {"success": False, "stdout": "", "stderr": f"Command not found: {cmd[0]}", "returncode": -1}
 
 
 # Service lifecycle

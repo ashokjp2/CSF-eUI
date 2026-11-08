@@ -5,6 +5,8 @@ import secrets
 import functools
 import threading
 import hmac
+import traceback
+import logging
 from flask import (
     Flask, render_template, request, redirect, url_for,
     session, flash, jsonify, Response,
@@ -52,6 +54,13 @@ from csf_backend import backup_restore
 from csf_backend import email_alerts
 
 app = Flask(__name__)
+logging.basicConfig(
+    filename="/var/log/csfv2.log",
+    level=logging.ERROR,
+    format="[%(asctime)s] %(levelname)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+app.logger.setLevel(logging.ERROR)
 app.secret_key = (os.environ.get("CSFV2_SECRET_KEY")
                   or os.environ.get("SECRET_KEY")
                   or secrets.token_hex(32))
@@ -1492,14 +1501,18 @@ def api_logs_view():
 def ip_lookup_view():
     ip = request.args.get("ip", "")
     result = None
-    if ip:
-        result = ip_lookup.lookup_ip(ip)
-    return render_template(
-        "ip_lookup.html",
-        ip=ip,
-        result=result,
-        status=get_firewall_status(),
-    )
+    try:
+        if ip:
+            result = ip_lookup.lookup_ip(ip)
+        return render_template(
+            "ip_lookup.html",
+            ip=ip,
+            result=result,
+            status=get_firewall_status(),
+        )
+    except Exception:
+        app.logger.error("ip_lookup_view error for ip=%r:\n%s", ip, traceback.format_exc())
+        raise
 
 
 @app.route("/api/ip/lookup")
