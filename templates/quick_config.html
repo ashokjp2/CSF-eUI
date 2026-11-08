@@ -1263,6 +1263,8 @@ $(function() {
                 var statusCell, addBtn = '';
                 if (pc.open) {
                     statusCell = '<span class="label label-success"><span class="glyphicon glyphicon-ok"></span> Open</span>';
+                } else if (pc.country_restricted) {
+                    statusCell = '<span class="label label-info" title="Open to specific countries only via CC_ALLOW_PORTS"><span class="glyphicon glyphicon-flag"></span> Country restricted</span>';
                 } else {
                     statusCell = '<span class="label label-danger"><span class="glyphicon glyphicon-remove"></span> Missing</span>';
                     addBtn = '<button class="btn btn-xs btn-success svc-add-one-port" data-rule="' + pc.rule + '" data-port="' + pc.port + '"><span class="glyphicon glyphicon-plus"></span> Add</button>';
@@ -1506,7 +1508,7 @@ function renderPortRec(data) {
         + '<thead><tr><th>Service</th><th>Port</th><th>Required in</th><th>Status</th><th></th></tr></thead><tbody>';
 
     recs.forEach(function(svc) {
-        var allPorts = svc.already_open.concat(svc.gaps);
+        var allPorts = svc.already_open.concat(svc.gaps).concat(svc.country_restricted || []);
         if (allPorts.length === 0) return;
 
         var rowspan = allPorts.length;
@@ -1520,12 +1522,17 @@ function renderPortRec(data) {
             }
             html += '<td><code>' + entry.key + '</code> <small class="text-muted">(' + entry.label + ')</small></td>';
             var isGap = svc.gaps.some(function(g) { return g.key === entry.key; });
+            var isCC  = (svc.country_restricted || []).some(function(g) { return g.key === entry.key; });
             if (isGap) {
                 html += '<td><span class="label label-warning">Missing</span></td>';
                 html += '<td><button class="btn btn-xs btn-success add-rec-port-btn"'
                     + ' data-key="' + entry.key + '" data-port="' + entry.port + '"'
                     + ' data-svc="' + svc.id + '">'
                     + '<span class="glyphicon glyphicon-plus"></span> Add</button></td>';
+            } else if (isCC) {
+                html += '<td><span class="label label-info" title="Open to specific countries only via CC_ALLOW_PORTS">'
+                    + '<span class="glyphicon glyphicon-flag"></span> Country restricted</span></td>';
+                html += '<td class="text-muted" style="font-size:11px">Allowed for specific countries</td>';
             } else {
                 html += '<td><span class="label label-success">Open</span></td>';
                 html += '<td class="text-muted" style="font-size:11px">Already open</td>';

@@ -1,4 +1,4 @@
-import os
+﻿import os
 import re
 import subprocess
 
@@ -185,13 +185,19 @@ def check_service_ports():
     tcp_out = _parse_ports(conf.get("TCP_OUT", ""))
     udp_in  = _parse_ports(conf.get("UDP_IN",  ""))
     udp_out = _parse_ports(conf.get("UDP_OUT", ""))
+    cc_tcp  = _parse_ports(conf.get("CC_ALLOW_PORTS_TCP", ""))
+    cc_udp  = _parse_ports(conf.get("CC_ALLOW_PORTS_UDP", ""))
     docker_on = conf.get("DOCKER", "0") == "1"
 
     detected = detect_all_services()
     service_types = {s["type"] for s in detected}
 
-    def _port_check(rule_set, port):
-        return port in rule_set
+    def _port_check(rule_set, cc_set, port):
+        if port in rule_set:
+            return {"open": True, "country_restricted": False}
+        if port in cc_set:
+            return {"open": False, "country_restricted": True}
+        return {"open": False, "country_restricted": False}
 
     # Build per-service entries: each has label, port_checks list, settings list
     # port_checks: {rule, port, open, reason}
@@ -213,7 +219,7 @@ def check_service_ports():
             "label": "SSH",
             "icon": "glyphicon-lock",
             "port_checks": [
-                {"rule": "TCP_IN",  "port": ssh_port, "open": _port_check(tcp_in,  ssh_port), "reason": "Accept SSH connections"},
+                {"rule": "TCP_IN",  "port": ssh_port, **_port_check(tcp_in, cc_tcp, ssh_port), "reason": "Accept SSH connections"},
             ],
             "settings": [],
         })
@@ -225,8 +231,8 @@ def check_service_ports():
                 "label": label,
                 "icon": "glyphicon-globe",
                 "port_checks": [
-                    {"rule": "TCP_IN",  "port": port, "open": _port_check(tcp_in,  port), "reason": "Accept web traffic"},
-                    {"rule": "TCP_OUT", "port": port, "open": _port_check(tcp_out, port), "reason": "Outbound web / package updates"},
+                    {"rule": "TCP_IN",  "port": port, **_port_check(tcp_in, cc_tcp, port), "reason": "Accept web traffic"},
+                    {"rule": "TCP_OUT", "port": port, **_port_check(tcp_out, cc_tcp, port), "reason": "Outbound web / package updates"},
                 ],
                 "settings": [],
             })
@@ -237,10 +243,10 @@ def check_service_ports():
             "label": "Docker",
             "icon": "glyphicon-th-large",
             "port_checks": [
-                {"rule": "UDP_IN",  "port": "4789", "open": _port_check(udp_in,  "4789"), "reason": "VXLAN overlay network (inter-host)"},
-                {"rule": "UDP_OUT", "port": "4789", "open": _port_check(udp_out, "4789"), "reason": "VXLAN overlay network (inter-host)"},
-                {"rule": "TCP_OUT", "port": "80",   "open": _port_check(tcp_out, "80"),   "reason": "Pull images from Docker Hub"},
-                {"rule": "TCP_OUT", "port": "443",  "open": _port_check(tcp_out, "443"),  "reason": "Pull images (HTTPS)"},
+                {"rule": "UDP_IN",  "port": "4789", **_port_check(udp_in, cc_udp, "4789"), "reason": "VXLAN overlay network (inter-host)"},
+                {"rule": "UDP_OUT", "port": "4789", **_port_check(udp_out, cc_udp, "4789"), "reason": "VXLAN overlay network (inter-host)"},
+                {"rule": "TCP_OUT", "port": "80",   **_port_check(tcp_out, cc_tcp, "80"),   "reason": "Pull images from Docker Hub"},
+                {"rule": "TCP_OUT", "port": "443",  **_port_check(tcp_out, cc_tcp, "443"),  "reason": "Pull images (HTTPS)"},
             ],
             "settings": [
                 {"key": "DOCKER", "value": "1", "ok": docker_on, "reason": "DOCKER=1 lets CSF manage container iptables rules"},
@@ -263,8 +269,8 @@ def check_service_ports():
                 "label": "WireGuard ({})".format(iface),
                 "icon": "glyphicon-random",
                 "port_checks": [
-                    {"rule": "UDP_IN",  "port": listen_port, "open": _port_check(udp_in,  listen_port), "reason": "WireGuard VPN tunnel"},
-                    {"rule": "UDP_OUT", "port": listen_port, "open": _port_check(udp_out, listen_port), "reason": "WireGuard VPN tunnel (outbound)"},
+                    {"rule": "UDP_IN",  "port": listen_port, **_port_check(udp_in, cc_udp, listen_port), "reason": "WireGuard VPN tunnel"},
+                    {"rule": "UDP_OUT", "port": listen_port, **_port_check(udp_out, cc_udp, listen_port), "reason": "WireGuard VPN tunnel (outbound)"},
                 ],
                 "settings": [],
             })
@@ -283,8 +289,8 @@ def check_service_ports():
             "label": "Netbird",
             "icon": "glyphicon-random",
             "port_checks": [
-                {"rule": "UDP_IN",  "port": nb_port, "open": _port_check(udp_in,  nb_port), "reason": "Netbird WireGuard tunnel"},
-                {"rule": "UDP_OUT", "port": nb_port, "open": _port_check(udp_out, nb_port), "reason": "Netbird WireGuard tunnel (outbound)"},
+                {"rule": "UDP_IN",  "port": nb_port, **_port_check(udp_in, cc_udp, nb_port), "reason": "Netbird WireGuard tunnel"},
+                {"rule": "UDP_OUT", "port": nb_port, **_port_check(udp_out, cc_udp, nb_port), "reason": "Netbird WireGuard tunnel (outbound)"},
             ],
             "settings": [],
         })
@@ -296,9 +302,9 @@ def check_service_ports():
                 "label": label,
                 "icon": "glyphicon-cloud",
                 "port_checks": [
-                    {"rule": "TCP_IN",  "port": port, "open": _port_check(tcp_in,  port), "reason": "{} web UI".format(label)},
-                    {"rule": "TCP_OUT", "port": "80",  "open": _port_check(tcp_out, "80"),  "reason": "Outbound HTTP for deployments"},
-                    {"rule": "TCP_OUT", "port": "443", "open": _port_check(tcp_out, "443"), "reason": "Outbound HTTPS for deployments"},
+                    {"rule": "TCP_IN",  "port": port, **_port_check(tcp_in, cc_tcp, port), "reason": "{} web UI".format(label)},
+                    {"rule": "TCP_OUT", "port": "80",  **_port_check(tcp_out, cc_tcp, "80"),  "reason": "Outbound HTTP for deployments"},
+                    {"rule": "TCP_OUT", "port": "443", **_port_check(tcp_out, cc_tcp, "443"), "reason": "Outbound HTTPS for deployments"},
                 ],
                 "settings": [],
             })
@@ -309,7 +315,7 @@ def check_service_ports():
             "label": "CSFv2 UI",
             "icon": "glyphicon-fire",
             "port_checks": [
-                {"rule": "TCP_IN", "port": "8750", "open": _port_check(tcp_in, "8750"), "reason": "CSFv2 management interface"},
+                {"rule": "TCP_IN", "port": "8750", **_port_check(tcp_in, cc_tcp, "8750"), "reason": "CSFv2 management interface"},
             ],
             "settings": [],
         })
@@ -320,10 +326,10 @@ def check_service_ports():
             "label": "DNS Server",
             "icon": "glyphicon-tasks",
             "port_checks": [
-                {"rule": "TCP_IN",  "port": "53", "open": _port_check(tcp_in,  "53"), "reason": "DNS TCP queries"},
-                {"rule": "UDP_IN",  "port": "53", "open": _port_check(udp_in,  "53"), "reason": "DNS UDP queries"},
-                {"rule": "TCP_OUT", "port": "53", "open": _port_check(tcp_out, "53"), "reason": "Outbound DNS resolution"},
-                {"rule": "UDP_OUT", "port": "53", "open": _port_check(udp_out, "53"), "reason": "Outbound DNS resolution"},
+                {"rule": "TCP_IN",  "port": "53", **_port_check(tcp_in, cc_tcp, "53"), "reason": "DNS TCP queries"},
+                {"rule": "UDP_IN",  "port": "53", **_port_check(udp_in, cc_udp, "53"), "reason": "DNS UDP queries"},
+                {"rule": "TCP_OUT", "port": "53", **_port_check(tcp_out, cc_tcp, "53"), "reason": "Outbound DNS resolution"},
+                {"rule": "UDP_OUT", "port": "53", **_port_check(udp_out, cc_udp, "53"), "reason": "Outbound DNS resolution"},
             ],
             "settings": [],
         })
@@ -337,7 +343,7 @@ def check_service_ports():
         ("UDP_OUT", "123", "NTP time sync"),
     ]:
         rule_set = {"TCP_OUT": tcp_out, "UDP_OUT": udp_out}.get(rule, set())
-        baseline.append({"rule": rule, "port": port, "open": _port_check(rule_set, port), "reason": reason})
+        baseline.append({"rule": rule, "port": port, **_port_check(rule_set, cc_tcp, port), "reason": reason})
     services.append({
         "label": "Server Baseline (outbound)",
         "icon": "glyphicon-upload",
@@ -346,7 +352,7 @@ def check_service_ports():
     })
 
     has_issues = any(
-        not pc["open"] for svc in services for pc in svc["port_checks"]
+        not pc["open"] and not pc.get("country_restricted") for svc in services for pc in svc["port_checks"]
     ) or any(
         not s["ok"] for svc in services for s in svc["settings"]
     )

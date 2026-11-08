@@ -335,6 +335,8 @@ def get_port_recommendations():
     tcp_out = _parse_set("TCP_OUT")
     udp_in = _parse_set("UDP_IN")
     udp_out = _parse_set("UDP_OUT")
+    cc_tcp = _parse_set("CC_ALLOW_PORTS_TCP")
+    cc_udp = _parse_set("CC_ALLOW_PORTS_UDP")
 
     detected = detect_services()
     recommendations = []
@@ -346,18 +348,28 @@ def get_port_recommendations():
 
         gaps = []
         already_open = []
+        country_restricted = []
 
-        for needed, current_set, key, label in [
-            (svc["tcp_in"], tcp_in, "TCP_IN", "Incoming TCP"),
-            (svc["tcp_out"], tcp_out, "TCP_OUT", "Outgoing TCP"),
-            (svc["udp_in"], udp_in, "UDP_IN", "Incoming UDP"),
-            (svc["udp_out"], udp_out, "UDP_OUT", "Outgoing UDP"),
+        for needed, current_set, cc_set, key, label in [
+            (svc["tcp_in"],  tcp_in,  cc_tcp, "TCP_IN",  "Incoming TCP"),
+            (svc["tcp_out"], tcp_out, cc_tcp, "TCP_OUT", "Outgoing TCP"),
+            (svc["udp_in"],  udp_in,  cc_udp, "UDP_IN",  "Incoming UDP"),
+            (svc["udp_out"], udp_out, cc_udp, "UDP_OUT", "Outgoing UDP"),
         ]:
             if needed:
                 if port in current_set:
                     already_open.append({"key": key, "label": label, "port": port})
+                elif port in cc_set:
+                    country_restricted.append({"key": key, "label": label, "port": port})
                 else:
                     gaps.append({"key": key, "label": label, "port": port})
+
+        if gaps:
+            status = "missing"
+        elif country_restricted and not already_open:
+            status = "country_restricted"
+        else:
+            status = "ok"
 
         recommendations.append({
             "id": svc["id"],
@@ -365,7 +377,8 @@ def get_port_recommendations():
             "port": port,
             "gaps": gaps,
             "already_open": already_open,
-            "status": "ok" if not gaps else "missing",
+            "country_restricted": country_restricted,
+            "status": status,
         })
 
     return {
