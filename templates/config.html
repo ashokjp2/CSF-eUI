@@ -754,7 +754,18 @@ $(function() {
         if (errors.length) {
             showToast('Fix ' + errors.length + ' validation error(s) before saving.', 'danger');
             var first = $('#configForm .field-val-error').first();
-            if (first.length) $('html,body').animate({scrollTop: first.offset().top - 120}, 300);
+            if (first.length) {
+                // Switch to the section (tab) that contains the first error
+                var section = first.closest('.virtualpage');
+                if (section.length) {
+                    var sectionId = section.attr('id').replace('section-', '');
+                    var btn = $('.section-btn[data-section="' + sectionId + '"]');
+                    if (btn.length) btn.trigger('click');
+                }
+                setTimeout(function() {
+                    $('html,body').animate({scrollTop: first.offset().top - 120}, 300);
+                }, 50);
+            }
             return;
         }
         var btn = $(this).find('button[type=submit]');
