@@ -1521,8 +1521,8 @@ _CSF_FIX_SETTINGS = {
 @login_required
 def api_health_quick_fix():
     data = request.get_json(silent=True) or {}
-    setting = data.get("setting", "").strip()
-    value = data.get("value", "").strip()
+    setting = str(data.get("setting", "")).strip()
+    value = str(data.get("value", "")).strip()
 
     if not setting or not value:
         return jsonify({"success": False, "error": "Missing setting or value"})
