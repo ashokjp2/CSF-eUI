@@ -387,18 +387,51 @@ def get_port_recommendations():
     }
 
 
+def _normalise_port(port):
+    port = str(port).strip()
+    if not port.isdigit() or len(port) > 5:
+        return None
+    port_number = int(port)
+    if not 1 <= port_number <= 65535:
+        return None
+    return str(port_number)
+
+
 def add_single_port(key, port):
     """Add one port to a CSF firewall rule key."""
     from csf_backend import csf_wrapper as csf
     valid_keys = {"TCP_IN", "TCP_OUT", "UDP_IN", "UDP_OUT", "TCP6_IN", "TCP6_OUT", "UDP6_IN", "UDP6_OUT"}
-    if key not in valid_keys or not str(port).isdigit():
+    port = _normalise_port(port)
+    if key not in valid_keys or port is None:
         return {"success": False, "error": "Invalid key or port"}
     conf = csf.load_csf_conf()
     existing = {p.strip() for p in conf.get(key, "").split(",") if p.strip()}
     existing.add(str(port))
     new_val = ",".join(sorted(existing, key=lambda p: int(p) if p.isdigit() else 99999))
-    csf.save_csf_conf({key: new_val})
+    save_result = csf.save_csf_conf({key: new_val})
+    if not save_result.get("success"):
+        return save_result
     return {"success": True, "message": "Port {} added to {}".format(port, key)}
+
+
+def remove_single_port(key, port):
+    """Remove one exact port from a CSF firewall rule key."""
+    from csf_backend import csf_wrapper as csf
+    valid_keys = {"TCP_IN", "TCP_OUT", "UDP_IN", "UDP_OUT", "TCP6_IN", "TCP6_OUT", "UDP6_IN", "UDP6_OUT"}
+    port = _normalise_port(port)
+    if key not in valid_keys or port is None:
+        return {"success": False, "error": "Invalid key or port"}
+
+    conf = csf.load_csf_conf()
+    existing = [p.strip() for p in conf.get(key, "").split(",") if p.strip()]
+    if port not in existing:
+        return {"success": False, "error": "Port {} is not in {}".format(port, key)}
+
+    new_val = ",".join(p for p in existing if p != port)
+    save_result = csf.save_csf_conf({key: new_val})
+    if not save_result.get("success"):
+        return save_result
+    return {"success": True, "message": "Port {} removed from {}".format(port, key)}
 
 
 def apply_defaults(selections):

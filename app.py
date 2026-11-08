@@ -2355,6 +2355,28 @@ def api_port_scan():
     return jsonify(port_scanner.scan_self())
 
 
+@app.route("/api/port-scan/rule", methods=["POST"])
+@login_required
+def api_port_scan_rule():
+    data = request.get_json(silent=True) or {}
+    action = str(data.get("action", "")).strip().lower()
+    port = str(data.get("port", "")).strip()
+
+    if action == "add":
+        result = port_defaults.add_single_port("TCP_IN", port)
+    elif action == "remove":
+        result = port_defaults.remove_single_port("TCP_IN", port)
+    else:
+        return jsonify({"success": False, "error": "Invalid rule action"})
+
+    if result.get("success"):
+        audit_log.log_event(
+            "config", session.get("username", ""), request.remote_addr,
+            f"Port scanner: {result.get('message', action + ' TCP_IN ' + port)}",
+        )
+    return jsonify(result)
+
+
 # --- LFD Blocks ---
 
 @app.route("/lfd-blocks")

@@ -31,6 +31,18 @@ def lookup_ip(ip):
         ]),
     })
 
+    # Reverse DNS. Use dig when available and fall back to Python's resolver.
+    rdns = _lookup_reverse_dns(ip)
+    info["sections"].append({
+        "title": "Reverse DNS",
+        "icon": "search",
+        "items": ([
+            {"key": "PTR Record", "value": rdns},
+        ] if rdns else [
+            {"key": "Status", "value": "No PTR record found"},
+        ]),
+    })
+
     # CSF status for this IP
     try:
         # Check deny list
@@ -108,18 +120,6 @@ def lookup_ip(ip):
         })
     except Exception:
         pass
-
-    # Reverse DNS. Use dig when available and fall back to Python's resolver.
-    rdns = _lookup_reverse_dns(ip)
-    info["sections"].append({
-        "title": "Reverse DNS",
-        "icon": "search",
-        "items": ([
-            {"key": "PTR Record", "value": rdns},
-        ] if rdns else [
-            {"key": "Status", "value": "No PTR record found"},
-        ]),
-    })
 
     return info
 
