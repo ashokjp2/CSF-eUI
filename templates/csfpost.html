@@ -1,0 +1,426 @@
+{% extends "base.html" %}
+{% block page_title %}{{ info.title }}{% endblock %}
+{% block title %}{{ info.title }} Editor - CSFv2{% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<div class="panel panel-primary">
+    <div class="panel-heading">
+        <h4 class="panel-title">
+            <span class="glyphicon glyphicon-wrench"></span>
+            {{ info.title }}
+            <small style="color:rgba(255,255,255,.7)">({{ info.path }})</small>
+            <div class="pull-right" style="margin-top:-2px">
+                <a href="/csfpost?script=csfpost" class="btn btn-xs {{ 'btn-warning' if script == 'csfpost' else 'btn-default' }}">csfpost.sh</a>
+                <a href="/csfpost?script=csfpre" class="btn btn-xs {{ 'btn-warning' if script == 'csfpre' else 'btn-default' }}">csfpre.sh</a>
+            </div>
+        </h4>
+    </div>
+    <div class="panel-body">
+        <p class="lead" style="margin-bottom:5px;font-size:14px">{{ info.description }}</p>
+        <p class="text-muted" style="margin:0;font-size:12px">
+            <span class="glyphicon glyphicon-info-sign"></span>
+            Changes require a <strong>CSF + LFD restart</strong> to take effect.
+        </p>
+    </div>
+</div>
+
+<!-- Alert area -->
+<div id="alert-area"></div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs" style="margin-bottom:0;border-bottom:none">
+    <li class="active"><a href="#tab-editor" data-toggle="tab"><span class="glyphicon glyphicon-pencil"></span> Script Editor</a></li>
+    <li><a href="#tab-rules" data-toggle="tab"><span class="glyphicon glyphicon-list-alt"></span> Parsed Rules <span class="badge" id="rules-badge">{{ info.rules|length }}</span></a></li>
+    <li><a href="#tab-builder" data-toggle="tab"><span class="glyphicon glyphicon-plus"></span> Rule Builder</a></li>
+</ul>
+
+<div class="tab-content" style="border:1px solid #ddd;border-top:none;padding:15px;background:#fff">
+
+    <!-- EDITOR TAB -->
+    <div class="tab-pane active" id="tab-editor">
+        <div class="row" style="margin-bottom:8px">
+            <div class="col-sm-8">
+                <span class="text-muted" style="font-size:12px">
+                    <span class="glyphicon glyphicon-info-sign"></span>
+                    Edit the script below. Click <strong>Check Syntax</strong> before saving.
+                </span>
+            </div>
+            <div class="col-sm-4 text-right">
+                <button class="btn btn-default btn-sm" id="check-btn">
+                    <span class="glyphicon glyphicon-ok-circle"></span> Check Syntax
+                </button>
+                <button class="btn btn-primary btn-sm" id="save-btn">
+                    <span class="glyphicon glyphicon-floppy-disk"></span> Save
+                </button>
+            </div>
+        </div>
+
+        <!-- Syntax result -->
+        <div id="syntax-result" style="display:none;margin-bottom:8px"></div>
+
+        <textarea id="script-editor" class="form-control" rows="28"
+            style="font-family:monospace;font-size:13px;line-height:1.5;resize:vertical">{{ info.content }}</textarea>
+
+        <div class="row" style="margin-top:12px">
+            <div class="col-sm-6">
+                <button class="btn btn-warning btn-sm" id="restart-btn">
+                    <span class="glyphicon glyphicon-refresh"></span> Restart CSF+LFD
+                </button>
+            </div>
+            <div class="col-sm-6 text-right">
+                <button class="btn btn-default btn-sm" id="reload-btn">
+                    <span class="glyphicon glyphicon-repeat"></span> Reload from Disk
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PARSED RULES TAB -->
+    <div class="tab-pane" id="tab-rules">
+        {% if info.rules %}
+        <p class="text-muted" style="font-size:12px;margin-bottom:10px">
+            <span class="glyphicon glyphicon-info-sign"></span>
+            Active iptables/ip6tables commands detected in the script. Commented lines are ignored and commands continued with <code>\</code> are grouped as one rule. Click a row to jump to its starting line.
+        </p>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover table-condensed" style="margin:0">
+                <thead>
+                    <tr>
+                        <th style="width:50px">Line</th>
+                        <th style="width:90px">Action</th>
+                        <th style="width:60px">Proto</th>
+                        <th style="width:80px">Port</th>
+                        <th style="width:130px">Source IP</th>
+                        <th style="width:130px">Dest IP</th>
+                        <th>Plain English</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in info.rules %}
+                    <tr class="rule-row" data-lineno="{{ r.lineno }}" style="cursor:pointer" title="{{ r.raw }}">
+                        <td><code style="font-size:11px">{{ r.lineno }}</code></td>
+                        <td><span class="label label-{{ r.badge }}">{{ r.jump or '—' }}</span></td>
+                        <td><small>{{ r.proto or '—' }}</small></td>
+                        <td><small>{{ r.port or '—' }}</small></td>
+                        <td><small><code>{{ r.src or '—' }}</code></small></td>
+                        <td><small><code>{{ r.dst or '—' }}</code></small></td>
+                        <td><small class="text-muted">{{ r.description }}</small></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center text-muted" style="padding:40px 0">
+            <span class="glyphicon glyphicon-search" style="font-size:32px;opacity:.4"></span>
+            <p style="margin-top:10px">No iptables rules found in the current script.</p>
+            <p style="font-size:12px">Use the <a href="#tab-builder" data-toggle="tab">Rule Builder</a> to generate rules, then save.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- RULE BUILDER TAB -->
+    <div class="tab-pane" id="tab-builder">
+        <p class="text-muted" style="font-size:12px;margin-bottom:12px">
+            <span class="glyphicon glyphicon-info-sign"></span>
+            Choose a rule type, fill in the details, and the generated line will be inserted into the script editor.
+        </p>
+
+        <div class="row">
+            <div class="col-md-4">
+                <div class="list-group" id="template-list">
+                    {% for t in templates %}
+                    <a href="#" class="list-group-item tmpl-btn" data-id="{{ t.id }}">
+                        <strong>{{ t.label }}</strong>
+                        <br><small class="text-muted">{{ t.description }}</small>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="col-md-8">
+                <div id="builder-form" style="display:none">
+                    <div class="panel panel-default">
+                        <div class="panel-heading">
+                            <h4 class="panel-title" id="builder-title">Rule Builder</h4>
+                        </div>
+                        <div class="panel-body">
+                            <!-- Proto -->
+                            <div class="form-group builder-field" id="field-proto" style="display:none">
+                                <label class="control-label">Protocol</label>
+                                <select class="form-control" id="b-proto">
+                                    <option value="tcp">TCP</option>
+                                    <option value="udp">UDP</option>
+                                    <option value="icmp">ICMP</option>
+                                </select>
+                            </div>
+                            <!-- Port -->
+                            <div class="form-group builder-field" id="field-port" style="display:none">
+                                <label class="control-label">Port</label>
+                                <input type="text" class="form-control" id="b-port" placeholder="e.g. 8080 or 8000:8100">
+                                <p class="help-block" style="font-size:11px">Single port or range (8000:8100)</p>
+                            </div>
+                            <!-- Source IP -->
+                            <div class="form-group builder-field" id="field-src" style="display:none">
+                                <label class="control-label">Source IP / CIDR <small class="text-muted">(optional)</small></label>
+                                <input type="text" class="form-control" id="b-src" placeholder="e.g. 203.0.113.0/24 (blank = any)">
+                            </div>
+                            <!-- Destination IP -->
+                            <div class="form-group builder-field" id="field-dst" style="display:none">
+                                <label class="control-label">Destination IP <small class="text-muted">(optional)</small></label>
+                                <input type="text" class="form-control" id="b-dst" placeholder="e.g. 172.17.0.5 (blank = any)">
+                            </div>
+                            <!-- Destination Port (NAT) -->
+                            <div class="form-group builder-field" id="field-dst_port" style="display:none">
+                                <label class="control-label">Destination Port</label>
+                                <input type="text" class="form-control" id="b-dst_port" placeholder="e.g. 80">
+                            </div>
+                            <!-- Log prefix -->
+                            <div class="form-group builder-field" id="field-log_prefix" style="display:none">
+                                <label class="control-label">Log Prefix</label>
+                                <input type="text" class="form-control" id="b-log_prefix" placeholder="e.g. CSF-DROP: " value="CSF-DROP: ">
+                                <p class="help-block" style="font-size:11px">Prefix for syslog entries (max ~29 chars)</p>
+                            </div>
+
+                            <div id="built-rule-area" style="display:none;margin-top:8px">
+                                <label>Generated rule:</label>
+                                <pre id="built-rule" style="background:#f5f5f5;padding:8px;border-radius:3px;font-size:12px;white-space:pre-wrap;word-break:break-all"></pre>
+                                <button class="btn btn-success btn-sm" id="insert-rule-btn">
+                                    <span class="glyphicon glyphicon-share-alt"></span> Insert into Editor
+                                </button>
+                            </div>
+
+                            <div class="text-right" style="margin-top:12px">
+                                <button class="btn btn-primary btn-sm" id="build-btn">
+                                    <span class="glyphicon glyphicon-cog"></span> Generate Rule
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="builder-placeholder" class="text-center text-muted" style="padding:40px 0">
+                    <span class="glyphicon glyphicon-arrow-left" style="font-size:28px;opacity:.4"></span>
+                    <p style="margin-top:10px">Select a rule type to get started</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+    var currentScript = '{{ script }}';
+    var currentTemplateId = null;
+    var currentTemplateFields = null;
+
+    var TEMPLATE_FIELDS = {
+        {% for t in templates %}
+        '{{ t.id }}': {{ t.fields | tojson }},
+        {% endfor %}
+    };
+
+    // ---- Helpers ----
+    function showAlert(type, msg, area) {
+        area = area || '#alert-area';
+        var icon = type === 'success' ? 'ok-sign' : type === 'danger' ? 'exclamation-sign' : 'info-sign';
+        var html = '<div class="alert alert-'+type+' alert-dismissible" style="margin-bottom:10px">' +
+            '<button type="button" class="close" data-dismiss="alert">&times;</button>' +
+            '<span class="glyphicon glyphicon-'+icon+'"></span> '+msg+'</div>';
+        $(area).prepend(html);
+        setTimeout(function(){ $(area+' .alert').first().fadeOut(); }, 6000);
+    }
+
+    function getEditorContent() {
+        return $('#script-editor').val();
+    }
+
+    // ---- Syntax check ----
+    $('#check-btn').on('click', function() {
+        var btn = $(this);
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh spinning"></span> Checking...');
+        $.ajax({
+            url: '/api/csfpost/check',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({content: getEditorContent()}),
+            success: function(r) {
+                var box = $('#syntax-result');
+                if (r.valid) {
+                    var msg = r.note ? r.note : 'Syntax OK — no errors found.';
+                    box.html('<div class="alert alert-success" style="margin:0;padding:6px 12px"><span class="glyphicon glyphicon-ok"></span> '+msg+'</div>');
+                } else {
+                    var errs = (r.errors || []).map(function(e){ return '<li>'+esc(e)+'</li>'; }).join('');
+                    box.html('<div class="alert alert-danger" style="margin:0;padding:6px 12px"><strong><span class="glyphicon glyphicon-exclamation-sign"></span> Syntax errors:</strong><ul style="margin:4px 0 0 0">'+errs+'</ul></div>');
+                }
+                box.show();
+            },
+            error: function() { showAlert('danger', 'Syntax check request failed'); },
+            complete: function() { btn.prop('disabled', false).html('<span class="glyphicon glyphicon-ok-circle"></span> Check Syntax'); }
+        });
+    });
+
+    // ---- Save ----
+    $('#save-btn').on('click', function() {
+        var btn = $(this);
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh spinning"></span> Saving...');
+        $.ajax({
+            url: '/api/csfpost/save',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({content: getEditorContent(), script: currentScript}),
+            success: function(r) {
+                if (r.success) {
+                    showAlert('success', r.message || 'Saved');
+                    // Refresh rules badge & tab (reload page rules count)
+                    refreshParsedRules();
+                } else {
+                    showAlert('danger', r.error || 'Save failed');
+                }
+            },
+            error: function() { showAlert('danger', 'Save request failed'); },
+            complete: function() { btn.prop('disabled', false).html('<span class="glyphicon glyphicon-floppy-disk"></span> Save'); }
+        });
+    });
+
+    // ---- Reload from disk ----
+    $('#reload-btn').on('click', function() {
+        if (!confirm('Reload from disk? Unsaved changes will be lost.')) return;
+        window.location.reload();
+    });
+
+    // ---- Restart ----
+    $('#restart-btn').on('click', function() {
+        var btn = $(this);
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh spinning"></span> Restarting...');
+        $.post('/api/restart', function(r) {
+            if (r.success) {
+                showAlert('success', 'CSF+LFD restarted successfully');
+            } else {
+                showAlert('danger', 'Restart failed: ' + (r.error || 'Unknown'));
+            }
+        }).fail(function() {
+            showAlert('danger', 'Restart request failed');
+        }).always(function() {
+            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-refresh"></span> Restart CSF+LFD');
+        });
+    });
+
+    // ---- Jump to line from parsed rules tab ----
+    $(document).on('click', '.rule-row', function() {
+        var lineno = parseInt($(this).data('lineno'), 10);
+        $('a[href="#tab-editor"]').tab('show');
+        // Highlight the line in the textarea by scrolling to it
+        var ta = document.getElementById('script-editor');
+        var lines = ta.value.split('\n');
+        var pos = 0;
+        for (var i = 0; i < lineno - 1 && i < lines.length; i++) {
+            pos += lines[i].length + 1;
+        }
+        ta.focus();
+        ta.setSelectionRange(pos, pos + (lines[lineno-1] || '').length);
+        // Scroll textarea to show line
+        var lineH = ta.scrollHeight / lines.length;
+        ta.scrollTop = Math.max(0, (lineno - 5) * lineH);
+    });
+
+    // ---- Refresh parsed rules after save ----
+    function refreshParsedRules() {
+        $.get('/api/csfpost/parse?script='+currentScript, function(r) {
+            if (!r.rules) return;
+            $('#rules-badge').text(r.rules.length);
+            var tbody = $('#tab-rules table tbody');
+            if (!tbody.length) return;
+            tbody.empty();
+            if (r.rules.length === 0) {
+                tbody.append('<tr><td colspan="7" class="text-center text-muted">No iptables rules found</td></tr>');
+                return;
+            }
+            r.rules.forEach(function(rule) {
+                tbody.append(
+                    '<tr class="rule-row" data-lineno="'+rule.lineno+'" style="cursor:pointer" title="'+esc(rule.raw)+'">' +
+                    '<td><code style="font-size:11px">'+rule.lineno+'</code></td>' +
+                    '<td><span class="label label-'+rule.badge+'">'+esc(rule.jump||'—')+'</span></td>' +
+                    '<td><small>'+esc(rule.proto||'—')+'</small></td>' +
+                    '<td><small>'+esc(rule.port||'—')+'</small></td>' +
+                    '<td><small><code>'+esc(rule.src||'—')+'</code></small></td>' +
+                    '<td><small><code>'+esc(rule.dst||'—')+'</code></small></td>' +
+                    '<td><small class="text-muted">'+esc(rule.description)+'</small></td>' +
+                    '</tr>'
+                );
+            });
+        });
+    }
+
+    // ---- Rule Builder ----
+    function showBuilderFields(fields) {
+        // Hide all fields first
+        $('.builder-field').hide();
+        // Show relevant ones
+        fields.forEach(function(f) {
+            $('#field-'+f).show();
+        });
+        $('#built-rule-area').hide();
+        $('#builder-form').show();
+        $('#builder-placeholder').hide();
+    }
+
+    $(document).on('click', '.tmpl-btn', function(e) {
+        e.preventDefault();
+        $('.tmpl-btn').removeClass('active');
+        $(this).addClass('active');
+        currentTemplateId = $(this).data('id');
+        currentTemplateFields = TEMPLATE_FIELDS[currentTemplateId] || [];
+        $('#builder-title').text($(this).find('strong').text());
+        showBuilderFields(currentTemplateFields);
+    });
+
+    $('#build-btn').on('click', function() {
+        if (!currentTemplateId) return;
+        var params = {
+            proto: $('#b-proto').val(),
+            port: $('#b-port').val(),
+            src: $('#b-src').val(),
+            dst: $('#b-dst').val(),
+            dst_port: $('#b-dst_port').val(),
+            log_prefix: $('#b-log_prefix').val(),
+        };
+        $.ajax({
+            url: '/api/csfpost/build-rule',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({template_id: currentTemplateId, params: params}),
+            success: function(r) {
+                if (r.success) {
+                    $('#built-rule').text(r.line);
+                    $('#built-rule-area').show();
+                } else {
+                    showAlert('danger', r.error || 'Failed to generate rule', '#tab-builder');
+                }
+            },
+            error: function() { showAlert('danger', 'Request failed', '#tab-builder'); }
+        });
+    });
+
+    $('#insert-rule-btn').on('click', function() {
+        var line = $('#built-rule').text();
+        if (!line) return;
+        var ta = $('#script-editor');
+        var current = ta.val();
+        // Insert before the last line if it exists, otherwise append
+        var appended = current.trimEnd() + '\n' + line + '\n';
+        ta.val(appended);
+        $('a[href="#tab-editor"]').tab('show');
+        showAlert('info', 'Rule inserted into editor. Review and click <strong>Save</strong> when ready.', '#alert-area');
+    });
+
+    function esc(s) {
+        return $('<span>').text(String(s || '')).html();
+    }
+
+})();
+</script>
+{% endblock %}
