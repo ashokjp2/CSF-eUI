@@ -1508,6 +1508,47 @@ def api_health():
     return jsonify(health_score.calculate_score())
 
 
+_SSH_FIX_SETTINGS = {
+    "PermitRootLogin", "PasswordAuthentication", "X11Forwarding", "MaxAuthTries",
+}
+_CSF_FIX_SETTINGS = {
+    "TESTING", "RESTRICT_SYSLOG", "LF_SSHD", "LF_FTPD", "LF_PERMBLOCK",
+    "PS_LIMIT", "CT_LIMIT", "DOCKER", "IPV6",
+}
+
+
+@app.route("/api/health/quick-fix", methods=["POST"])
+@login_required
+def api_health_quick_fix():
+    data = request.get_json(silent=True) or {}
+    setting = data.get("setting", "").strip()
+    value = data.get("value", "").strip()
+
+    if not setting or not value:
+        return jsonify({"success": False, "error": "Missing setting or value"})
+
+    if setting in _SSH_FIX_SETTINGS:
+        result = security_check.update_sshd_setting(setting, value)
+        if result.get("success"):
+            audit_log.log_event("config", session.get("username", ""), request.remote_addr,
+                                f"Health quick-fix: sshd {setting}={value}")
+        return jsonify(result)
+
+    if setting in _CSF_FIX_SETTINGS:
+        save_result = csf_wrapper.save_csf_conf({setting: value})
+        if not save_result.get("success"):
+            return jsonify(save_result)
+        reload_result = csf_wrapper.csf_restart()
+        audit_log.log_event("config", session.get("username", ""), request.remote_addr,
+                            f"Health quick-fix: csf {setting}={value}")
+        if reload_result.get("returncode", 1) != 0:
+            return jsonify({"success": True,
+                            "message": f"{setting} set to {value}. CSF reload had warnings — check logs."})
+        return jsonify({"success": True, "message": f"{setting} set to {value}. CSF reloaded."})
+
+    return jsonify({"success": False, "error": f"Setting '{setting}' is not allowed for quick-fix"})
+
+
 # --- Setting Help / Tooltips ---
 
 @app.route("/api/setting-help")

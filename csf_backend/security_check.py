@@ -230,6 +230,7 @@ def run_full_check():
                 "title": "Root login with password is allowed",
                 "detail": "Attackers can brute-force the root password directly. Set PermitRootLogin to 'no' or 'prohibit-password' (key-only).",
                 "setting": "PermitRootLogin",
+                "fix_value": "prohibit-password",
                 "current": root_login,
                 "recommended": "no (or prohibit-password for key-only)",
             })
@@ -254,6 +255,7 @@ def run_full_check():
             "title": "Password authentication is enabled",
             "detail": "SSH key authentication is more secure. Consider disabling password auth after setting up SSH keys.",
             "setting": "PasswordAuthentication",
+            "fix_value": "no",
             "current": "yes",
             "recommended": "no (use SSH keys instead)",
         })
@@ -271,6 +273,7 @@ def run_full_check():
             "title": "X11 forwarding is enabled",
             "detail": "Not needed on servers. Disable it to reduce attack surface.",
             "setting": "X11Forwarding",
+            "fix_value": "no",
             "current": "yes",
             "recommended": "no",
         })
@@ -283,6 +286,7 @@ def run_full_check():
                 "title": f"SSH MaxAuthTries is {max_auth} (high)",
                 "detail": "Lower this to 3-4 to limit brute-force attempts per connection.",
                 "setting": "MaxAuthTries",
+                "fix_value": "3",
                 "current": max_auth,
                 "recommended": "3",
             })
@@ -300,6 +304,7 @@ def run_full_check():
             "title": "CSF is in TESTING mode",
             "detail": "Firewall rules are cleared every few minutes. Disable TESTING once you confirm access works.",
             "setting": "TESTING",
+            "fix_value": "0",
             "current": "1 (enabled)",
             "recommended": "0 (disabled)",
         })
@@ -317,6 +322,7 @@ def run_full_check():
             "title": "RESTRICT_SYSLOG is disabled",
             "detail": "Attackers could spoof syslog entries to bypass LFD. Enable for better log integrity.",
             "setting": "RESTRICT_SYSLOG",
+            "fix_value": "3",
             "current": "0",
             "recommended": "3 (strict)",
         })
@@ -328,6 +334,7 @@ def run_full_check():
             "title": "SSH brute-force protection is DISABLED",
             "detail": "LF_SSHD should be set to block IPs after failed SSH login attempts.",
             "setting": "LF_SSHD",
+            "fix_value": "5",
             "current": "0 (disabled)",
             "recommended": "5",
         })
@@ -346,6 +353,7 @@ def run_full_check():
                 "status": "warn",
                 "title": "FTP brute-force protection disabled but FTP server detected",
                 "setting": "LF_FTPD",
+                "fix_value": "10",
                 "current": "0",
                 "recommended": "10",
             })
@@ -357,6 +365,7 @@ def run_full_check():
             "title": "Auto permanent-block for repeat offenders is off",
             "detail": "Persistent attackers will keep getting temporary blocks that expire. Enable LF_PERMBLOCK.",
             "setting": "LF_PERMBLOCK",
+            "fix_value": "1",
             "current": "0",
             "recommended": "1",
         })
@@ -368,6 +377,7 @@ def run_full_check():
             "title": "Port scan detection is disabled",
             "detail": "Enable PS_LIMIT to detect and block port scanning.",
             "setting": "PS_LIMIT",
+            "fix_value": "10",
             "current": "0",
             "recommended": "10",
         })
@@ -379,6 +389,7 @@ def run_full_check():
             "title": "Connection tracking is disabled",
             "detail": "CT_LIMIT protects against DDoS by blocking IPs with too many connections.",
             "setting": "CT_LIMIT",
+            "fix_value": "300",
             "current": "0",
             "recommended": "300",
         })
@@ -403,6 +414,7 @@ def run_full_check():
             "title": "Docker is running but DOCKER mode is OFF in CSF",
             "detail": "CSF will break Docker container networking. Enable DOCKER=1 immediately.",
             "setting": "DOCKER",
+            "fix_value": "1",
             "current": "0",
             "recommended": "1",
         })
@@ -489,6 +501,7 @@ def run_full_check():
             "title": "Server has IPv6 but CSF IPv6 firewall is disabled",
             "detail": "IPv6 traffic is not being firewalled. Enable IPV6 in csf.conf if your server uses IPv6.",
             "setting": "IPV6",
+            "fix_value": "1",
             "current": "0",
             "recommended": "1",
         })

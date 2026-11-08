@@ -56,6 +56,7 @@ def calculate_score():
                     "title": item["title"],
                     "detail": item.get("detail", ""),
                     "setting": item.get("setting"),
+                    "fix_value": item.get("fix_value"),
                     "category": cat["category"],
                 })
             elif item["status"] == "warn":
@@ -64,6 +65,7 @@ def calculate_score():
                     "title": item["title"],
                     "detail": item.get("detail", ""),
                     "setting": item.get("setting"),
+                    "fix_value": item.get("fix_value"),
                     "category": cat["category"],
                 })
 
