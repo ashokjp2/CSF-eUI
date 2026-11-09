@@ -1,9 +1,12 @@
 ﻿import os
 import re
 import subprocess
+from pathlib import Path
 
 CSF_IGNORE = "/etc/csf/csf.ignore"
 CSF_PIGNORE = "/etc/csf/csf.pignore"
+CSFPOST = "/etc/csf/csfpost.sh"
+DOCKER_RULE_MARKER = "# CSFV2-DOCKER-FORWARDING"
 
 
 def _run(cmd, timeout=10):
@@ -30,6 +33,38 @@ def detect_docker_networks():
         if subnet:
             networks.append({"name": name, "subnet": subnet, "type": "docker"})
     return networks
+
+
+def ensure_docker_forwarding_rules():
+    """Keep CSF from blocking Docker bridge and Swarm overlay forwarding."""
+    if not _run(["docker", "info", "--format", "{{.ID}}"]):
+        return {"success": True, "changed": False, "message": "Docker is not running."}
+    # Docker can restore Traefik's port bindings without restoring its network
+    # attachment after a daemon restart. Reconnect the existing proxy only
+    # when it has no network, preserving its configuration and volumes.
+    if _run(["docker", "ps", "-q", "-f", "name=^dokploy-traefik$"]):
+        networks = _run(["docker", "inspect", "dokploy-traefik",
+                         "--format", "{{json .NetworkSettings.Networks}}"])
+        if networks in ("{}", "null", ""):
+            _run(["docker", "network", "connect", "dokploy-network", "dokploy-traefik"])
+    path = Path(CSFPOST)
+    try:
+        existing = path.read_text() if path.exists() else ""
+        if DOCKER_RULE_MARKER in existing:
+            return {"success": True, "changed": False, "message": "Docker forwarding rules already installed."}
+        block = '''
+# CSFV2-DOCKER-FORWARDING
+# Preserve Docker bridge and Swarm overlay traffic when CSF reloads.
+for IFACE in docker0 docker_gwbridge ingress; do
+    iptables -C FORWARD -i "$IFACE" -j ACCEPT 2>/dev/null || iptables -I FORWARD 1 -i "$IFACE" -j ACCEPT
+    iptables -C FORWARD -o "$IFACE" -j ACCEPT 2>/dev/null || iptables -I FORWARD 1 -o "$IFACE" -j ACCEPT
+done
+'''
+        path.write_text(existing.rstrip() + block)
+        path.chmod(0o700)
+        return {"success": True, "changed": True, "message": "Docker forwarding rules installed."}
+    except OSError as exc:
+        return {"success": False, "changed": False, "message": str(exc)}
 
 
 def detect_wireguard_networks():

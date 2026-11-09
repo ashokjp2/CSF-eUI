@@ -85,7 +85,12 @@ def csf_stop():
     return run_csf(["-f"])
 
 def csf_restart():
-    return run_csf(["-sf"], timeout=300)
+    result = run_csf(["-sf"], timeout=300)
+    if result["success"]:
+        from csf_backend import service_integration
+        service_integration.ensure_docker_forwarding_rules()
+        service_integration._run(["/etc/csf/csfpost.sh"])
+    return result
 
 def csf_restart_q():
     return run_csf(["-q"], timeout=300)
