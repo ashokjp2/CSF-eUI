@@ -9,6 +9,54 @@ CSF_IGNORE = "/etc/csf/csf.ignore"
 CSF_PIGNORE = "/etc/csf/csf.pignore"
 CSFPOST = "/etc/csf/csfpost.sh"
 DOCKER_RULE_MARKER = "# CSFV2-DOCKER-FORWARDING"
+DOCKER_RULE_END_MARKER = "# END CSFV2-DOCKER-FORWARDING"
+
+
+def _docker_forwarding_block():
+    """Return the managed CSF hook for all active Docker bridge networks."""
+    return '''
+# CSFV2-DOCKER-FORWARDING
+# Preserve Docker bridge and Swarm overlay traffic when CSF reloads.
+# Coolify and Compose use dynamically named br-* interfaces, so do not assume
+# that the default docker0 bridge is the only Docker network on the host.
+DOCKER_IFACES="docker0 docker_gwbridge ingress"
+for IFACE in $(ip -o link show 2>/dev/null | awk -F': ' '$2 ~ /^br-[[:xdigit:]]+$/ {print $2}'); do
+    DOCKER_IFACES="$DOCKER_IFACES $IFACE"
+done
+for IFACE in $DOCKER_IFACES; do
+    [ -d "/sys/class/net/$IFACE" ] || continue
+    iptables -C FORWARD -i "$IFACE" -j ACCEPT 2>/dev/null || \\
+        iptables -I FORWARD 1 -i "$IFACE" -j ACCEPT
+    iptables -C FORWARD -o "$IFACE" -j ACCEPT 2>/dev/null || \\
+        iptables -I FORWARD 1 -o "$IFACE" -j ACCEPT
+    for SUBNET in $(ip -4 route show dev "$IFACE" scope link 2>/dev/null | awk '$1 ~ /^[0-9]+\\./ {print $1}'); do
+        iptables -t nat -C POSTROUTING -s "$SUBNET" ! -o "$IFACE" -j MASQUERADE 2>/dev/null || \\
+            iptables -t nat -A POSTROUTING -s "$SUBNET" ! -o "$IFACE" -j MASQUERADE
+    done
+done
+# END CSFV2-DOCKER-FORWARDING
+'''
+
+
+def _upsert_docker_forwarding_block(existing):
+    """Add or upgrade only the block previously managed by CSFv2."""
+    block = _docker_forwarding_block()
+    if DOCKER_RULE_END_MARKER in existing:
+        return existing, False
+
+    legacy_block = '''
+# CSFV2-DOCKER-FORWARDING
+# Preserve Docker bridge and Swarm overlay traffic when CSF reloads.
+for IFACE in docker0 docker_gwbridge ingress; do
+    iptables -C FORWARD -i "$IFACE" -j ACCEPT 2>/dev/null || iptables -I FORWARD 1 -i "$IFACE" -j ACCEPT
+    iptables -C FORWARD -o "$IFACE" -j ACCEPT 2>/dev/null || iptables -I FORWARD 1 -o "$IFACE" -j ACCEPT
+done
+'''
+    if legacy_block in existing:
+        return existing.replace(legacy_block, block, 1), True
+    if DOCKER_RULE_MARKER not in existing:
+        return existing.rstrip() + block, True
+    return existing, False
 
 
 def _run(cmd, timeout=10):
@@ -38,7 +86,7 @@ def detect_docker_networks():
 
 
 def ensure_docker_forwarding_rules():
-    """Keep CSF from blocking Docker bridge and Swarm overlay forwarding."""
+    """Keep CSF from blocking Docker bridge forwarding and container egress."""
     if not _run(["docker", "info", "--format", "{{.ID}}"]):
         return {"success": True, "changed": False, "message": "Docker is not running."}
     # Docker can restore Traefik's port bindings without restoring its network
@@ -52,19 +100,12 @@ def ensure_docker_forwarding_rules():
     path = Path(CSFPOST)
     try:
         existing = path.read_text() if path.exists() else ""
-        if DOCKER_RULE_MARKER in existing:
+        updated, changed = _upsert_docker_forwarding_block(existing)
+        if not changed:
             return {"success": True, "changed": False, "message": "Docker forwarding rules already installed."}
-        block = '''
-# CSFV2-DOCKER-FORWARDING
-# Preserve Docker bridge and Swarm overlay traffic when CSF reloads.
-for IFACE in docker0 docker_gwbridge ingress; do
-    iptables -C FORWARD -i "$IFACE" -j ACCEPT 2>/dev/null || iptables -I FORWARD 1 -i "$IFACE" -j ACCEPT
-    iptables -C FORWARD -o "$IFACE" -j ACCEPT 2>/dev/null || iptables -I FORWARD 1 -o "$IFACE" -j ACCEPT
-done
-'''
-        path.write_text(existing.rstrip() + block)
+        path.write_text(updated)
         path.chmod(0o700)
-        return {"success": True, "changed": True, "message": "Docker forwarding rules installed."}
+        return {"success": True, "changed": True, "message": "Docker forwarding rules installed or updated."}
     except OSError as exc:
         return {"success": False, "changed": False, "message": str(exc)}
 
