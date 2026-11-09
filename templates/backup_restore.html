@@ -19,6 +19,26 @@
             </div>
         </div>
 
+        <div class="panel panel-info">
+            <div class="panel-heading"><h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-upload"></span> Upload Backup</h4></div>
+            <div class="panel-body">
+                <form id="form-upload-backup" enctype="multipart/form-data">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <input type="file" class="form-control" id="upload-backup" name="backup_file" accept=".tar.gz,application/gzip,application/x-gzip" required>
+                            <p class="help-block">Upload a CSF <code>.tar.gz</code> backup (maximum 50 MB). The archive is validated before it is saved.</p>
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-info btn-block" id="btn-upload-backup">
+                                <span class="glyphicon glyphicon-upload"></span> Upload Backup
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <div class="panel panel-default">
             <div class="panel-heading">
                 <div class="pull-right">
@@ -68,6 +88,38 @@ $(function() {
             if (r.success) { $('#backup-label').val(''); load(); }
             btn.prop('disabled', false);
         }, 'json').fail(function() { showToast('Failed', 'danger'); btn.prop('disabled', false); });
+    });
+
+    $('#form-upload-backup').on('submit', function(e) {
+        e.preventDefault();
+        var file = $('#upload-backup')[0].files[0];
+        if (!file) { showToast('Select a backup file', 'warning'); return; }
+        if (file.size > 50 * 1024 * 1024) { showToast('Backup file is too large (maximum 50 MB)', 'warning'); return; }
+
+        var btn = $('#btn-upload-backup');
+        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Uploading...');
+        $.ajax({
+            url: '/api/backups/upload',
+            method: 'POST',
+            data: new FormData(this),
+            processData: false,
+            contentType: false,
+            headers: {'X-CSRFToken': $('meta[name="csrf-token"]').attr('content')},
+            success: function(r) {
+                if (r.success) {
+                    showToast(r.message, 'success');
+                    $('#upload-backup').val('');
+                    load();
+                } else {
+                    showToast(r.error || 'Upload failed', 'danger');
+                }
+                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-upload"></span> Upload Backup');
+            },
+            error: function(xhr) {
+                showToast((xhr.responseJSON && xhr.responseJSON.error) || 'Upload failed', 'danger');
+                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-upload"></span> Upload Backup');
+            }
+        });
     });
 
     $(document).on('click', '.btn-restore', function() {

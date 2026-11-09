@@ -4,8 +4,11 @@ import tarfile
 import time
 from datetime import datetime
 
+from werkzeug.utils import secure_filename
+
 CSF_DIR = "/etc/csf"
 BACKUP_DIR = "/var/lib/csfv2/backups"
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 BACKUP_FILES = [
     "csf.conf", "csf.allow", "csf.deny", "csf.ignore",
@@ -66,22 +69,94 @@ def create_backup(label=""):
     }
 
 
-def restore_backup(filename):
+def _backup_path(filename):
+    """Return a safe path for a stored backup filename, or None."""
+    if not filename or filename != os.path.basename(filename) or not filename.endswith(".tar.gz"):
+        return None
+    return os.path.join(BACKUP_DIR, filename)
+
+
+def _validate_archive(path):
+    """Validate that an archive contains only regular, expected CSF files."""
+    try:
+        with tarfile.open(path, "r:gz") as tar:
+            members = tar.getmembers()
+            if not members:
+                return False, "Backup archive is empty"
+
+            seen = set()
+            for member in members:
+                if member.name not in BACKUP_FILES:
+                    return False, f"Unexpected file in backup: {member.name}"
+                if member.name in seen:
+                    return False, f"Duplicate file in backup: {member.name}"
+                if not member.isfile():
+                    return False, f"Backup contains a non-regular file: {member.name}"
+                seen.add(member.name)
+    except (OSError, tarfile.TarError) as e:
+        return False, f"Invalid backup archive: {e}"
+    return True, ""
+
+
+def upload_backup(file_storage):
+    """Validate and save an uploaded CSF backup archive for later restore."""
+    if not file_storage or not getattr(file_storage, "filename", ""):
+        return {"success": False, "error": "Select a backup file to upload"}
+
+    original_name = secure_filename(file_storage.filename)
+    if not original_name or not original_name.endswith(".tar.gz"):
+        return {"success": False, "error": "Backup must be a .tar.gz file"}
+
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    label = original_name[:-7]
+    label = "".join(c for c in label if c.isalnum() or c in "-_")[:30] or "backup"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"csf_backup_{timestamp}_uploaded_{label}.tar.gz"
     path = os.path.join(BACKUP_DIR, filename)
-    if not os.path.isfile(path):
+    suffix = 2
+    while os.path.exists(path):
+        filename = f"csf_backup_{timestamp}_uploaded_{label}_{suffix}.tar.gz"
+        path = os.path.join(BACKUP_DIR, filename)
+        suffix += 1
+
+    try:
+        file_storage.save(path)
+        if os.path.getsize(path) > MAX_UPLOAD_BYTES:
+            os.unlink(path)
+            return {"success": False, "error": "Backup file is too large (maximum 50 MB)"}
+
+        valid, error = _validate_archive(path)
+        if not valid:
+            os.unlink(path)
+            return {"success": False, "error": error}
+    except OSError as e:
+        if os.path.exists(path):
+            os.unlink(path)
+        return {"success": False, "error": str(e)}
+
+    return {
+        "success": True,
+        "filename": filename,
+        "message": f"Backup uploaded: {filename}. Use Restore to apply it.",
+    }
+
+
+def restore_backup(filename):
+    path = _backup_path(filename)
+    if not path or not os.path.isfile(path):
         return {"success": False, "error": "Backup file not found"}
-    if not filename.endswith(".tar.gz"):
-        return {"success": False, "error": "Invalid backup file"}
+
+    valid, error = _validate_archive(path)
+    if not valid:
+        return {"success": False, "error": error}
 
     # Create a pre-restore backup first
-    create_backup(label="pre-restore")
+    safety_backup = create_backup(label="pre-restore")
+    if not safety_backup["success"]:
+        return {"success": False, "error": f"Failed to create safety backup: {safety_backup['error']}"}
 
     try:
         with tarfile.open(path, "r:gz") as tar:
-            members = tar.getnames()
-            for m in members:
-                if m.startswith("/") or ".." in m:
-                    return {"success": False, "error": "Invalid path in backup archive"}
             tar.extractall(CSF_DIR)
     except (OSError, tarfile.TarError) as e:
         return {"success": False, "error": str(e)}
@@ -94,16 +169,16 @@ def restore_backup(filename):
 
 
 def delete_backup(filename):
-    path = os.path.join(BACKUP_DIR, filename)
-    if not os.path.isfile(path):
+    path = _backup_path(filename)
+    if not path or not os.path.isfile(path):
         return {"success": False, "error": "Backup not found"}
     os.unlink(path)
     return {"success": True, "message": "Backup deleted"}
 
 
 def download_path(filename):
-    path = os.path.join(BACKUP_DIR, filename)
-    if os.path.isfile(path):
+    path = _backup_path(filename)
+    if path and os.path.isfile(path):
         return path
     return None
 

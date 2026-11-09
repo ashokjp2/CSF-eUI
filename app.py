@@ -2501,6 +2501,11 @@ def api_backups_create():
     data = request.get_json(force=True)
     return jsonify(backup_restore.create_backup(data.get("label", "")))
 
+@app.route("/api/backups/upload", methods=["POST"])
+@login_required
+def api_backups_upload():
+    return jsonify(backup_restore.upload_backup(request.files.get("backup_file")))
+
 @app.route("/api/backups/restore", methods=["POST"])
 @login_required
 def api_backups_restore():
