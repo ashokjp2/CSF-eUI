@@ -58,7 +58,7 @@ cd "$INSTALL_DIR"
 # ── Python environment ────────────────────────────────────────────────────────
 
 section "Installing application dependencies"
-apt-get install -y --quiet python3-venv python3-pip whois dnsutils curl wget perl perl6 ipset
+apt-get install -y --quiet python3-venv python3-pip whois dnsutils curl wget perl perl6 libwww-perl ipset sendmail
 $PYTHON -m venv "$INSTALL_DIR/venv"
 "$INSTALL_DIR/venv/bin/pip" install --quiet --upgrade pip
 "$INSTALL_DIR/venv/bin/pip" install --quiet -r "$INSTALL_DIR/requirements.txt"
@@ -312,13 +312,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=$INSTALL_DIR/venv/bin/python3 -c "
-import sys; sys.path.insert(0, '$INSTALL_DIR')
-from csf_backend import updater
-info = updater.get_version_info(force=True)
-if info.get('update_available'):
-    print(f'CSF-eUI update available: {info[\"current\"]} -> {info[\"latest\"]}')
-"
+ExecStart=$INSTALL_DIR/venv/bin/python3 $INSTALL_DIR/csf_backend/_version_check_runner.py
 EOF
 
 cat > /etc/systemd/system/${SERVICE_NAME}-update-check.timer <<EOF
@@ -337,7 +331,15 @@ EOF
 systemctl daemon-reload
 systemctl enable --now "${SERVICE_NAME}" || true
 systemctl enable --now "${SERVICE_NAME}-redirect" || true
-systemctl enable --now "${SERVICE_NAME}-update-check.timer" || true
+if systemctl enable --now "${SERVICE_NAME}-update-check.timer"; then
+    if systemctl is-active --quiet "${SERVICE_NAME}-update-check.timer"; then
+        info "Update-check timer is active."
+    else
+        warn "Update-check timer was enabled but is not active. Check: systemctl status ${SERVICE_NAME}-update-check.timer"
+    fi
+else
+    warn "Could not enable the update-check timer. Check: systemctl status ${SERVICE_NAME}-update-check.timer"
+fi
 
 # Give gunicorn a moment to bind, then check
 sleep 2
