@@ -512,11 +512,14 @@ $(function() {
                         '<td>' + typeBadge + '</td>' +
                         '<td style="font-size:11px" title="' + (e.comment || '').replace(/"/g, '&quot;') + '">' + reason + '</td>' +
                         '<td>' +
-                        '<button class="btn btn-xs btn-success blocked-unblock" data-ip="' + e.ip + '" title="Unblock"><span class="glyphicon glyphicon-ok"></span></button> ' +
+                        '<button class="btn btn-xs btn-warning blocked-unblock" data-ip="' + e.ip + '" title="Remove block"><span class="glyphicon glyphicon-remove"></span></button> ' +
                         '<a href="/ip-lookup?ip=' + e.ip + '" class="btn btn-xs btn-info" title="Lookup"><span class="glyphicon glyphicon-search"></span></a>' +
                         '</td></tr>';
                 });
                 html += '</tbody></table></div>';
+                html += '<div class="text-right" style="margin-top:10px">' +
+                    '<button class="btn btn-sm btn-danger" id="flush-deny-list">' +
+                    '<span class="glyphicon glyphicon-trash"></span> Clear permanent deny list</button></div>';
 
                 $('#statDetailBody').html(html).show();
 
@@ -543,17 +546,36 @@ $(function() {
                 $('#blocked-search').on('input', filterBlocked);
                 $('#blocked-search-btn').on('click', filterBlocked);
 
+                $('#flush-deny-list').on('click', function() {
+                    if (!confirm('Remove all permanent IPs from the deny list? Temporary blocks will not be affected.')) return;
+                    var btn = $(this);
+                    btn.prop('disabled', true);
+                    $.post('/api/deny/flush', function(r) {
+                        if (r.success) {
+                            showToast('Permanent deny list cleared', 'success');
+                            $('#statDetailModal').modal('hide');
+                            location.reload();
+                        } else {
+                            showToast(r.error || r.stderr || 'Failed to clear deny list', 'danger');
+                            btn.prop('disabled', false);
+                        }
+                    }).fail(function(xhr) {
+                        showToast((xhr.responseJSON && (xhr.responseJSON.error || xhr.responseJSON.stderr)) || 'Failed to clear deny list', 'danger');
+                        btn.prop('disabled', false);
+                    });
+                });
+
                 $(document).off('click', '.blocked-unblock').on('click', '.blocked-unblock', function() {
                     var btn = $(this);
                     var ip = btn.data('ip');
-                    if (!confirm('Unblock ' + ip + '?')) return;
+                    if (!confirm('Remove block for ' + ip + '?')) return;
                     btn.prop('disabled', true);
                     $.post('/quick/unblock', {ip: ip}, function(r) {
                         if (r.success) {
                             btn.closest('tr').fadeOut(300, function() { $(this).remove(); });
-                            showToast(ip + ' unblocked', 'success');
+                            showToast(ip + ' removed from the deny list', 'success');
                         } else {
-                            showToast(r.error || 'Failed', 'danger');
+                            showToast(r.error || r.stderr || 'Failed to remove block', 'danger');
                             btn.prop('disabled', false);
                         }
                     });

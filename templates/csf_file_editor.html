@@ -339,6 +339,11 @@
         <a href="/files/{{ filetype }}?raw=1" class="btn btn-default">
             <span class="glyphicon glyphicon-pencil"></span> Raw File Editor
         </a>
+        {% if filetype == 'deny' %}
+        <button class="btn btn-danger" id="flush-deny-list">
+            <span class="glyphicon glyphicon-trash"></span> Clear deny list
+        </button>
+        {% endif %}
     </div>
     <div class="col-sm-6 text-right">
         <button class="btn btn-warning" id="restart-btn">
@@ -526,6 +531,27 @@
             btn.prop('disabled', false).html('<span class="glyphicon glyphicon-refresh"></span> Restart CSF + LFD');
         });
     });
+
+    {% if filetype == 'deny' %}
+    $('#flush-deny-list').on('click', function() {
+        if (!confirm('Remove all permanent IPs from the deny list? Temporary blocks will not be affected.')) return;
+        var btn = $(this);
+        btn.prop('disabled', true);
+        $.post('/api/deny/flush', function(resp) {
+            if (resp.success) {
+                entries = [];
+                renderTable();
+                showAlert('success', 'Permanent deny list cleared');
+            } else {
+                showAlert('danger', resp.error || resp.stderr || 'Failed to clear deny list');
+                btn.prop('disabled', false);
+            }
+        }).fail(function(xhr) {
+            showAlert('danger', (xhr.responseJSON && xhr.responseJSON.error) || 'Request failed');
+            btn.prop('disabled', false);
+        });
+    });
+    {% endif %}
 
 })();
 </script>

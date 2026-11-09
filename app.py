@@ -313,11 +313,19 @@ def quick_unblock():
         flash("IP address required", "danger")
         return redirect("/")
     result = csf.unblock_ip(ip)
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify(result)
     if result["success"]:
         flash(f"Unblocked {ip}", "success")
     else:
         flash(result["stderr"], "danger")
     return redirect("/")
+
+
+@app.route("/api/deny/flush", methods=["POST"])
+@login_required
+def api_flush_deny():
+    return jsonify(csf.flush_deny())
 
 
 @app.route("/quick/search", methods=["POST"])

@@ -154,6 +154,10 @@ def unblock_ip(ip):
         "returncode": 0 if r1["success"] or r2["success"] else 1,
     }
 
+def flush_deny():
+    """Remove all permanent entries from csf.deny."""
+    return run_csf(["-df"])
+
 def search_ip(ip):
     return run_csf(["-g", ip])
 

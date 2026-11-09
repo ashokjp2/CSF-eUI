@@ -283,8 +283,13 @@ def run_update_stream(force=False):
     # Restart service
     yield from _sse("")
     yield from _sse("Restarting CSF-eUI service...")
+    # Run the restart in a separate transient systemd unit. Restarting the
+    # current service directly terminates this updater process with SIGTERM
+    # when systemd stops csfv2, which makes a successful update look failed.
     proc = subprocess.Popen(
-        ["systemctl", "restart", "csfv2"],
+        ["systemd-run", "--quiet", "--no-block",
+         f"--unit=csfv2-update-restart-{os.getpid()}",
+         "systemctl", "restart", "csfv2"],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -295,10 +300,10 @@ def run_update_stream(force=False):
 
     if rc == 0:
         yield from _sse("")
-        yield from _sse("=== Update complete! Service restarted. ===")
+        yield from _sse("=== Update complete! Restart scheduled. ===")
         yield from _sse("Refresh this page in a few seconds.")
         yield "data: __DONE_OK__\n\n"
     else:
-        yield from _sse(f"Service restart failed (exit {rc}).")
+        yield from _sse(f"Service restart scheduling failed (exit {rc}).")
         yield from _sse("Run manually: systemctl restart csfv2")
         yield "data: __DONE_ERROR__\n\n"
