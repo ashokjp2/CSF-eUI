@@ -490,7 +490,7 @@ var HELP = {
     PT_USERPROC: 'Max processes per user before alerting. 0=disabled.',
     PT_USERMEM: 'Max memory (MB) per user. 0=disabled.',
     PT_USERRSS: 'Max RSS memory (MB) per user. 0=disabled.',
-    PT_USERTIME: 'Max CPU seconds per user process. 0=disabled.',
+    PT_USERTIME: 'Max wall-clock runtime in seconds per user process. 0=disabled. Long-running service daemons are noisy at low values.',
     PT_USERKILL: 'Kill processes exceeding limits instead of just alerting.',
     PT_USERKILL_ALERT: 'Email alert when a process is killed.',
     PT_USER_ACTION: 'Script to run instead of killing (path to script).',
@@ -1275,7 +1275,7 @@ $(function() {
         PT_USERPROC_ALERT:   'Alert after this many excess processes, e.g. 60',
         PT_USERMEM:          'Max RSS memory per user (MB), e.g. 512 (0 = disabled)',
         PT_USERRSS:          'Max RSS memory per user (MB), e.g. 512',
-        PT_USERTIME:         'Max process CPU time (seconds), e.g. 1800 (0 = disabled)',
+        PT_USERTIME:         'Max process wall-clock runtime (seconds), e.g. 1800 (0 = disabled)',
         PT_FORKBOMB:         '0 to disable, or 100–1000 (e.g. 250)',
         PT_FORKBOMB_ALERT:   'Process count threshold for fork bomb detection, e.g. 250',
         /* ── Port scan ───────────────────────────────────────────────── */

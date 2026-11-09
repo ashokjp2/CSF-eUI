@@ -64,6 +64,28 @@ $PYTHON -m venv "$INSTALL_DIR/venv"
 "$INSTALL_DIR/venv/bin/pip" install --quiet -r "$INSTALL_DIR/requirements.txt"
 info "Python environment ready."
 
+# ── CSF-eUI LFD defaults and supported-service exemptions ────────────────────
+
+section "Configuring LFD for supported services"
+
+# CSF's stock 1800-second user-process runtime threshold flags normal daemons
+# such as rsyslogd and systemd-networkd. Preserve explicit custom values, but
+# remove the known noisy stock default on new/stock CSF configurations.
+if grep -qE '^PT_USERTIME[[:space:]]*=[[:space:]]*"?1800"?[[:space:]]*$' /etc/csf/csf.conf 2>/dev/null; then
+    sed -i 's/^PT_USERTIME[[:space:]]*=.*/PT_USERTIME = "0"/' /etc/csf/csf.conf
+    info "Disabled the noisy stock PT_USERTIME=1800 process-alert default."
+fi
+
+# Keep this list in the application so install-time and UI auto-fix behavior
+# cannot drift apart as Docker/WireGuard/NetBird support grows.
+"$INSTALL_DIR/venv/bin/python3" -c "
+import sys
+sys.path.insert(0, '$INSTALL_DIR')
+from csf_backend.service_integration import apply_supported_process_ignores
+result = apply_supported_process_ignores()
+print(result.get('message', 'Supported-service process exemptions applied.'))
+" || warn "Could not apply supported-service process exemptions; use Quick Config > Services to retry."
+
 # ── Directories ───────────────────────────────────────────────────────────────
 
 mkdir -p "$CONF_DIR" "$SSL_DIR" "$SESSION_DIR"

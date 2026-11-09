@@ -2,6 +2,8 @@
 import re
 import subprocess
 from pathlib import Path
+import pwd
+import shutil
 
 CSF_IGNORE = "/etc/csf/csf.ignore"
 CSF_PIGNORE = "/etc/csf/csf.pignore"
@@ -128,6 +130,90 @@ def get_csf_pignore_entries():
     return entries
 
 
+def get_supported_process_ignores():
+    """Return safe process exemptions for supported CSF-EUI workloads."""
+    rules = [
+        ("exe:/usr/sbin/rsyslogd", "system logging daemon"),
+        ("exe:/usr/lib/systemd/systemd-networkd", "systemd network daemon"),
+        ("exe:/lib/systemd/systemd-networkd", "systemd network daemon"),
+        ("exe:/usr/lib/systemd/systemd-timesyncd", "systemd time synchronization"),
+        ("exe:/usr/lib/systemd/systemd-resolved", "systemd DNS resolver"),
+        ("exe:/lib/systemd/systemd-resolved", "systemd DNS resolver"),
+        ("exe:/usr/sbin/sshd", "OpenSSH server"),
+        ("exe:/usr/bin/dockerd", "Docker daemon"),
+        ("exe:/usr/bin/containerd", "Docker container runtime"),
+        ("pexe:/usr/bin/containerd-shim.*", "Docker container shims"),
+        ("pexe:/usr/bin/docker-proxy", "Docker published-port proxy"),
+        ("pexe:/usr/local/bin/traefik", "Traefik reverse proxy"),
+        ("pexe:/usr/bin/traefik", "Traefik reverse proxy"),
+        ("pexe:/usr/local/bin/netbird", "NetBird VPN daemon"),
+        ("pexe:/usr/bin/netbird", "NetBird VPN daemon"),
+        ("pexe:/usr/local/bin/wireguard-ui", "WireGuard UI"),
+        ("pexe:/usr/bin/wireguard-ui", "WireGuard UI"),
+        ("pexe:/usr/local/bin/node.*", "Node.js application processes"),
+        ("pexe:/usr/bin/node.*", "Node.js application processes"),
+        ("exe:/usr/bin/redis-server", "Redis service"),
+        ("user:postgres", "PostgreSQL service user"),
+        ("user:www-data", "web service user"),
+        ("user:_mta-sts", "MTA-STS service user"),
+        ("user:netbird", "NetBird service user"),
+        ("user:wireguard-ui", "WireGuard UI service user"),
+    ]
+
+    optional_paths = {
+        "/usr/sbin/rsyslogd", "/usr/lib/systemd/systemd-networkd",
+        "/lib/systemd/systemd-networkd", "/usr/lib/systemd/systemd-timesyncd",
+        "/usr/lib/systemd/systemd-resolved", "/lib/systemd/systemd-resolved",
+        "/usr/sbin/sshd", "/usr/bin/dockerd", "/usr/bin/containerd",
+        "/usr/bin/containerd-shim-runc-v2", "/usr/bin/docker-proxy",
+        "/usr/local/bin/traefik", "/usr/bin/traefik", "/usr/local/bin/netbird",
+        "/usr/bin/netbird", "/usr/local/bin/wireguard-ui", "/usr/bin/wireguard-ui",
+        "/usr/bin/redis-server", "/usr/local/bin/node", "/usr/bin/node",
+    }
+    for command in ("dockerd", "containerd", "docker-proxy", "traefik", "netbird", "wireguard-ui"):
+        resolved = shutil.which(command)
+        if resolved:
+            optional_paths.add(resolved)
+    installed = {path for path in optional_paths if os.path.exists(path)}
+
+    selected = []
+    for entry, label in rules:
+        if entry.startswith("exe:"):
+            if entry[4:] in installed:
+                selected.append({"entry": entry, "label": label})
+        elif entry.startswith("pexe:"):
+            prefix = entry[5:].split(".*", 1)[0]
+            if any(path.startswith(prefix) for path in installed):
+                selected.append({"entry": entry, "label": label})
+        elif entry.startswith("user:"):
+            try:
+                pwd.getpwnam(entry[5:])
+            except KeyError:
+                continue
+            selected.append({"entry": entry, "label": label})
+
+    selected.extend([
+        {"entry": "pexe:/usr/lib/postgresql/.*/bin/postgres", "label": "PostgreSQL containers"},
+        {"entry": "exe:/usr/sbin/nginx", "label": "Nginx containers"},
+    ])
+    return selected
+
+
+def apply_supported_process_ignores():
+    """Idempotently add supported workload rules to csf.pignore."""
+    existing = set(get_csf_pignore_entries())
+    added = []
+    for proc in get_supported_process_ignores():
+        entry = proc["entry"]
+        if entry in existing:
+            continue
+        result = add_to_csf_pignore(entry, f"CSF-EUI: {proc['label']}")
+        if result.get("success"):
+            existing.add(entry)
+            added.append(entry)
+    return {"success": True, "added": added, "message": f"Applied {len(added)} supported-service process exemptions."}
+
+
 def add_to_csf_ignore(subnet, comment=""):
     entries = get_csf_ignore_entries()
     clean = subnet.strip()
@@ -189,14 +275,7 @@ def get_integration_status():
     for svc in detected:
         svc["ignored"] = svc["subnet"] in ignored
 
-    common_processes = [
-        {"entry": "pexe:/usr/lib/postgresql/.*/bin/postgres", "label": "PostgreSQL", "ignored": False},
-        {"entry": "exe:/usr/sbin/nginx", "label": "Nginx", "ignored": False},
-        {"entry": "pexe:/usr/local/bin/node.*", "label": "Node.js", "ignored": False},
-        {"entry": "exe:/usr/bin/redis-server", "label": "Redis", "ignored": False},
-        {"entry": "user:postgres", "label": "postgres user", "ignored": False},
-        {"entry": "user:www-data", "label": "www-data user", "ignored": False},
-    ]
+    common_processes = [dict(proc, ignored=False) for proc in get_supported_process_ignores()]
     for proc in common_processes:
         proc["ignored"] = proc["entry"] in pignored
 
@@ -436,16 +515,10 @@ def auto_fix_all():
             r = add_to_csf_ignore(svc["subnet"], f"{svc['type']}: {svc['name']}")
             results.append({"subnet": svc["subnet"], "name": svc["name"], "result": r})
 
-    common_pignore = [
-        ("pexe:/usr/lib/postgresql/.*/bin/postgres", "PostgreSQL containers"),
-        ("exe:/usr/sbin/nginx", "Nginx containers"),
-        ("pexe:/usr/local/bin/node.*", "Node.js containers"),
-        ("exe:/usr/bin/redis-server", "Redis containers"),
-        ("user:postgres", "postgres user"),
-        ("user:www-data", "www-data user"),
-    ]
     pignored = get_csf_pignore_entries()
-    for entry, comment in common_pignore:
+    for proc in get_supported_process_ignores():
+        entry = proc["entry"]
+        comment = proc["label"]
         if entry not in pignored:
             r = add_to_csf_pignore(entry, comment)
             results.append({"entry": entry, "name": comment, "result": r})
