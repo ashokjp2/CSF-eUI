@@ -13,7 +13,7 @@
     <li><a data-toggle="tab" href="#cloudflare"><span class="glyphicon glyphicon-cloud"></span> CloudFlare</a></li>
     <li><a data-toggle="tab" href="#security"><span class="glyphicon glyphicon-lock"></span> Security</a></li>
     <li><a data-toggle="tab" href="#dyndns"><span class="glyphicon glyphicon-globe"></span> Dynamic DNS</a></li>
-    <li><a data-toggle="tab" href="#services"><span class="glyphicon glyphicon-link"></span> Service Integration</a></li>
+    <li><a data-toggle="tab" href="#services"><span class="glyphicon glyphicon-link"></span> Services &amp; LFD</a></li>
     <li><a data-toggle="tab" href="#monitors"><span class="glyphicon glyphicon-eye-open"></span> Docker Monitors</a></li>
     <li><a data-toggle="tab" href="#misc"><span class="glyphicon glyphicon-cog"></span> General</a></li>
 </ul>
@@ -574,7 +574,7 @@
     <div class="panel panel-default">
         <div class="panel-heading">
             <h4>
-                <span class="glyphicon glyphicon-link"></span> Service Integration
+                <span class="glyphicon glyphicon-link"></span> Services &amp; LFD
                 <button class="btn btn-sm btn-info pull-right" id="detect-services-btn">
                     <span class="glyphicon glyphicon-refresh"></span> Detect Services
                 </button>
@@ -610,8 +610,8 @@
             </div>
 
             <hr>
-            <h5><span class="glyphicon glyphicon-flash"></span> Quick Fix: Whitelist All Detected Services</h5>
-            <p class="text-muted" style="font-size:12px">One-click fix: adds all detected Docker/WireGuard/Netbird networks to csf.ignore AND common container processes (PostgreSQL, Nginx, Node.js, Redis) to csf.pignore so LFD stops flagging them.</p>
+            <h5><span class="glyphicon glyphicon-flash"></span> Quick Fix: Services &amp; LFD Noise</h5>
+            <p class="text-muted" style="font-size:12px">One-click fix: whitelists detected Docker/WireGuard/Netbird networks and supported service processes, and changes the noisy stock PT_USERTIME=1800 setting to 0. Explicit custom thresholds are preserved.</p>
             <button class="btn btn-success" id="autofix-services-btn">
                 <span class="glyphicon glyphicon-ok-circle"></span> Auto-Fix All Services
             </button>

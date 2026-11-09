@@ -507,6 +507,8 @@ def add_service_ports(tcp_ports, udp_ports):
 
 
 def auto_fix_all():
+    from csf_backend import csf_wrapper as csf
+
     results = []
     detected = detect_all_services()
     ignored = get_csf_ignore_entries()
@@ -514,6 +516,17 @@ def auto_fix_all():
         if svc["subnet"] not in ignored:
             r = add_to_csf_ignore(svc["subnet"], f"{svc['type']}: {svc['name']}")
             results.append({"subnet": svc["subnet"], "name": svc["name"], "result": r})
+
+    # CSF's stock 1800-second threshold creates noise from normal daemons.
+    # Only change that known stock value; preserve deliberate custom tuning.
+    conf = csf.load_csf_conf()
+    if conf.get("PT_USERTIME") == "1800":
+        r = csf.save_csf_conf({"PT_USERTIME": "0"})
+        results.append({
+            "setting": "PT_USERTIME",
+            "name": "Disable noisy 30-minute process-runtime alerts",
+            "result": r,
+        })
 
     pignored = get_csf_pignore_entries()
     for proc in get_supported_process_ignores():
