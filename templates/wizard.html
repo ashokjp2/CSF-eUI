@@ -68,12 +68,14 @@
 
                     {% if step.status != 'done' %}
                     {% if step.setting is defined %}
-                    <!-- CSF setting — can be applied directly -->
+                    <!-- CSF or SSH setting — can be applied directly -->
                     <div class="form-inline" style="margin-top:10px">
                         <div class="form-group">
                             <label>Set {{ step.setting }} to:</label>
-                            <input type="text" class="form-control wiz-val" id="val-{{ step.id }}"
-                                   placeholder="{{ step.recommended }}" style="width:200px; margin-left:8px">
+                            <input type="{{ step.input_type|default('text') }}" class="form-control wiz-val" id="val-{{ step.id }}"
+                                   placeholder="{{ step.input_placeholder|default(step.recommended) }}"
+                                   {% if step.input_type == 'number' %}min="1" max="65535"{% endif %}
+                                   style="width:200px; margin-left:8px">
                         </div>
                         <button class="btn btn-primary wiz-apply" data-step="{{ step.id }}" data-setting="{{ step.setting }}" style="margin-left:8px">
                             <span class="glyphicon glyphicon-ok"></span> Apply
@@ -82,8 +84,7 @@
                     {% elif step.category == 'ssh' %}
                     <div class="alert alert-warning" style="margin-bottom:0">
                         <span class="glyphicon glyphicon-warning-sign"></span>
-                        <strong>Manual Step:</strong> SSH settings must be changed in <code>/etc/ssh/sshd_config</code> and SSHD restarted.
-                        Make sure you have an active SSH session before changing these, or you could lose access!
+                        <strong>Manual Step:</strong> Make sure you have an active SSH session before changing this setting, or you could lose access!
                     </div>
                     {% endif %}
                     {% else %}

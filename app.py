@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import sys
+import subprocess
 import secrets
 import functools
 import threading
@@ -1590,7 +1591,7 @@ def api_health():
 
 
 _SSH_FIX_SETTINGS = {
-    "PermitRootLogin", "PasswordAuthentication", "X11Forwarding", "MaxAuthTries",
+    "Port", "PermitRootLogin", "PasswordAuthentication", "X11Forwarding", "MaxAuthTries",
 }
 _CSF_FIX_SETTINGS = {
     "TESTING", "RESTRICT_SYSLOG", "LF_SSHD", "LF_FTPD", "LF_PERMBLOCK",
@@ -2074,6 +2075,14 @@ def wizard_apply():
     value = data.get("value", "")
     if not setting or not value:
         return jsonify({"success": False, "error": "Setting and value required"})
+    if str(setting).lower() in security_check.SSHD_SAFE_SETTINGS:
+        result = security_check.update_sshd_setting(setting, value)
+        if result.get("success"):
+            audit_log.log_event(
+                "config", session.get("username", ""), request.remote_addr,
+                f"Wizard SSHD {setting}={value}",
+            )
+        return jsonify(result)
     csf.save_csf_conf({setting: value})
     return jsonify({"success": True, "message": f"{setting} set to {value}. Restart CSF to apply."})
 

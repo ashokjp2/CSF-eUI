@@ -2,6 +2,8 @@ import os
 import re
 import subprocess
 
+from csf_backend import security_check
+
 
 def _run(cmd, timeout=10):
     try:
@@ -57,17 +59,32 @@ def get_wizard_state():
     steps = []
 
     # Step 1: SSH Port
-    ssh_port = _get_sshd_val("Port") or "22"
+    ssh_status = security_check.get_ssh_port_status()
+    ssh_port = ssh_status["configured_port"] or _get_sshd_val("Port") or "22"
+    listening_ports = ssh_status["listening_ports"]
+    ssh_runtime_mismatch = bool(
+        listening_ports and str(ssh_port) not in listening_ports
+    )
+    ssh_current = str(ssh_port)
+    if ssh_runtime_mismatch:
+        ssh_current = f"configured: {ssh_port}; listening: {', '.join(listening_ports)}"
     steps.append({
         "id": "ssh_port",
         "title": "Change SSH Port",
         "description": "Move SSH away from the default port 22 to reduce automated attacks.",
-        "status": "done" if ssh_port != "22" else "todo",
-        "current": ssh_port,
-        "recommended": "A non-standard port (e.g. 2222, 8022)",
+        "status": "done" if ssh_port != "22" and not ssh_runtime_mismatch else "todo",
+        "current": ssh_current,
+        "recommended": "858 (or another unused port)",
         "risk": "high",
         "category": "ssh",
-        "help": "Port 22 is scanned by bots constantly. Changing it drastically reduces brute-force noise. Make sure to add the new port to TCP_IN before changing!",
+        "setting": "Port",
+        "input_type": "number",
+        "input_placeholder": "e.g. 858",
+        "help": (
+            "Port 22 is scanned by bots constantly. CSF-EUI updates both sshd and "
+            "systemd ssh.socket when socket activation is enabled. Make sure you have "
+            "an active SSH session and keep the new port allowed in TCP_IN."
+        ),
     })
 
     # Step 2: SSH Root Login

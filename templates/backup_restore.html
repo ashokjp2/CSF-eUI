@@ -15,7 +15,7 @@
                         </button>
                     </span>
                 </div>
-                <p class="help-block">Backs up all CSF config files from /etc/csf/</p>
+                <p class="help-block">Backs up all CSF config files from /etc/csf/ and the active SSL certificate/key when managed by CSFv2.</p>
             </div>
         </div>
 
@@ -27,7 +27,7 @@
                     <div class="row">
                         <div class="col-md-8">
                             <input type="file" class="form-control" id="upload-backup" name="backup_file" accept=".tar.gz,application/gzip,application/x-gzip" required>
-                            <p class="help-block">Upload a CSF <code>.tar.gz</code> backup (maximum 50 MB). The archive is validated before it is saved.</p>
+                            <p class="help-block">Upload a CSF <code>.tar.gz</code> backup (maximum 50 MB). CSF and SSL contents are validated before it is saved.</p>
                         </div>
                         <div class="col-md-4">
                             <button type="submit" class="btn btn-info btn-block" id="btn-upload-backup">
@@ -50,7 +50,7 @@
             </div>
             <div class="table-responsive">
                 <table class="table table-condensed table-hover" style="font-size:12px">
-                    <thead><tr><th>Filename</th><th>Created</th><th>Size</th><th>Actions</th></tr></thead>
+                    <thead><tr><th>Filename</th><th>Created</th><th>Size</th><th>SSL</th><th>Actions</th></tr></thead>
                     <tbody id="backup-table"></tbody>
                 </table>
             </div>
@@ -68,13 +68,14 @@ $(function() {
                     '<td><code>' + b.filename + '</code></td>' +
                     '<td>' + b.created + '</td>' +
                     '<td>' + b.size_human + '</td>' +
+                    '<td>' + (b.ssl_included ? '<span class="label label-success">Included</span>' : '—') + '</td>' +
                     '<td>' +
                     '<a href="/api/backups/download/' + encodeURIComponent(b.filename) + '" class="btn btn-xs btn-default"><span class="glyphicon glyphicon-download"></span></a> ' +
                     '<button class="btn btn-xs btn-warning btn-restore" data-file="' + b.filename + '"><span class="glyphicon glyphicon-open"></span> Restore</button> ' +
                     '<button class="btn btn-xs btn-danger btn-delete" data-file="' + b.filename + '"><span class="glyphicon glyphicon-trash"></span></button>' +
                     '</td></tr>';
             });
-            $('#backup-table').html(html || '<tr><td colspan="4" class="text-muted">No backups yet</td></tr>');
+            $('#backup-table').html(html || '<tr><td colspan="5" class="text-muted">No backups yet</td></tr>');
         });
     }
     load();

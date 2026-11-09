@@ -63,6 +63,52 @@ SSHD_SAFE_SETTINGS = {
 }
 
 
+def _active_ssh_socket():
+    """Return the active systemd socket unit used to accept SSH connections."""
+    for unit in ("ssh.socket", "sshd.socket"):
+        try:
+            check = subprocess.run(
+                ["systemctl", "is-active", unit],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if check.returncode == 0 and check.stdout.strip() == "active":
+            return unit
+    return None
+
+
+def _listening_ports():
+    """Return TCP ports currently listening on the host."""
+    output = _run(["ss", "-ltn"])
+    ports = set()
+    for line in output.splitlines():
+        for match in re.finditer(r":(\d+)\b", line):
+            ports.add(match.group(1))
+    return sorted(ports, key=int)
+
+
+def get_ssh_port_status():
+    """Return configured, systemd-socket, and runtime SSH port information."""
+    configured = ""
+    effective = _run(["sshd", "-T"])
+    for line in effective.splitlines():
+        parts = line.split(None, 1)
+        if len(parts) == 2 and parts[0].lower() == "port":
+            configured = parts[1].strip()
+            break
+    if not configured:
+        configured = _get_sshd_config().get("port", "")
+
+    return {
+        "configured_port": configured,
+        "listening_ports": _listening_ports(),
+        "socket_unit": _active_ssh_socket(),
+    }
+
+
 def update_sshd_setting(key, value):
     key_lower = key.lower()
     if key_lower not in SSHD_SAFE_SETTINGS:
@@ -142,7 +188,7 @@ def update_sshd_setting(key, value):
                 except OSError:
                     pass
 
-    # For port changes, add new port to CSF TCP_IN and update systemd socket
+    # For port changes, add new port to CSF TCP_IN and update systemd socket.
     if key_lower == "port":
         try:
             csf_conf_path = "/etc/csf/csf.conf"
@@ -161,15 +207,11 @@ def update_sshd_setting(key, value):
             subprocess.run(["csf", "-r"], capture_output=True, text=True, timeout=30)
         except Exception:
             pass
-        socket_override = "/etc/systemd/system/ssh.socket.d/port.conf"
-        socket_unit = None
-        for name in ["ssh.socket", "sshd.socket"]:
-            chk = subprocess.run(["systemctl", "is-active", name],
-                                 capture_output=True, text=True, timeout=5)
-            if chk.stdout.strip() == "active":
-                socket_unit = name
-                break
+        socket_unit = _active_ssh_socket()
         if socket_unit:
+            socket_override = os.path.join(
+                "/etc/systemd/system", f"{socket_unit}.d", "port.conf"
+            )
             os.makedirs(os.path.dirname(socket_override), exist_ok=True)
             with open(socket_override, "w") as f:
                 f.write(f"[Socket]\nListenStream=\nListenStream=0.0.0.0:{value}\nListenStream=[::]:{value}\n")
@@ -191,6 +233,24 @@ def update_sshd_setting(key, value):
 
     msg = f"{key} set to {value}. sshd restarted."
     if key_lower == "port":
+        runtime = get_ssh_port_status()
+        listening = runtime["listening_ports"]
+        if str(value) not in listening:
+            return {
+                "success": False,
+                "error": (
+                    f"sshd was restarted, but port {value} is not listening. "
+                    f"Current listening ports: {', '.join(listening) or 'none'}."
+                ),
+            }
+        if str(value) != "22" and "22" in listening:
+            return {
+                "success": False,
+                "error": (
+                    f"Port {value} is listening, but port 22 is still open. "
+                    "The systemd SSH socket may still be configured for port 22."
+                ),
+            }
         msg += f" SSH is now on port {value}. Update your SSH client connection."
     return {"success": True, "message": msg}
 
@@ -204,8 +264,24 @@ def run_full_check():
     checks.append({"category": "SSH Hardening", "items": []})
     cat = checks[-1]["items"]
 
-    port = sshd.get("port", "22")
-    if port == "22":
+    port_status = get_ssh_port_status()
+    port = port_status["configured_port"] or sshd.get("port", "22")
+    listening_ports = port_status["listening_ports"]
+    if listening_ports and str(port) not in listening_ports:
+        cat.append({
+            "status": "fail",
+            "title": f"SSH is configured for port {port} but not listening there",
+            "detail": (
+                f"The effective sshd configuration uses port {port}, but the server is "
+                f"listening on {', '.join(listening_ports)}. This commonly happens when "
+                "systemd ssh.socket is still bound to the old port."
+            ),
+            "setting": "Port",
+            "current": f"configured: {port}; listening: {', '.join(listening_ports)}",
+            "recommended": "Use the SSH port editor to apply the port and socket together",
+            "fix_value": port,
+        })
+    elif port == "22":
         cat.append({
             "status": "warn",
             "title": "SSH running on default port 22",

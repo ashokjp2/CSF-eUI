@@ -1,6 +1,10 @@
+import io
+import json
 import os
+import shutil
 import subprocess
 import tarfile
+import tempfile
 import time
 from datetime import datetime
 
@@ -9,6 +13,8 @@ from werkzeug.utils import secure_filename
 CSF_DIR = "/etc/csf"
 BACKUP_DIR = "/var/lib/csfv2/backups"
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+SSL_ARCHIVE_FILES = ("ssl/certificate.pem", "ssl/private-key.pem", "ssl/paths.json")
+SSL_ALLOWED_ROOTS = ("/etc/csfv2/ssl", "/etc/letsencrypt/live")
 
 BACKUP_FILES = [
     "csf.conf", "csf.allow", "csf.deny", "csf.ignore",
@@ -34,18 +40,26 @@ def list_backups():
         if f.endswith(".tar.gz"):
             path = os.path.join(BACKUP_DIR, f)
             stat = os.stat(path)
+            ssl_included = False
+            try:
+                with tarfile.open(path, "r:gz") as tar:
+                    ssl_included = set(SSL_ARCHIVE_FILES).issubset({member.name for member in tar.getmembers()})
+            except (OSError, tarfile.TarError):
+                pass
             backups.append({
                 "filename": f,
                 "path": path,
                 "size": stat.st_size,
                 "size_human": _human_size(stat.st_size),
                 "created": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+                "ssl_included": ssl_included,
             })
     return backups
 
 
 def create_backup(label=""):
     os.makedirs(BACKUP_DIR, exist_ok=True)
+    os.chmod(BACKUP_DIR, 0o700)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     name = f"csf_backup_{ts}"
     if label:
@@ -53,20 +67,73 @@ def create_backup(label=""):
         name = f"csf_backup_{ts}_{safe}"
     tarpath = os.path.join(BACKUP_DIR, f"{name}.tar.gz")
 
+    ssl_paths = _active_ssl_paths()
     try:
         with tarfile.open(tarpath, "w:gz") as tar:
             for fname in BACKUP_FILES:
                 fpath = os.path.join(CSF_DIR, fname)
                 if os.path.isfile(fpath):
                     tar.add(fpath, arcname=fname)
+            if ssl_paths:
+                _add_file_bytes(tar, "ssl/certificate.pem", ssl_paths["cert_path"])
+                _add_file_bytes(tar, "ssl/private-key.pem", ssl_paths["key_path"])
+                _add_bytes(tar, "ssl/paths.json", json.dumps(ssl_paths, sort_keys=True).encode("utf-8"))
+        os.chmod(tarpath, 0o600)
     except OSError as e:
+        if os.path.exists(tarpath):
+            os.unlink(tarpath)
         return {"success": False, "error": str(e)}
 
+    message = f"Backup created: {name}.tar.gz"
+    if ssl_paths:
+        message += " Active SSL certificate and key included."
     return {
         "success": True,
-        "message": f"Backup created: {name}.tar.gz",
+        "message": message,
         "filename": f"{name}.tar.gz",
+        "ssl_included": bool(ssl_paths),
     }
+
+
+def _is_allowed_ssl_path(path):
+    """Allow certificate paths only in the app's managed certificate locations."""
+    if not isinstance(path, str) or not os.path.isabs(path):
+        return False
+    normalized = os.path.abspath(path)
+    return any(os.path.commonpath([normalized, root]) == root for root in SSL_ALLOWED_ROOTS)
+
+
+def _active_ssl_paths():
+    """Return the active certificate/key paths when both are safely managed."""
+    try:
+        from csf_backend import ssl_manager
+
+        current = (ssl_manager.get_ssl_status() or {}).get("current_cert") or {}
+        cert_path = current.get("cert_path")
+        key_path = current.get("key_path")
+        if (
+            _is_allowed_ssl_path(cert_path)
+            and _is_allowed_ssl_path(key_path)
+            and os.path.isfile(cert_path)
+            and os.path.isfile(key_path)
+        ):
+            return {"cert_path": cert_path, "key_path": key_path}
+    except (OSError, ImportError):
+        pass
+    return None
+
+
+def _add_bytes(tar, archive_name, data, mode=0o600):
+    info = tarfile.TarInfo(archive_name)
+    info.size = len(data)
+    info.mode = mode
+    info.mtime = int(time.time())
+    tar.addfile(info, io.BytesIO(data))
+
+
+def _add_file_bytes(tar, archive_name, path):
+    with open(path, "rb") as source:
+        _add_bytes(tar, archive_name, source.read(), 0o600 if "private" in archive_name else 0o644)
 
 
 def _backup_path(filename):
@@ -84,15 +151,30 @@ def _validate_archive(path):
             if not members:
                 return False, "Backup archive is empty"
 
+            allowed_files = set(BACKUP_FILES) | set(SSL_ARCHIVE_FILES)
             seen = set()
             for member in members:
-                if member.name not in BACKUP_FILES:
+                if member.name not in allowed_files:
                     return False, f"Unexpected file in backup: {member.name}"
                 if member.name in seen:
                     return False, f"Duplicate file in backup: {member.name}"
                 if not member.isfile():
                     return False, f"Backup contains a non-regular file: {member.name}"
                 seen.add(member.name)
+            ssl_members = set(SSL_ARCHIVE_FILES) & seen
+            if ssl_members and ssl_members != set(SSL_ARCHIVE_FILES):
+                return False, "SSL backup is incomplete"
+            if ssl_members:
+                metadata = tar.extractfile("ssl/paths.json")
+                try:
+                    paths = json.load(metadata)
+                except (TypeError, ValueError):
+                    return False, "Invalid SSL path metadata in backup"
+                if not (
+                    _is_allowed_ssl_path(paths.get("cert_path"))
+                    and _is_allowed_ssl_path(paths.get("key_path"))
+                ):
+                    return False, "SSL paths in backup are not allowed"
     except (OSError, tarfile.TarError) as e:
         return False, f"Invalid backup archive: {e}"
     return True, ""
@@ -108,6 +190,7 @@ def upload_backup(file_storage):
         return {"success": False, "error": "Backup must be a .tar.gz file"}
 
     os.makedirs(BACKUP_DIR, exist_ok=True)
+    os.chmod(BACKUP_DIR, 0o700)
     label = original_name[:-7]
     label = "".join(c for c in label if c.isalnum() or c in "-_")[:30] or "backup"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -134,6 +217,7 @@ def upload_backup(file_storage):
             os.unlink(path)
         return {"success": False, "error": str(e)}
 
+    os.chmod(path, 0o600)
     return {
         "success": True,
         "filename": filename,
@@ -155,17 +239,61 @@ def restore_backup(filename):
     if not safety_backup["success"]:
         return {"success": False, "error": f"Failed to create safety backup: {safety_backup['error']}"}
 
+    ssl_members = set()
     try:
         with tarfile.open(path, "r:gz") as tar:
-            tar.extractall(CSF_DIR)
+            members = tar.getmembers()
+            config_members = [member for member in members if member.name in BACKUP_FILES]
+            if config_members:
+                tar.extractall(CSF_DIR, members=config_members)
+
+            ssl_members = set(SSL_ARCHIVE_FILES) & {member.name for member in members}
+            if ssl_members:
+                metadata = tar.extractfile("ssl/paths.json")
+                ssl_paths = json.load(metadata)
+                _restore_ssl_file(tar, "ssl/certificate.pem", ssl_paths["cert_path"], 0o644)
+                _restore_ssl_file(tar, "ssl/private-key.pem", ssl_paths["key_path"], 0o600)
     except (OSError, tarfile.TarError) as e:
         return {"success": False, "error": str(e)}
+    except (KeyError, TypeError, ValueError) as e:
+        return {"success": False, "error": f"Invalid SSL metadata: {e}"}
 
     code, _, err = _run(["csf", "-r"], timeout=60)
     if code != 0:
         return {"success": False, "error": f"Config restored but CSF restart failed: {err}"}
 
-    return {"success": True, "message": "Backup restored and CSF restarted."}
+    message = "Backup restored and CSF restarted."
+    if ssl_members:
+        message += " SSL certificate and key restored; restart CSFv2 to apply the SSL changes."
+    return {"success": True, "message": message, "ssl_restored": bool(ssl_members)}
+
+
+def _restore_ssl_file(tar, archive_name, target_path, mode):
+    if not _is_allowed_ssl_path(target_path):
+        raise ValueError(f"SSL path is not allowed: {target_path}")
+    source = tar.extractfile(archive_name)
+    if source is None:
+        raise ValueError(f"Missing SSL file: {archive_name}")
+    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+
+    # Preserve certbot's live symlinks by writing through them instead of replacing them.
+    if os.path.islink(target_path):
+        with open(target_path, "wb") as destination:
+            shutil.copyfileobj(source, destination)
+        return
+
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb", dir=os.path.dirname(target_path), prefix=".csfv2-restore-", delete=False
+        ) as destination:
+            temp_path = destination.name
+            shutil.copyfileobj(source, destination)
+        os.chmod(temp_path, mode)
+        os.replace(temp_path, target_path)
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
 
 
 def delete_backup(filename):
