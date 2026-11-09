@@ -459,6 +459,9 @@
                 </div>
             </div>
             <div class="modal-footer">
+                <button type="button" class="btn btn-danger" id="statDetailFlushDeny" style="display:none">
+                    <span class="glyphicon glyphicon-trash"></span> Clear permanent deny list
+                </button>
                 <span id="statDetailLink"></span>
                 <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
             </div>
@@ -476,6 +479,7 @@ $(function() {
         $('#statDetailBody').text('Loading...').show();
         $('#statDetailExtra').hide();
         $('#statDetailLink').empty();
+        $('#statDetailFlushDeny').hide();
         $('#statDetailModal').modal('show');
         $.getJSON('/api/system/detail/' + metric, function(data) {
             $('#statDetailTitle').text(data.title || 'Details');
@@ -517,11 +521,9 @@ $(function() {
                         '</td></tr>';
                 });
                 html += '</tbody></table></div>';
-                html += '<div class="text-right" style="margin-top:10px">' +
-                    '<button class="btn btn-sm btn-danger" id="flush-deny-list">' +
-                    '<span class="glyphicon glyphicon-trash"></span> Clear permanent deny list</button></div>';
 
                 $('#statDetailBody').html(html).show();
+                $('#statDetailFlushDeny').show();
 
                 $('#statDetailBody .nav-tabs a').on('click', function(e) {
                     e.preventDefault();
@@ -546,7 +548,7 @@ $(function() {
                 $('#blocked-search').on('input', filterBlocked);
                 $('#blocked-search-btn').on('click', filterBlocked);
 
-                $('#flush-deny-list').on('click', function() {
+                $('#statDetailFlushDeny').off('click').on('click', function() {
                     if (!confirm('Remove all permanent IPs from the deny list? Temporary blocks will not be affected.')) return;
                     var btn = $(this);
                     btn.prop('disabled', true);
