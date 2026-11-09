@@ -530,6 +530,7 @@ $(function() {
                     $(this).closest('ul').find('li').removeClass('active');
                     $(this).parent().addClass('active');
                     var filter = $(this).data('filter');
+                    $('#statDetailFlushDeny').toggle(filter !== 'temporary');
                     $('#blocked-table tbody tr').each(function() {
                         if (filter === 'all' || $(this).data('type') === filter) {
                             $(this).show();
