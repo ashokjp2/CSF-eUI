@@ -1,6 +1,8 @@
 import os
 import json
+import shutil
 import subprocess
+import tempfile
 import time
 from datetime import datetime
 
@@ -70,13 +72,14 @@ def _invalidate_cache():
         pass
 
 
-def _remove_conflicting_untracked_files():
-    """Remove only untracked files that the incoming release will track.
+def _quarantine_conflicting_untracked_files():
+    """Move only untracked files that the incoming release will track.
 
     ``git reset --hard`` does not remove untracked files.  That matters after a
     quick SCP deployment of a file that is introduced by the next release:
     ``git pull`` refuses to overwrite it.  Keep unrelated server-local files
-    untouched and only remove explicit path conflicts with ``origin/main``.
+    untouched and only move explicit path conflicts with ``origin/main`` into a
+    temporary backup directory.
     """
     fetch = subprocess.run(
         ["git", "fetch", "origin", "main"],
@@ -86,7 +89,7 @@ def _remove_conflicting_untracked_files():
     )
     if fetch.returncode != 0:
         detail = (fetch.stderr or fetch.stdout or "fetch failed").strip()
-        return [], f"Could not inspect incoming files: {detail}"
+        return [], None, f"Could not inspect incoming files: {detail}"
 
     remote_result = subprocess.run(
         ["git", "ls-tree", "-r", "--name-only", "FETCH_HEAD"],
@@ -101,13 +104,14 @@ def _remove_conflicting_untracked_files():
         text=True,
     )
     if remote_result.returncode != 0 or untracked_result.returncode != 0:
-        return [], "Could not inspect local/remote file lists"
+        return [], None, "Could not inspect local/remote file lists"
 
     remote_files = set(remote_result.stdout.splitlines())
     untracked_files = set(untracked_result.stdout.splitlines())
     conflicts = sorted(remote_files & untracked_files)
     install_root = os.path.abspath(INSTALL_DIR)
-    removed = []
+    backup_root = tempfile.mkdtemp(prefix="csfv2-update-conflicts-") if conflicts else None
+    moved = []
 
     for relative_path in conflicts:
         target = os.path.abspath(os.path.join(INSTALL_DIR, relative_path))
@@ -115,19 +119,22 @@ def _remove_conflicting_untracked_files():
             continue
         try:
             if os.path.islink(target) or os.path.isfile(target):
-                os.unlink(target)
-                removed.append(relative_path)
+                backup_target = os.path.join(backup_root, relative_path)
+                os.makedirs(os.path.dirname(backup_target), exist_ok=True)
+                shutil.move(target, backup_target)
+                moved.append(relative_path)
             elif os.path.isdir(target):
-                # A directory can also block a tracked file path.  This is an
-                # explicit remote conflict, so remove only that directory.
-                import shutil
-                shutil.rmtree(target)
-                removed.append(relative_path)
+                # A directory can also block a tracked file path.  Move only
+                # that explicit conflict, preserving it in the backup.
+                backup_target = os.path.join(backup_root, relative_path)
+                os.makedirs(os.path.dirname(backup_target), exist_ok=True)
+                shutil.move(target, backup_target)
+                moved.append(relative_path)
         except OSError:
             # Leave failures for git pull to report with the exact path.
             continue
 
-    return removed, None
+    return moved, backup_root, None
 
 
 def get_version_info(force=False):
@@ -214,16 +221,21 @@ def run_update_stream(force=False):
         yield from _sse(f"Updating {current} → {latest} ...")
     yield from _sse("")
 
-    # Discard tracked edits, then clear only untracked paths that conflict with
-    # files in the incoming release.  reset --hard alone does not do this.
+    # Discard tracked edits, then quarantine only untracked paths that conflict
+    # with files in the incoming release.  reset --hard alone does not do this.
     yield from _sse("Running: git reset --hard HEAD")
     subprocess.run(["git", "reset", "--hard", "HEAD"], cwd=INSTALL_DIR,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     yield from _sse("Checking for untracked files that conflict with the update")
-    removed, cleanup_error = _remove_conflicting_untracked_files()
-    if removed:
-        yield from _sse("Removed conflicting untracked files: " + ", ".join(removed))
+    moved, backup_root, cleanup_error = _quarantine_conflicting_untracked_files()
+    if moved:
+        yield from _sse(
+            "Moved conflicting files to backup "
+            + backup_root
+            + ": "
+            + ", ".join(moved)
+        )
     if cleanup_error:
         yield from _sse("Warning: " + cleanup_error)
 
