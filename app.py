@@ -82,7 +82,7 @@ def set_security_headers(response):
         "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://code.jquery.com https://maxcdn.bootstrapcdn.com; "
         "style-src 'self' 'unsafe-inline' https://maxcdn.bootstrapcdn.com https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
         "font-src 'self' https://maxcdn.bootstrapcdn.com https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
-        "img-src 'self' data:; "
+        "img-src 'self' data: https://cdnjs.cloudflare.com; "
         "connect-src 'self'; "
         "frame-ancestors 'self';"
     )
