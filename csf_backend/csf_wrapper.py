@@ -330,10 +330,11 @@ def load_csf_conf_full():
         for line_num, line in enumerate(f, 1):
             raw = line.rstrip("\n")
             stripped = raw.strip()
-            if stripped.startswith("# SECTION:"):
+            section_match = re.match(r'^#\s*SECTION:\s*(.*)$', stripped)
+            if section_match:
                 if current_section["settings"] or current_section["lines"]:
                     sections.append(current_section)
-                section_name = stripped[len("# SECTION:"):].strip()
+                section_name = section_match.group(1).strip()
                 current_section = {"name": section_name, "settings": [], "lines": []}
                 continue
             match = re.match(r'^(\w+)\s*=\s*"(.*)"', stripped)
