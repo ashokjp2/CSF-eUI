@@ -121,10 +121,8 @@ body {
 }
 .sidebar-logo-icon {
     width: 32px; height: 32px;
-    background: var(--accent);
-    border-radius: 8px;
-    display: flex; align-items: center; justify-content: center;
-    color: #fff; font-weight: 700; font-size: 13px;
+    display: block;
+    object-fit: contain;
     flex-shrink: 0;
 }
 .sidebar-logo-text {
