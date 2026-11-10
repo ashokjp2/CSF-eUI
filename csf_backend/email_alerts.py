@@ -217,7 +217,10 @@ def test_email(to_addr):
     if not to_addr:
         return {"success": False, "error": "Email address required"}
     if _smtp_configured():
-        return _send_via_smtp(to_addr, "CSFv2 Test Alert", "CSFv2 test alert — email is working.")
+        result = _send_via_smtp(to_addr, "CSFv2 Test Alert", "CSFv2 test alert — email is working.")
+        if result.get("success"):
+            result["message"] = f"Test email sent to {to_addr}"
+        return result
     try:
         r = subprocess.run(
             ["mail", "-s", "CSFv2 Test Alert", to_addr],

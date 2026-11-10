@@ -158,7 +158,7 @@ $(function() {
         $(this).prop('disabled', true);
         var btn = $(this);
         $.post('/api/email-alerts/test', JSON.stringify({email: email}), function(r) {
-            showToast(r.message || r.error, r.success ? 'success' : 'danger');
+            showToast(r.message || r.error || (r.success ? 'Test email sent successfully' : 'Test email failed'), r.success ? 'success' : 'danger');
             btn.prop('disabled', false);
         }, 'json').fail(function() { showToast('Failed', 'danger'); btn.prop('disabled', false); });
     });

@@ -57,7 +57,7 @@ cd "$INSTALL_DIR"
 # ── Python environment ────────────────────────────────────────────────────────
 
 section "Installing application dependencies"
-apt-get install -y --quiet python3-venv python3-pip whois dnsutils curl wget perl perl6 libwww-perl ipset sendmail
+apt-get install -y --quiet python3-venv python3-pip whois dnsutils curl wget perl perl6 libwww-perl ipset sendmail unzip
 $PYTHON -m venv "$INSTALL_DIR/venv"
 "$INSTALL_DIR/venv/bin/pip" install --quiet --upgrade pip
 "$INSTALL_DIR/venv/bin/pip" install --quiet -r "$INSTALL_DIR/requirements.txt"
