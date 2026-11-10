@@ -68,22 +68,8 @@
                                     <div class="setting-help text-muted" style="font-size:11px; margin-top:2px"></div>
                                 </td>
                                 <td>
-                                    {% set numeric_threshold_keys = ['PT_FORKBOMB'] %}
-                                    {% if setting.value in ['0', '1'] and setting.key not in numeric_threshold_keys %}
-                                    <div class="btn-group" data-toggle="buttons">
-                                        <label class="btn btn-default {% if setting.value == '1' %}active btn-success{% endif %}">
-                                            <input type="radio" name="cfg_{{ setting.key }}" value="1"
-                                                   {% if setting.value == '1' %}checked{% endif %}> On
-                                        </label>
-                                        <label class="btn btn-default {% if setting.value == '0' %}active btn-danger{% endif %}">
-                                            <input type="radio" name="cfg_{{ setting.key }}" value="0"
-                                                   {% if setting.value == '0' %}checked{% endif %}> Off
-                                        </label>
-                                    </div>
-                                    {% else %}
                                     <input type="text" class="form-control" name="cfg_{{ setting.key }}"
                                            value="{{ setting.value }}" onfocus="CSFexpand(this)">
-                                    {% endif %}
                                 </td>
                             </tr>
                             {% endfor %}
@@ -237,7 +223,7 @@ var HELP = {
     TESTING_INTERVAL: 'Minutes between auto-clear in testing mode (default: 5).',
     RESTRICT_SYSLOG: 'Restrict syslog/rsyslog access to prevent log spoofing. 0=off, 1=basic, 2=moderate, 3=strict.',
     RESTRICT_SYSLOG_GROUP: 'Group name for syslog restriction (only used with RESTRICT_SYSLOG=3).',
-    RESTRICT_UI: 'Restrict the built-in CSF UI to specific IPs. Not needed since you use CSFv2.',
+    RESTRICT_UI: 'Controls what the legacy CSF UI can edit: 0=unrestricted, 1=restricted settings, 2=UI disabled. CSFv2 is separate.',
     AUTO_UPDATES: 'Automatically update CSF when new versions are available.',
 
     /* IPv4 Ports */
@@ -519,7 +505,7 @@ var HELP = {
     UID_PORTS: 'Ports to monitor for UID tracking.',
 
     /* Account Tracking */
-    AT_ALERT: 'Email alert on account changes.',
+    AT_ALERT: 'Who to monitor for account changes: 0=disabled, 1=all accounts, 2=superuser accounts (UID 0), 3=root account only.',
     AT_INTERVAL: 'Seconds between account checks.',
     AT_NEW: 'Alert on new accounts.',
     AT_OLD: 'Alert on deleted accounts.',
@@ -541,7 +527,7 @@ var HELP = {
     UI_BAN: 'Ban time (seconds) after too many login failures on CSF\'s built-in UI.',
     UI_ALLOW: 'IPs allowed to access CSF\'s built-in UI.',
     UI_BLOCK: 'Block login failures through LFD.',
-    UI_ALERT: 'Email alert on CSF UI login.',
+    UI_ALERT: 'Legacy UI login alerts: 0=disabled, 1=bans/blocks, 2=failed logins plus bans/blocks, 3=adds successful logins, 4=all login attempts.',
     UI_CIPHER: 'SSL cipher for CSF\'s built-in UI.',
     UI_SSL_VERSION: 'SSL/TLS version for CSF\'s built-in UI.',
     UI_CXS: 'Show CXS integration in CSF\'s built-in UI.',
@@ -725,7 +711,7 @@ $(function() {
             $('#paginatediv').find('.section-btn').removeClass('btn-primary').addClass('btn-default');
             $('tr[data-key]').each(function() {
                 var key = $(this).data('key').toLowerCase();
-                var val = $(this).find('input').val() || '';
+                var val = $(this).find('input, select').first().val() || '';
                 var helpText = $(this).find('.setting-help').text().toLowerCase();
                 $(this).toggle(key.indexOf(q) !== -1 || val.toLowerCase().indexOf(q) !== -1 || helpText.indexOf(q) !== -1);
             });
@@ -804,6 +790,9 @@ $(function() {
         CC6_LOOKUPS:         [{v:'1',l:'1 — MaxMind DB'},{v:'2',l:'2 — ipdeny.com'}],
         URLGET:              [{v:'1',l:'1 — LWP (Perl library)'},{v:'2',l:'2 — curl (recommended)'}],
         RESTRICT_SYSLOG:     [{v:'0',l:'0 — Off'},{v:'1',l:'1 — Basic restriction'},{v:'2',l:'2 — Moderate'},{v:'3',l:'3 — Strict (recommended)'}],
+        RESTRICT_UI:         [{v:'0',l:'0 — Unrestricted UI'},{v:'1',l:'1 — Restricted settings'},{v:'2',l:'2 — UI disabled'}],
+        AT_ALERT:            [{v:'0',l:'0 — Account tracking disabled'},{v:'1',l:'1 — Track all accounts'},{v:'2',l:'2 — Track superuser accounts (UID 0)'},{v:'3',l:'3 — Track root account only'}],
+        UI_ALERT:            [{v:'0',l:'0 — No UI login alerts'},{v:'1',l:'1 — Alerts for bans/blocks'},{v:'2',l:'2 — Alerts for failed logins, bans, and blocks'},{v:'3',l:'3 — Adds successful logins'},{v:'4',l:'4 — Adds all login attempts'}],
         LF_NETBLOCK_CLASS:   [{v:'A',l:'A — Block /8  (16 million IPs — use with extreme caution)'},{v:'B',l:'B — Block /16 (65,000 IPs)'},{v:'C',l:'C — Block /24 (256 IPs, recommended)'}],
         PT_LOAD_AVG:         [{v:'1',l:'1 — 1-minute average'},{v:'5',l:'5 — 5-minute average (recommended)'},{v:'15',l:'15 — 15-minute average'}],
         CF_BLOCK:            [{v:'block',l:'block — Hard block at CloudFlare'},{v:'challenge',l:'challenge — Show CAPTCHA'},{v:'whitelist',l:'whitelist — Allow through'}],
@@ -818,17 +807,29 @@ $(function() {
         CC_DROP_CIDR:        [{v:'',l:'— Off (block each IP individually, no CIDR grouping)'},{v:'32',l:'/32 — Group single hosts into their /32'},{v:'24',l:'/24 — Group /24 and larger (256 IPs, recommended)'},{v:'16',l:'/16 — Group /16 and larger (65 K IPs)'},{v:'8',l:'/8 — Group /8 and larger (16 M IPs — use with caution)'}],
     };
 
+    var TOGGLE_LABELS = {};
+
     function convertToSelects() {
         $('tr[data-key]').each(function() {
             var key = $(this).data('key');
-            var opts = SELECT_FIELDS[key];
-            if (!opts) return;
             var td = $(this).find('td').eq(1);
             var currentVal = '';
             var txt = td.find('input[type=text]');
             var radio = td.find('input[type=radio]:checked');
             if (txt.length) currentVal = txt.val();
             else if (radio.length) currentVal = radio.val();
+
+            var opts = SELECT_FIELDS[key];
+            /* A known binary setting is also a fixed-option field. Keep
+             * thresholds and intervals as text inputs even when their current
+             * value happens to be 0 or 1. */
+            if (!opts && TOGGLE_LABELS[key]) {
+                opts = [
+                    {v:'0', l:'0 — ' + TOGGLE_LABELS[key]['0']},
+                    {v:'1', l:'1 — ' + TOGGLE_LABELS[key]['1']}
+                ];
+            }
+            if (!opts) return;
             var sel = $('<select class="form-control" style="max-width:420px">').attr('name', 'cfg_' + key);
             var matched = false;
             opts.forEach(function(o) {
@@ -904,10 +905,10 @@ $(function() {
         });
     }
 
-    /* ===== DESCRIPTIVE TOGGLE BUTTON LABELS ===== */
+    /* ===== DESCRIPTIVE FIXED-VALUE LABELS ===== */
     function updateToggleLabels() {
         var DEFAULT = {'1': 'On', '0': 'Off'};
-        var OVERRIDES = {
+        TOGGLE_LABELS = {
             /* Core */
             TESTING:              {'1':'Test mode — blocks suppressed','0':'Live — blocks active'},
             AUTO_UPDATES:         {'1':'Auto-update CSF/LFD','0':'Manual updates only'},
@@ -924,6 +925,8 @@ $(function() {
             LF_SPI:               {'1':'Stateful packet inspection on','0':'No SPI'},
             /* Network */
             IPV6:                 {'1':'IPv6 enabled','0':'IPv4 only'},
+            IPV6_ICMP_STRICT:     {'1':'Strict IPv6 ICMP filtering','0':'Allow IPv6 ICMP traffic'},
+            IPV6_SPI:             {'1':'Stateful IPv6 inspection','0':'Static IPv6 firewall rules'},
             ICMP_IN:              {'1':'Allow inbound ping (ICMP)','0':'Block all inbound ICMP/ping'},
             ICMP_OUT:             {'1':'Allow outbound ping (ICMP)','0':'Block all outbound ICMP/ping'},
             ICMP_TIMESTAMPDROP:   {'1':'Drop ICMP timestamp requests (more secure)','0':'Allow ICMP timestamps'},
@@ -1057,11 +1060,19 @@ $(function() {
             /* X-ARF abuse reporting */
             X_ARF:                {'1':'Send X-ARF abuse reports to ISPs','0':'No abuse reporting'},
             X_ARF_ABUSE:          {'1':'Auto-report abuse to contact addresses','0':'No auto abuse reports'},
+            /* Account tracking */
+            AT_NEW:               {'1':'Alert when a new account is created','0':'Do not alert on new accounts'},
+            AT_OLD:               {'1':'Alert when an account is deleted','0':'Do not alert on deleted accounts'},
+            AT_PASSWD:            {'1':'Alert when an account password changes','0':'Do not alert on password changes'},
+            AT_UID:               {'1':'Alert when an account UID changes','0':'Do not alert on UID changes'},
+            AT_GID:               {'1':'Alert when an account GID changes','0':'Do not alert on GID changes'},
+            AT_DIR:               {'1':'Alert when an account home directory changes','0':'Do not alert on home directory changes'},
+            AT_SHELL:             {'1':'Alert when an account shell changes','0':'Do not alert on shell changes'},
         };
         $('tr[data-key]').each(function() {
             var key = $(this).data('key');
             if (SELECT_FIELDS[key]) return; /* will be a dropdown, skip */
-            var labels = OVERRIDES[key] || DEFAULT;
+            var labels = TOGGLE_LABELS[key] || DEFAULT;
             $(this).find('label.btn').each(function() {
                 var radio = $(this).find('input[type=radio]');
                 if (!radio.length) return;
