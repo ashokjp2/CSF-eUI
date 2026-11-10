@@ -63,6 +63,47 @@ $PYTHON -m venv "$INSTALL_DIR/venv"
 "$INSTALL_DIR/venv/bin/pip" install --quiet -r "$INSTALL_DIR/requirements.txt"
 info "Python environment ready."
 
+# Ubuntu 26.04 ships postfix-mta-sts-resolver 1.5.0 with a Python 3.14
+# incompatibility: it calls asyncio.get_event_loop() before creating a loop.
+# Keep the distro package, but launch it through a small compatibility wrapper
+# so the service remains functional on both old and new Ubuntu releases.
+if command -v mta-sts-daemon >/dev/null 2>&1; then
+    MTA_STS_WRAPPER="/usr/local/sbin/csfv2-mta-sts-daemon"
+    cat > "$MTA_STS_WRAPPER" <<'PY'
+#!/usr/bin/python3
+import asyncio
+import runpy
+
+_get_event_loop = asyncio.get_event_loop
+
+
+def _get_event_loop_compat():
+    try:
+        return _get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop
+
+
+asyncio.get_event_loop = _get_event_loop_compat
+runpy.run_path("/usr/bin/mta-sts-daemon", run_name="__main__")
+PY
+    chmod 755 "$MTA_STS_WRAPPER"
+    mkdir -p /etc/systemd/system/postfix-mta-sts-resolver.service.d
+    cat > /etc/systemd/system/postfix-mta-sts-resolver.service.d/csfv2-compat.conf <<EOF
+[Service]
+ExecStart=
+ExecStart=$MTA_STS_WRAPPER --config /etc/mta-sts-daemon.yml
+EOF
+    systemctl daemon-reload
+    if systemctl is-active --quiet postfix-mta-sts-resolver.service; then
+        systemctl try-restart postfix-mta-sts-resolver.service || \
+            warn "Could not restart postfix-mta-sts-resolver after applying the Python compatibility wrapper."
+    fi
+    info "Applied MTA-STS Python event-loop compatibility wrapper."
+fi
+
 # ── CSF-eUI LFD defaults and supported-service exemptions ────────────────────
 
 section "Configuring LFD for supported services"
@@ -285,23 +326,6 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-# HTTP→HTTPS redirect service (port 8080 → 8750)
-cat > /etc/systemd/system/${SERVICE_NAME}-redirect.service <<EOF
-[Unit]
-Description=CSF-eUI HTTP redirect (8080 -> 8750)
-After=network.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=/usr/bin/python3 $INSTALL_DIR/http_redirect.py
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
 # Version-check timer (checks GitHub every 12 h, never auto-installs)
 cat > /etc/systemd/system/${SERVICE_NAME}-update-check.service <<EOF
 [Unit]
@@ -329,7 +353,7 @@ EOF
 
 systemctl daemon-reload
 systemctl enable --now "${SERVICE_NAME}" || true
-systemctl enable --now "${SERVICE_NAME}-redirect" || true
+systemctl disable --now "${SERVICE_NAME}-redirect" >/dev/null 2>&1 || true
 if systemctl enable --now "${SERVICE_NAME}-update-check.timer"; then
     if systemctl is-active --quiet "${SERVICE_NAME}-update-check.timer"; then
         info "Update-check timer is active."
@@ -384,7 +408,6 @@ else
 fi
 echo ""
 echo -e "  UI:         ${CYAN}https://$DISPLAY_HOST:$PORT${NC}"
-echo -e "  HTTP redir: http://$DISPLAY_HOST:8080  →  https://$DISPLAY_HOST:$PORT"
 echo ""
 echo -e "  Service:    systemctl status $SERVICE_NAME"
 echo -e "  Logs:       journalctl -u $SERVICE_NAME -f"

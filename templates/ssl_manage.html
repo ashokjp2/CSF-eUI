@@ -270,36 +270,6 @@
             </div>
         </div>
 
-        <!-- HTTP → HTTPS Redirect -->
-        <div class="panel panel-default" id="panel-redirect">
-            <div class="panel-heading">
-                <h4 class="panel-title" style="margin:0">
-                    <span class="glyphicon glyphicon-share-alt"></span> HTTP &rarr; HTTPS Redirect
-                </h4>
-            </div>
-            <div class="panel-body">
-                <p class="text-muted" style="margin-bottom:10px">
-                    Writes an nginx config (<code>/etc/nginx/conf.d/csfv2-redirect.conf</code>) that listens on
-                    <strong>port 80</strong> and redirects all traffic to <strong>https://&lt;host&gt;:8750</strong>.
-                    Certbot ACME challenges on <code>/.well-known/</code> are always allowed through.
-                </p>
-                <div class="alert alert-warning" style="padding:8px 12px; margin-bottom:12px">
-                    <span class="glyphicon glyphicon-exclamation-sign"></span>
-                    <strong>Prerequisites:</strong> nginx must be installed and running.
-                    Enable only after confirming https://{{ ssl.hostname }}:8750 works — if HTTPS is broken,
-                    you will be locked out via port 80 too.
-                </div>
-                <div style="display:flex; align-items:center; gap:12px">
-                    <span id="redirect-status-label" class="label label-default">Checking...</span>
-                    <button class="btn btn-success btn-sm" id="btn-redirect-enable" style="display:none">
-                        <span class="glyphicon glyphicon-ok"></span> Enable Redirect
-                    </button>
-                    <button class="btn btn-danger btn-sm" id="btn-redirect-disable" style="display:none">
-                        <span class="glyphicon glyphicon-remove"></span> Disable Redirect
-                    </button>
-                </div>
-            </div>
-        </div>
 {% endblock %}
 
 {% block scripts %}
@@ -465,46 +435,6 @@ $(function() {
         });
     });
 
-    // HTTP → HTTPS redirect toggle
-    function loadRedirectStatus() {
-        $.getJSON('/api/ssl/http-redirect', function(r) {
-            var label = $('#redirect-status-label');
-            if (r.enabled) {
-                label.removeClass('label-default label-danger').addClass('label-success').text('Enabled — HTTP redirects to HTTPS');
-                $('#btn-redirect-enable').hide();
-                $('#btn-redirect-disable').show();
-            } else {
-                label.removeClass('label-success label-danger').addClass('label-default').text('Disabled — HTTP requests pass through');
-                $('#btn-redirect-enable').show();
-                $('#btn-redirect-disable').hide();
-            }
-        });
-    }
-
-    function setRedirect(enabled) {
-        var btn = enabled ? $('#btn-redirect-enable') : $('#btn-redirect-disable');
-        btn.prop('disabled', true);
-        $.ajax({
-            url: '/api/ssl/http-redirect',
-            method: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({enabled: enabled}),
-            success: function(r) {
-                if (r.success) {
-                    showToast(r.message, 'success');
-                    loadRedirectStatus();
-                } else {
-                    showToast(r.error || 'Failed', 'danger');
-                    btn.prop('disabled', false);
-                }
-            },
-            error: function() { showToast('Failed', 'danger'); btn.prop('disabled', false); }
-        });
-    }
-
-    $('#btn-redirect-enable').on('click', function() { setRedirect(true); });
-    $('#btn-redirect-disable').on('click', function() { setRedirect(false); });
-    loadRedirectStatus();
 });
 </script>
 {% endblock %}
