@@ -11,19 +11,20 @@ CSFV2_CONF = "/etc/csfv2/csfv2.conf"
 _SMTP_KEYS = ("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM", "SMTP_TLS")
 
 ALERT_SETTINGS = [
-    ("LF_ALERT_TO", "Alert email address", "Email address for all LFD alerts"),
-    ("LF_ALERT_FROM", "Alert from address", "Sender address for alert emails"),
-    ("LF_EMAIL_ALERT", "Login failure alerts", "Send email on login failures (1=on, 0=off)"),
-    ("LF_PERMBLOCK_ALERT", "Permanent block alerts", "Email when an IP is permanently blocked"),
-    ("LF_NETBLOCK_ALERT", "Netblock alerts", "Email when a netblock is blocked"),
-    ("LF_DISTFTP_ALERT", "Distributed FTP alerts", "Email on distributed FTP attacks"),
-    ("LF_DISTSMTP_ALERT", "Distributed SMTP alerts", "Email on distributed SMTP attacks"),
-    ("LT_EMAIL_ALERT", "Login tracking alerts", "Email on excessive logins"),
-    ("CT_EMAIL_ALERT", "Connection tracking alerts", "Email when connection limit is hit"),
-    ("PS_EMAIL_ALERT", "Port scan alerts", "Email when a port scan is detected"),
-    ("LF_INTEGRITY_ALERT", "File integrity alerts", "Email when system files change"),
-    ("LF_EXPLOIT_ALERT", "Exploit alerts", "Email on suspected exploit attempts"),
-    ("LF_QUEUE_ALERT", "Mail queue alerts", "Email on large mail queue"),
+    ("LF_ALERT_TO", "Alert email address", "Email address for all LFD alerts", "email", ""),
+    ("LF_ALERT_FROM", "Alert from address", "Sender address for alert emails", "email", ""),
+    ("LF_EMAIL_ALERT", "Login failure alerts", "Send email on login failures (1=on, 0=off)", "toggle", ""),
+    ("LF_PERMBLOCK_ALERT", "Permanent block alerts", "Email when an IP is permanently blocked", "toggle", ""),
+    ("LF_NETBLOCK_ALERT", "Netblock alerts", "Email when a netblock is blocked", "toggle", ""),
+    ("LF_DISTFTP_ALERT", "Distributed FTP alerts", "Email on distributed FTP attacks", "toggle", ""),
+    ("LF_DISTSMTP_ALERT", "Distributed SMTP alerts", "Email on distributed SMTP attacks", "toggle", ""),
+    ("LT_EMAIL_ALERT", "Login tracking alerts", "Email on excessive logins", "toggle", ""),
+    ("CT_EMAIL_ALERT", "Connection tracking alerts", "Email when connection limit is hit", "toggle", ""),
+    ("PS_EMAIL_ALERT", "Port scan alerts", "Email when a port scan is detected", "toggle", ""),
+    # These are feature intervals/thresholds in CSF, not email-address settings.
+    ("LF_INTEGRITY", "File integrity alerts", "Email when system files change; interval in seconds (0=disabled)", "interval", "3600"),
+    ("LF_EXPLOIT", "Exploit alerts", "Email on suspected exploit attempts; interval in seconds (0=disabled)", "interval", "300"),
+    ("LF_QUEUE_ALERT", "Mail queue alerts", "Email when the mail queue reaches this size (0=disabled)", "threshold", "2000"),
 ]
 
 
@@ -138,7 +139,7 @@ def _send_via_smtp(to_addr, subject, body):
 def get_alert_settings():
     conf = _read_conf()
     settings = []
-    for key, label, description in ALERT_SETTINGS:
+    for key, label, description, control, default_value in ALERT_SETTINGS:
         value = ""
         m = re.search(rf'^{key}\s*=\s*"([^"]*)"', conf, re.MULTILINE)
         if m:
@@ -148,12 +149,14 @@ def get_alert_settings():
             "label": label,
             "description": description,
             "value": value,
+            "control": control,
+            "default_value": default_value,
         })
     return settings
 
 
 def update_alert_setting(key, value):
-    valid_keys = {k for k, _, _ in ALERT_SETTINGS}
+    valid_keys = {k for k, _, _, _, _ in ALERT_SETTINGS}
     if key not in valid_keys:
         return {"success": False, "error": f"Invalid setting: {key}"}
 

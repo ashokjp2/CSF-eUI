@@ -117,14 +117,20 @@ $(function() {
         $.getJSON('/api/email-alerts', function(data) {
             var html = '';
             data.forEach(function(s) {
-                var inputType = (s.key.indexOf('_TO') > -1 || s.key.indexOf('_FROM') > -1) ? 'text' : 'text';
-                var isToggle = (s.value === '0' || s.value === '1') && s.key !== 'LF_ALERT_TO' && s.key !== 'LF_ALERT_FROM';
                 html += '<div class="form-group" style="border-bottom:1px solid #eee;padding-bottom:10px;margin-bottom:10px">' +
                     '<label>' + s.label + ' <code style="font-size:10px">' + s.key + '</code></label>' +
                     '<p class="help-block" style="margin-bottom:5px">' + s.description + '</p>';
-                if (isToggle) {
+                if (s.control === 'toggle') {
                     var checked = s.value === '1' ? ' checked' : '';
                     html += '<label class="checkbox-inline"><input type="checkbox" class="alert-toggle" data-key="' + s.key + '"' + checked + '> Enabled</label>';
+                } else if (s.control === 'interval' || s.control === 'threshold') {
+                    var numericChecked = s.value !== '' && s.value !== '0' ? ' checked' : '';
+                    var numericMin = s.control === 'interval' ? ' min="0"' : ' min="0"';
+                    html += '<div class="row">' +
+                        '<div class="col-md-2"><label class="checkbox-inline"><input type="checkbox" class="alert-feature-toggle" data-key="' + s.key + '" data-default="' + s.default_value + '"' + numericChecked + '> Enabled</label></div>' +
+                        '<div class="col-md-10"><div class="input-group"><input type="number" class="form-control input-sm alert-input" data-key="' + s.key + '" value="' + (s.value || '0') + '"' + numericMin + '>' +
+                        '<span class="input-group-btn"><button class="btn btn-sm btn-primary btn-save-setting" data-key="' + s.key + '">Save</button></span></div></div>' +
+                        '</div>';
                 } else {
                     html += '<div class="input-group"><input type="text" class="form-control input-sm alert-input" data-key="' + s.key + '" value="' + (s.value || '') + '">' +
                         '<span class="input-group-btn"><button class="btn btn-sm btn-primary btn-save-setting" data-key="' + s.key + '">Save</button></span></div>';
@@ -144,9 +150,19 @@ $(function() {
         }, 'json');
     });
 
+    $(document).on('change', '.alert-feature-toggle', function() {
+        var key = $(this).data('key');
+        var input = $('.alert-input[data-key="' + key + '"]');
+        var val = $(this).is(':checked') ? (input.val() === '0' ? $(this).data('default') : input.val()) : '0';
+        if ($(this).is(':checked')) { input.val(val); }
+        $.post('/api/email-alerts', JSON.stringify({key: key, value: val}), function(r) {
+            showToast(r.message || 'Updated', r.success ? 'success' : 'danger');
+        }, 'json');
+    });
+
     $(document).on('click', '.btn-save-setting', function() {
         var key = $(this).data('key');
-        var val = $('input[data-key="' + key + '"]').val().trim();
+        var val = $('.alert-input[data-key="' + key + '"]').val().trim();
         $.post('/api/email-alerts', JSON.stringify({key: key, value: val}), function(r) {
             showToast(r.message || 'Updated', r.success ? 'success' : 'danger');
         }, 'json');
