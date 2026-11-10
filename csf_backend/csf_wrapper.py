@@ -79,17 +79,40 @@ def run_command(cmd, timeout=30):
 
 # Service lifecycle
 def csf_start():
-    return run_csf(["-sf"])
+    return _apply_csf_with_docker_recovery()
 
 def csf_stop():
     return run_csf(["-f"])
 
 def csf_restart():
+    return _apply_csf_with_docker_recovery()
+
+
+def _apply_csf_with_docker_recovery():
+    """Reload CSF while preserving Docker's version-specific firewall chains."""
+    from csf_backend import service_integration
+
+    docker_state = service_integration.get_docker_firewall_state()
+    hook_result = service_integration.ensure_docker_forwarding_rules()
     result = run_csf(["-sf"], timeout=300)
-    if result["success"]:
-        from csf_backend import service_integration
-        service_integration.ensure_docker_forwarding_rules()
-        service_integration._run(["/etc/csf/csfpost.sh"])
+    if not result["success"]:
+        return result
+
+    # CSF executes csfpost.sh during -sf. Run it once more so a newly upgraded
+    # hook is applied on the same request, then recover Docker-owned chains if
+    # CSF flushed them.
+    service_integration._run(["/etc/csf/csfpost.sh"])
+    docker_result = service_integration.restore_docker_firewall_chains(docker_state)
+    warnings = []
+    if not hook_result.get("success"):
+        warnings.append(f"Docker forwarding hook: {hook_result.get('message', 'failed')}")
+    if not docker_result.get("success"):
+        warnings.append(docker_result.get("message", "Docker firewall recovery failed."))
+    if warnings:
+        result["success"] = False
+        result["stderr"] = (result.get("stderr", "") + "\n" + "\n".join(warnings)).strip()
+    elif docker_result.get("changed"):
+        result["stdout"] = (result.get("stdout", "") + "\n" + docker_result["message"]).strip()
     return result
 
 def csf_restart_q():

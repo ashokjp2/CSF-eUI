@@ -49,8 +49,7 @@ if [[ ! -f "$INSTALL_DIR/app.py" ]]; then
     git clone https://github.com/ashokjp2/CSF-eUI.git "$INSTALL_DIR"
 else
     info "Using existing installation at $INSTALL_DIR"
-    cd "$INSTALL_DIR"
-    git pull origin main
+    info "Keeping existing application files; continuing with dependency and service setup."
 fi
 
 cd "$INSTALL_DIR"

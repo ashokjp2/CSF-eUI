@@ -67,6 +67,48 @@ def _run(cmd, timeout=10):
         return ""
 
 
+def get_docker_firewall_state():
+    """Capture the Docker firewall-chain state before CSF reloads iptables."""
+    running = bool(_run(["docker", "info", "--format", "{{.ID}}"], timeout=15))
+    return {
+        "running": running,
+        "forward_chain": running and bool(
+            _run(["iptables", "-t", "filter", "-S", "DOCKER-FORWARD"])
+        ),
+    }
+
+
+def restore_docker_firewall_chains(previous_state):
+    """Recreate Docker-owned chains if CSF removed them during a reload.
+
+    Docker owns these chains and must recreate them itself; manually building
+    them in csfpost.sh would be incomplete and can diverge between Docker
+    releases. Restart Docker only when the chain existed before CSF ran and is
+    now missing, so ordinary CSF restarts do not bounce Docker unnecessarily.
+    """
+    if not previous_state.get("running") or not previous_state.get("forward_chain"):
+        return {"success": True, "changed": False, "message": "Docker chains did not need recovery."}
+    if _run(["iptables", "-t", "filter", "-S", "DOCKER-FORWARD"]):
+        return {"success": True, "changed": False, "message": "Docker firewall chains are intact."}
+
+    try:
+        result = subprocess.run(
+            ["systemctl", "restart", "docker"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"success": False, "changed": False, "message": f"Docker restart failed: {exc}"}
+
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        return {"success": False, "changed": False, "message": f"Docker restart failed: {detail}"}
+    if not _run(["iptables", "-t", "filter", "-S", "DOCKER-FORWARD"]):
+        return {"success": False, "changed": True, "message": "Docker restarted but DOCKER-FORWARD is still missing."}
+    return {"success": True, "changed": True, "message": "Docker firewall chains restored after CSF reload."}
+
+
 def detect_docker_networks():
     networks = []
     raw = _run(["docker", "network", "ls", "--format", "{{.Name}}"])
