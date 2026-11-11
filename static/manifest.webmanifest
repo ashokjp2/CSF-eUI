@@ -4,13 +4,13 @@
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1f2933",
-  "theme_color": "#2980b9",
+  "theme_color": "#4f7cff",
   "icons": [
     {
       "src": "/static/img/csfv2-icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }
