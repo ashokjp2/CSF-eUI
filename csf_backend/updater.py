@@ -353,21 +353,30 @@ def run_update_stream(force=False):
     if cleanup_error:
         yield from _sse("Warning: " + cleanup_error)
 
-    # git pull
-    yield from _sse("Running: git pull origin main")
-    proc = subprocess.Popen(
-        ["git", "pull", "origin", "main"],
-        cwd=INSTALL_DIR,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    for line in proc.stdout:
-        yield from _sse(line.rstrip())
-    rc = proc.wait()
+    # Fetch, then hard-reset to origin/main.  Unlike ``git pull`` this keeps
+    # working if the GitHub history is ever rewritten (force-pushed), because it
+    # never tries to merge diverged histories.  Local edits were discarded above.
+    yield from _sse("Running: git fetch origin main")
+    rc = 1
+    for cmd in (["git", "fetch", "origin", "main"],
+                ["git", "reset", "--hard", "FETCH_HEAD"]):
+        if cmd[1] == "reset":
+            yield from _sse("Running: git reset --hard origin/main")
+        proc = subprocess.Popen(
+            cmd,
+            cwd=INSTALL_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        for line in proc.stdout:
+            yield from _sse(line.rstrip())
+        rc = proc.wait()
+        if rc != 0:
+            break
 
     if rc != 0:
-        yield from _sse(f"ERROR: git pull failed (exit {rc}). Update aborted.")
+        yield from _sse(f"ERROR: git fetch/reset failed (exit {rc}). Update aborted.")
         yield "data: __DONE_ERROR__\n\n"
         return
 
