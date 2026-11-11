@@ -307,6 +307,62 @@ var CSFv2 = {
         });
     },
 
+    // ---- Safe apply bar: restart with auto-rollback unless confirmed ----
+    _safeTimer: null,
+    initSafeApply: function() {
+        var bar = document.getElementById('safe-bar');
+        if (!bar) return;
+        var self = this;
+        function render(s) {
+            var $bar = $(bar), icon = $bar.find('.safe-bar-icon'), act = $('#safe-bar-actions').empty();
+            $bar.removeClass('safe-pending safe-armed safe-rolled');
+            if (s.rolled_back) {
+                $bar.addClass('safe-rolled').show();
+                icon.attr('class', 'ti safe-bar-icon ti-arrow-back-up');
+                $('#safe-bar-title').text(s.rolled_back.success ? 'Change rolled back' : 'Rollback failed');
+                $('#safe-bar-sub').text(s.rolled_back.message || '');
+                act.append($('<button class="btn btn-default btn-sm">Dismiss</button>').on('click', function() {
+                    $.post('/api/safe-apply/dismiss', function() { refresh(); });
+                }));
+            } else if (s.armed) {
+                $bar.addClass('safe-armed').show();
+                icon.attr('class', 'ti safe-bar-icon ti-hourglass');
+                $('#safe-bar-title').text('Confirm the firewall still lets you in');
+                var sub = $('#safe-bar-sub');
+                var remaining = s.remaining;
+                sub.text('Rolls back to the previous config in ' + remaining + 's unless you confirm.');
+                clearInterval(self._safeTimer);
+                self._safeTimer = setInterval(function() {
+                    remaining -= 1;
+                    if (remaining <= 0) { clearInterval(self._safeTimer); refresh(); return; }
+                    sub.text('Rolls back to the previous config in ' + remaining + 's unless you confirm.');
+                }, 1000);
+                act.append($('<button class="btn btn-primary btn-sm"><i class="ti ti-check"></i> Keep this config</button>').on('click', function() {
+                    var b = $(this).prop('disabled', true);
+                    $.post('/api/safe-apply/confirm', function() { clearInterval(self._safeTimer); self.toast('Configuration confirmed', 'success'); refresh(); })
+                     .fail(function() { b.prop('disabled', false); });
+                }));
+            } else if (s.pending) {
+                $bar.addClass('safe-pending').show();
+                icon.attr('class', 'ti safe-bar-icon ti-player-play');
+                $('#safe-bar-title').text('Unapplied firewall changes');
+                $('#safe-bar-sub').text('Apply safely restarts csf+lfd and rolls back automatically in ' + s.seconds + 's unless you confirm you still have access.');
+                act.append($('<button class="btn btn-primary btn-sm"><i class="ti ti-shield-check"></i> Apply safely</button>').on('click', function() {
+                    var b = $(this).prop('disabled', true).text('Applying…');
+                    $.ajax({url: '/api/safe-apply/start', method: 'POST', contentType: 'application/json', data: JSON.stringify({seconds: s.seconds})})
+                        .done(function(r) { if (!r.success) self.toast(r.error || 'Apply failed', 'danger'); refresh(); })
+                        .fail(function() { self.toast('Apply failed', 'danger'); b.prop('disabled', false); });
+                }));
+                act.append($('<a class="btn btn-default btn-sm" href="/backup-restore">Backups</a>'));
+            } else {
+                $bar.hide();
+            }
+        }
+        function refresh() { $.getJSON('/api/safe-apply/status', render); }
+        refresh();
+        setInterval(refresh, 20000);
+    },
+
     // ---- Command palette (Ctrl+K) ----
     _settingHelp: null,
     initPalette: function() {
@@ -405,6 +461,7 @@ $(document).ready(function() {
     CSFv2.initTheme();
     CSFv2.initSidebar();
     CSFv2.initPalette();
+    CSFv2.initSafeApply();
 
     // Theme toggle
     function syncThemeIcon() {

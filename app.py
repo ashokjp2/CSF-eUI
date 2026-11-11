@@ -53,6 +53,9 @@ from csf_backend import bandwidth
 from csf_backend import login_history
 from csf_backend import backup_restore
 from csf_backend import email_alerts
+from csf_backend import notifications
+from csf_backend import safe_apply
+import time
 
 app = Flask(__name__)
 logging.basicConfig(
@@ -166,6 +169,12 @@ def check_csrf():
              or (request.get_json(silent=True) or {}).get("csrf_token"))
     if not token or not hmac.compare_digest(token, session.get("csrf_token", "")):
         return jsonify({"error": "CSRF validation failed"}), 403
+    # Safe apply: keep a known-good snapshot before the first firewall config change
+    if session.get("logged_in") and safe_apply.is_change_path(request.path):
+        try:
+            safe_apply.snapshot_baseline()
+        except Exception as e:
+            logging.getLogger(__name__).warning("safe-apply baseline failed: %s", e)
 
 
 def login_required(f):
@@ -202,14 +211,43 @@ def login():
         remote_ip = request.remote_addr
         ok, msg = auth.authenticate(username, password, remote_ip)
         if ok:
-            session["logged_in"] = True
-            session["username"] = username
-            session.permanent = True
-            login_history.record_login(username, remote_ip, True)
+            if auth.totp_status(username)["enabled"]:
+                session.clear()
+                session["pending_2fa"] = {"username": username, "expires": int(time.time()) + 300}
+                return redirect(url_for("login_2fa"))
+            _complete_login(username, remote_ip)
             return redirect(url_for("dashboard"))
         login_history.record_login(username, remote_ip, False)
+        notifications.event("ui_login_failed", "Failed UI login", f"Failed login for '{username}' from {remote_ip}")
         flash(msg, "danger")
     return render_template("login.html")
+
+
+def _complete_login(username, remote_ip):
+    session.pop("pending_2fa", None)
+    session["logged_in"] = True
+    session["username"] = username
+    session.permanent = True
+    login_history.record_login(username, remote_ip, True)
+    notifications.event("ui_login", "UI login", f"'{username}' signed in from {remote_ip}")
+
+
+@app.route("/login/2fa", methods=["GET", "POST"])
+def login_2fa():
+    pending = session.get("pending_2fa") or {}
+    if not pending.get("username") or time.time() > pending.get("expires", 0):
+        session.pop("pending_2fa", None)
+        flash("Sign in again to continue", "warning")
+        return redirect(url_for("login"))
+    if request.method == "POST":
+        remote_ip = request.remote_addr
+        if auth.totp_check_login(pending["username"], request.form.get("code", "")):
+            _complete_login(pending["username"], remote_ip)
+            return redirect(url_for("dashboard"))
+        auth.record_failed(auth.load_auth_config(), remote_ip)
+        login_history.record_login(pending["username"], remote_ip, False)
+        flash("Invalid authentication code", "danger")
+    return render_template("login_2fa.html")
 
 
 @app.route("/logout")
@@ -269,6 +307,9 @@ def csf_action(action):
     if action == "csftest":
         report = security_check.run_full_check()
         return render_template("server_check.html", report=report, status=get_firewall_status())
+
+    if action in ("restart", "restartq", "restartboth"):
+        safe_apply.clear_baseline()   # an ordinary restart applies whatever is on disk
 
     if action == "sshd_edit":
         data = request.form
@@ -1172,9 +1213,42 @@ def settings_view():
                             flash(f"Verification email sent to {admin_email}. Click the link in the email to confirm the change.", "info")
                         else:
                             flash(f"Could not send verification email: {result['error']}", "danger")
+        elif action == "totp_setup":
+            session["totp_setup_secret"] = auth.totp_generate_secret()
+            return redirect(url_for("settings_view") + "#twofactor")
+        elif action == "totp_enable":
+            secret = session.get("totp_setup_secret", "")
+            if not secret:
+                flash("Start the two-factor setup again", "danger")
+            else:
+                ok, result = auth.totp_enable(session.get("username", "admin"), secret, request.form.get("code", ""))
+                if ok:
+                    session.pop("totp_setup_secret", None)
+                    session["totp_backup_codes"] = result
+                    flash("Two-factor authentication is on", "success")
+                else:
+                    flash(result, "danger")
+            return redirect(url_for("settings_view") + "#twofactor")
+        elif action == "totp_cancel":
+            session.pop("totp_setup_secret", None)
+            session.pop("totp_backup_codes", None)
+            return redirect(url_for("settings_view") + "#twofactor")
+        elif action == "totp_disable":
+            ok, msg = auth.totp_disable(session.get("username", "admin"),
+                                        request.form.get("current_password", ""), request.form.get("code", ""))
+            flash(msg, "success" if ok else "danger")
+            return redirect(url_for("settings_view") + "#twofactor")
         return redirect(url_for("settings_view"))
     admin_email = email_alerts.get_admin_email()
-    return render_template("settings.html", status=get_firewall_status(), admin_email=admin_email)
+    username = session.get("username", "admin")
+    setup_secret = session.get("totp_setup_secret")
+    return render_template(
+        "settings.html", status=get_firewall_status(), admin_email=admin_email,
+        totp=auth.totp_status(username),
+        totp_setup_secret=setup_secret,
+        totp_setup_uri=auth.totp_uri(setup_secret, username) if setup_secret else None,
+        totp_backup_codes=session.pop("totp_backup_codes", None),
+    )
 
 
 @app.route("/settings/confirm-username")
@@ -2657,9 +2731,70 @@ def api_smtp_config_save():
 
 # --- Initialization ---
 
+# --- Push notifications ---
+
+@app.route("/notifications")
+@login_required
+def notifications_page():
+    return render_template("notifications.html", status=get_firewall_status())
+
+
+@app.route("/api/notifications", methods=["GET"])
+@login_required
+def api_notifications_get():
+    return jsonify(notifications.public_config())
+
+
+@app.route("/api/notifications", methods=["POST"])
+@login_required
+def api_notifications_save():
+    data = request.get_json(silent=True) or {}
+    try:
+        notifications.save_config(data)
+        audit_log.log_event("config_change", session.get("username", ""), request.remote_addr, "Updated push notification settings")
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/notifications/test", methods=["POST"])
+@login_required
+def api_notifications_test():
+    data = request.get_json(silent=True) or {}
+    return jsonify(notifications.test_channel(data.get("channel", ""), data.get("values") or {}))
+
+
+# --- Safe apply (restart with automatic rollback) ---
+
+@app.route("/api/safe-apply/status")
+@login_required
+def api_safe_apply_status():
+    return jsonify(safe_apply.status())
+
+
+@app.route("/api/safe-apply/start", methods=["POST"])
+@login_required
+def api_safe_apply_start():
+    data = request.get_json(silent=True) or {}
+    return jsonify(safe_apply.arm(data.get("seconds", safe_apply.DEFAULT_SECONDS)))
+
+
+@app.route("/api/safe-apply/confirm", methods=["POST"])
+@login_required
+def api_safe_apply_confirm():
+    return jsonify(safe_apply.confirm())
+
+
+@app.route("/api/safe-apply/dismiss", methods=["POST"])
+@login_required
+def api_safe_apply_dismiss():
+    return jsonify(safe_apply.dismiss_rollback())
+
+
 def init_app():
     auth.init_auth()
     auth.setup_initial_user()
+    notifications.start_watcher()
 
 
 init_app()

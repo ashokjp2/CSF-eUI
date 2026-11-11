@@ -61,6 +61,63 @@
         </form>
 
         <hr>
+        <h4 id="twofactor">Two-factor authentication</h4>
+        {% if totp_backup_codes %}
+        <div class="alert alert-warning" style="max-width:560px">
+            <strong>Save these backup codes now.</strong> Each works once if you lose access to your authenticator app. They will not be shown again.
+            <pre style="margin:10px 0 0; font-size:13px; background:transparent; border:none; padding:0">{% for c in totp_backup_codes %}{{ c }}{{ '   ' if loop.index % 2 else '\n' }}{% endfor %}</pre>
+        </div>
+        {% endif %}
+        {% if totp.enabled %}
+        <p class="text-muted" style="font-size:13px">
+            <span class="ti ti-shield-check text-success"></span> <strong>On.</strong>
+            Sign-in asks for a code from your authenticator app. {{ totp.backup_codes_left }} backup codes left.
+        </p>
+        <form method="POST" action="/settings" class="form-inline">
+            <input type="hidden" name="action" value="totp_disable">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="password" class="form-control" name="current_password" placeholder="Current password" required>
+            <input type="text" class="form-control" name="code" placeholder="Code or backup code" required autocomplete="one-time-code" style="width:170px">
+            <button type="submit" class="btn btn-danger"><span class="ti ti-shield-off"></span> Turn off</button>
+        </form>
+        {% elif totp_setup_secret %}
+        <div class="row">
+            <div class="col-md-4" style="margin-bottom:12px">
+                <div id="totp-qr" style="padding:10px; background:#fff; border:1px solid var(--border-color); border-radius:10px; display:inline-block"></div>
+            </div>
+            <div class="col-md-8">
+                <ol style="font-size:13px; padding-left:18px; color:var(--text-secondary)">
+                    <li>Open your authenticator app (Google Authenticator, Authy, 1Password, Bitwarden, Microsoft Authenticator…).</li>
+                    <li>Scan the QR code, or enter this key manually:<br>
+                        <code style="font-size:13px; letter-spacing:1px">{{ totp_setup_secret }}</code></li>
+                    <li>Enter the 6-digit code the app shows to finish.</li>
+                </ol>
+                <form method="POST" action="/settings" class="form-inline">
+                    <input type="hidden" name="action" value="totp_enable">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="text" class="form-control" name="code" placeholder="123456" inputmode="numeric" autocomplete="one-time-code" required style="width:130px; font-family:monospace; letter-spacing:3px">
+                    <button type="submit" class="btn btn-primary"><span class="ti ti-shield-check"></span> Turn on</button>
+                </form>
+                <form method="POST" action="/settings" style="display:inline-block; margin-top:8px">
+                    <input type="hidden" name="action" value="totp_cancel">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-link btn-sm">Cancel</button>
+                </form>
+            </div>
+        </div>
+        {% else %}
+        <p class="text-muted" style="font-size:13px">
+            <span class="ti ti-shield-off"></span> <strong>Off.</strong>
+            Add a second step at sign-in using a time-based code from an authenticator app. Recommended: this UI controls the firewall.
+        </p>
+        <form method="POST" action="/settings">
+            <input type="hidden" name="action" value="totp_setup">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn btn-primary"><span class="ti ti-shield-lock"></span> Set up two-factor</button>
+        </form>
+        {% endif %}
+
+        <hr>
         <h4>About CSFv2</h4>
         <table class="table table-bordered" style="max-width:500px">
             <tr><td>CSF Version</td><td>{{ status.version }}</td></tr>
@@ -70,4 +127,14 @@
         </table>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{% if totp_setup_uri %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+new QRCode(document.getElementById('totp-qr'), { text: {{ totp_setup_uri|tojson }}, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+if (location.hash !== '#twofactor') location.hash = 'twofactor';
+</script>
+{% endif %}
 {% endblock %}

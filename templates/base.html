@@ -49,6 +49,7 @@
         {% set system_items = [
             ('/backup-restore', 'Backup & Restore', 'database-export', 'exact', ''),
             ('/email-alerts', 'Email Alerts', 'mail-exclamation', 'exact', ''),
+            ('/notifications', 'Notifications', 'bell-ringing', 'exact', ''),
             ('/ssl', 'SSL Certificates', 'certificate', 'exact', ''),
             ('/health', 'Health Check', 'heart-rate-monitor', 'exact', ''),
         ] %}
@@ -200,6 +201,13 @@
                     <input type="hidden" name="ip" id="palette-search-ip">
                 </form>
             </div>
+        </div>
+
+        <!-- Safe apply bar: unapplied changes / confirmation countdown / rollback notice -->
+        <div class="safe-bar" id="safe-bar" style="display:none">
+            <i class="ti safe-bar-icon"></i>
+            <div class="safe-bar-text"><b id="safe-bar-title"></b><span id="safe-bar-sub"></span></div>
+            <div class="safe-bar-actions" id="safe-bar-actions"></div>
         </div>
 
         <!-- Page content -->

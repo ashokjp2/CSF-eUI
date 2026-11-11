@@ -1499,6 +1499,35 @@ hr { border-color: var(--border-light); }
 .ti.spin, .ti.spinning { display: inline-block; animation: ti-spin 1s linear infinite; }
 @keyframes ti-spin { to { transform: rotate(360deg); } }
 
+/* ===== Safe apply bar ===== */
+.safe-bar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    margin: 16px 24px 0; padding: 10px 14px;
+    background: var(--panel-bg); border: 1px solid var(--border-color); border-left: 3px solid var(--accent); border-radius: 10px;
+}
+.safe-bar-icon { font-size: 20px; color: var(--accent); flex-shrink: 0; }
+.safe-bar-text { flex: 1; min-width: 220px; }
+.safe-bar-text b { display: block; font-weight: 500; font-size: 13px; }
+.safe-bar-text span { font-size: 12px; color: var(--text-secondary); }
+.safe-bar-actions { display: flex; gap: 6px; }
+.safe-bar.safe-armed { border-left-color: var(--warning); }
+.safe-bar.safe-armed .safe-bar-icon { color: var(--warning); }
+.safe-bar.safe-rolled { border-left-color: var(--danger); }
+.safe-bar.safe-rolled .safe-bar-icon { color: var(--danger); }
+@media (max-width: 768px) { .safe-bar { margin: 12px 16px 0; } }
+
+/* ===== Notifications page ===== */
+.notify-ch { border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+.notify-ch-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.notify-switch { margin: 0; font-weight: 500; font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.notify-switch .ti { font-size: 17px; color: var(--text-muted); }
+.notify-ch.on .notify-switch .ti { color: var(--accent); }
+.notify-ch-body { margin-top: 8px; display: none; }
+.notify-ch.on .notify-ch-body { display: block; }
+.notify-ch-body .row { margin-bottom: 6px; }
+.notify-event { display: flex; align-items: flex-start; gap: 8px; font-weight: 400; font-size: 13px; margin: 0 0 8px; cursor: pointer; }
+.notify-event input { margin-top: 3px; }
+
 /* ===== Restrained palette: light neutral sidebar, one blue accent, colour only for meaning ===== */
 :root {
     --sidebar-bg: #ffffff;

@@ -186,6 +186,109 @@ def confirm_username_change(token):
     return True, new
 
 
+# --- Two-factor authentication (TOTP, RFC 6238; no third-party dependency) ---
+
+import base64
+import struct
+
+TOTP_ISSUER = "CSF-eUI"
+
+
+def totp_generate_secret():
+    """Return a new 160-bit base32 secret for an authenticator app."""
+    return base64.b32encode(os.urandom(20)).decode().rstrip("=")
+
+
+def totp_code(secret, timestamp=None, step=30, digits=6):
+    """Compute the TOTP code for a base32 secret at the given time."""
+    key = base64.b32decode(secret.upper() + "=" * (-len(secret) % 8))
+    counter = int((timestamp or time.time()) // step)
+    msg = struct.pack(">Q", counter)
+    digest = hmac.new(key, msg, hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    code = (struct.unpack(">I", digest[offset:offset + 4])[0] & 0x7FFFFFFF) % (10 ** digits)
+    return str(code).zfill(digits)
+
+
+def totp_verify(secret, code, window=1):
+    """Accept the current code and one step either side to allow for clock drift."""
+    code = (code or "").strip().replace(" ", "")
+    if not code.isdigit():
+        return False
+    now = time.time()
+    for i in range(-window, window + 1):
+        if hmac.compare_digest(totp_code(secret, now + i * 30), code):
+            return True
+    return False
+
+
+def totp_uri(secret, username):
+    return f"otpauth://totp/{TOTP_ISSUER}:{username}?secret={secret}&issuer={TOTP_ISSUER}&digits=6&period=30"
+
+
+def totp_status(username):
+    """Return {'enabled': bool, 'backup_codes_left': int} for a user."""
+    user = load_auth_config().get("users", {}).get(username, {})
+    t = user.get("totp") or {}
+    return {"enabled": bool(t.get("enabled")), "backup_codes_left": len(t.get("backup_codes", []))}
+
+
+def totp_enable(username, secret, code):
+    """Verify the first code from the app, then enable 2FA. Returns (ok, backup_codes_or_error)."""
+    if not totp_verify(secret, code):
+        return False, "The code did not match. Check the time on your phone and try again."
+    config = load_auth_config()
+    user = config.get("users", {}).get(username)
+    if user is None:
+        return False, "User not found"
+    plain_codes = [secrets.token_hex(4) for _ in range(8)]
+    user["totp"] = {
+        "enabled": True,
+        "secret": secret,
+        "enabled_at": int(time.time()),
+        "backup_codes": [hashlib.sha256(c.encode()).hexdigest() for c in plain_codes],
+    }
+    save_auth_config(config)
+    log_event(f"Two-factor authentication enabled for {username}")
+    return True, plain_codes
+
+
+def totp_disable(username, password, code):
+    """Disable 2FA; requires the password and a current code (or backup code)."""
+    config = load_auth_config()
+    user = config.get("users", {}).get(username)
+    if user is None:
+        return False, "User not found"
+    if not verify_password(password, user["password"]):
+        return False, "Invalid password"
+    if not totp_check_login(username, code):
+        return False, "Invalid authentication code"
+    user.pop("totp", None)
+    save_auth_config(config)
+    log_event(f"Two-factor authentication disabled for {username}")
+    return True, "Two-factor authentication disabled"
+
+
+def totp_check_login(username, code):
+    """Verify a login code: TOTP first, then single-use backup codes."""
+    config = load_auth_config()
+    user = config.get("users", {}).get(username, {})
+    t = user.get("totp") or {}
+    if not t.get("enabled"):
+        return True
+    if totp_verify(t.get("secret", ""), code):
+        return True
+    digest = hashlib.sha256((code or "").strip().lower().encode()).hexdigest()
+    codes = t.get("backup_codes", [])
+    for stored in codes:
+        if hmac.compare_digest(stored, digest):
+            codes.remove(stored)
+            save_auth_config(config)
+            log_event(f"Backup code used for {username} ({len(codes)} left)")
+            return True
+    return False
+
+
 def change_password(username, new_password):
     config = load_auth_config()
     if username not in config.get("users", {}):
