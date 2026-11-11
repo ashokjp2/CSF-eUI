@@ -7,7 +7,7 @@
         <!-- Quick Add -->
         <div class="panel panel-primary">
             <div class="panel-heading">
-                <h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-plus"></span> Quick Add IP</h4>
+                <h4 class="panel-title" style="margin:0"><span class="ti ti-plus"></span> Quick Add IP</h4>
             </div>
             <div class="panel-body">
                 <div class="row">
@@ -26,13 +26,13 @@
                     <div class="col-md-2">
                         <label>&nbsp;</label>
                         <button class="btn btn-success btn-block" id="qa-allow">
-                            <span class="glyphicon glyphicon-ok"></span> Allow
+                            <span class="ti ti-check"></span> Allow
                         </button>
                     </div>
                     <div class="col-md-2">
                         <label>&nbsp;</label>
                         <button class="btn btn-danger btn-block" id="qa-deny">
-                            <span class="glyphicon glyphicon-ban-circle"></span> Deny
+                            <span class="ti ti-ban"></span> Deny
                         </button>
                     </div>
                 </div>
@@ -45,7 +45,7 @@
                 <div class="panel panel-success">
                     <div class="panel-heading">
                         <h4 class="panel-title" style="margin:0">
-                            <span class="glyphicon glyphicon-ok-circle"></span> Allowed IPs (csf.allow)
+                            <span class="ti ti-circle-check"></span> Allowed IPs (csf.allow)
                             <span class="badge" id="allow-badge">0</span>
                         </h4>
                     </div>
@@ -67,7 +67,7 @@
                 <div class="panel panel-danger">
                     <div class="panel-heading">
                         <h4 class="panel-title" style="margin:0">
-                            <span class="glyphicon glyphicon-ban-circle"></span> Denied IPs (csf.deny)
+                            <span class="ti ti-ban"></span> Denied IPs (csf.deny)
                             <span class="badge" id="deny-badge">0</span>
                         </h4>
                     </div>
@@ -103,8 +103,8 @@ $(function() {
                 '<td style="width:50%"><code>' + e.ip + '</code></td>' +
                 '<td style="font-size:11px; color:#777">' + (e.comment || '') + '</td>' +
                 '<td style="width:80px; text-align:right">' +
-                '<button class="btn btn-xs btn-default ip-remove" data-type="' + type + '" data-ip="' + e.ip + '" title="Remove"><span class="glyphicon glyphicon-remove text-danger"></span></button> ' +
-                '<a href="/ip-lookup?ip=' + e.ip.split('/')[0] + '" class="btn btn-xs btn-default" title="Lookup"><span class="glyphicon glyphicon-search"></span></a>' +
+                '<button class="btn btn-xs btn-default ip-remove" data-type="' + type + '" data-ip="' + e.ip + '" title="Remove"><span class="ti ti-x text-danger"></span></button> ' +
+                '<a href="/ip-lookup?ip=' + e.ip.split('/')[0] + '" class="btn btn-xs btn-default" title="Lookup"><span class="ti ti-search"></span></a>' +
                 '</td></tr>';
         });
         $('#' + type + '-tbody').html(html || '<tr><td colspan="3" class="text-center text-muted" style="padding:20px">Empty</td></tr>');

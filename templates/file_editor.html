@@ -4,7 +4,7 @@
 {% block content %}
 <div class="panel panel-default">
     <div class="panel-heading">
-        <h4 style="margin:0"><span class="glyphicon glyphicon-file"></span> {{ title }}</h4>
+        <h4 style="margin:0"><span class="ti ti-file"></span> {{ title }}</h4>
         <p class="text-muted">{{ filepath }}</p>
     </div>
     <div class="panel-body">
@@ -13,16 +13,16 @@
             <textarea name="content" id="editor" class="form-control textarea" rows="25" style="font-family:monospace; font-size:13px">{{ content }}</textarea>
             <div style="margin-top:15px" class="text-center">
                 <button type="submit" class="btn btn-primary btn-lg">
-                    <span class="glyphicon glyphicon-floppy-disk"></span> Save Changes
+                    <span class="ti ti-device-floppy"></span> Save Changes
                 </button>
                 {% if restart_type == 'both' %}
                 <p class="text-warning" style="margin-top:10px">
-                    <span class="glyphicon glyphicon-warning-sign"></span>
+                    <span class="ti ti-alert-triangle"></span>
                     Changes require a CSF+LFD restart to take effect.
                 </p>
                 {% elif restart_type == 'lfd' %}
                 <p class="text-warning" style="margin-top:10px">
-                    <span class="glyphicon glyphicon-warning-sign"></span>
+                    <span class="ti ti-alert-triangle"></span>
                     Changes require an LFD restart to take effect.
                 </p>
                 {% endif %}
@@ -37,14 +37,14 @@
     <form method="POST" action="/action/restartboth" style="display:inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="btn btn-warning">
-            <span class="glyphicon glyphicon-refresh"></span> Restart csf+lfd
+            <span class="ti ti-refresh"></span> Restart csf+lfd
         </button>
     </form>
     {% elif restart_type == 'lfd' %}
     <form method="POST" action="/action/lfdrestart" style="display:inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="btn btn-warning">
-            <span class="glyphicon glyphicon-refresh"></span> Restart lfd
+            <span class="ti ti-refresh"></span> Restart lfd
         </button>
     </form>
     {% endif %}

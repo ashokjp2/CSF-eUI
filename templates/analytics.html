@@ -43,7 +43,7 @@
             <div class="col-md-7">
                 <div class="panel panel-danger">
                     <div class="panel-heading">
-                        <h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-alert"></span> Top Attackers</h4>
+                        <h4 class="panel-title" style="margin:0"><span class="ti ti-alert-triangle"></span> Top Attackers</h4>
                     </div>
                     <div class="table-responsive">
                         <table class="table table-condensed table-hover" style="margin:0">
@@ -58,7 +58,7 @@
             <div class="col-md-5">
                 <div class="panel panel-warning">
                     <div class="panel-heading">
-                        <h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-globe"></span> Top Countries</h4>
+                        <h4 class="panel-title" style="margin:0"><span class="ti ti-world"></span> Top Countries</h4>
                     </div>
                     <div id="aa-countries-chart" style="padding:10px"></div>
                 </div>
@@ -66,7 +66,7 @@
                 <!-- Attack Types -->
                 <div class="panel panel-info">
                     <div class="panel-heading">
-                        <h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-flash"></span> Attack Types</h4>
+                        <h4 class="panel-title" style="margin:0"><span class="ti ti-bolt"></span> Attack Types</h4>
                     </div>
                     <div id="aa-types" style="padding:10px"></div>
                 </div>
@@ -76,7 +76,7 @@
         <!-- Hourly Heatmap -->
         <div class="panel panel-default">
             <div class="panel-heading">
-                <h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-time"></span> Attack Heatmap (by hour of day)</h4>
+                <h4 class="panel-title" style="margin:0"><span class="ti ti-clock"></span> Attack Heatmap (by hour of day)</h4>
             </div>
             <div class="panel-body" id="aa-heatmap" style="padding:10px"></div>
         </div>
@@ -101,8 +101,8 @@ $(function() {
                     '<td>' + flag + '</td>' +
                     '<td><span class="badge" style="background:#d9534f">' + ip.count + '</span></td>' +
                     '<td>' +
-                    '<a href="/ip-lookup?ip=' + ip.ip + '" class="btn btn-xs btn-info" title="Lookup"><span class="glyphicon glyphicon-search"></span></a> ' +
-                    '<a href="/logs/search?q=' + ip.ip + '" class="btn btn-xs btn-default" title="View Logs"><span class="glyphicon glyphicon-list-alt"></span></a>' +
+                    '<a href="/ip-lookup?ip=' + ip.ip + '" class="btn btn-xs btn-info" title="Lookup"><span class="ti ti-search"></span></a> ' +
+                    '<a href="/logs/search?q=' + ip.ip + '" class="btn btn-xs btn-default" title="View Logs"><span class="ti ti-list-details"></span></a>' +
                     '</td></tr>';
             });
             $('#aa-ips-table').html(html || '<tr><td colspan="5" class="text-center text-muted">No attack data</td></tr>');

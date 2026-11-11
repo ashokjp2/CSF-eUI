@@ -6,16 +6,16 @@
 
 <!-- Tabs -->
 <ul class="nav nav-tabs" id="configTabs">
-    <li class="active"><a data-toggle="tab" href="#ports"><span class="glyphicon glyphicon-transfer"></span> Ports</a></li>
-    <li><a data-toggle="tab" href="#countries"><span class="glyphicon glyphicon-globe"></span> Country Block</a></li>
-    <li><a data-toggle="tab" href="#connections"><span class="glyphicon glyphicon-random"></span> Connection Limits</a></li>
-    <li><a data-toggle="tab" href="#alerts"><span class="glyphicon glyphicon-envelope"></span> Email Alerts</a></li>
-    <li><a data-toggle="tab" href="#cloudflare"><span class="glyphicon glyphicon-cloud"></span> CloudFlare</a></li>
-    <li><a data-toggle="tab" href="#security"><span class="glyphicon glyphicon-lock"></span> Security</a></li>
-    <li><a data-toggle="tab" href="#dyndns"><span class="glyphicon glyphicon-globe"></span> Dynamic DNS</a></li>
-    <li><a data-toggle="tab" href="#services"><span class="glyphicon glyphicon-link"></span> Services &amp; LFD</a></li>
-    <li><a data-toggle="tab" href="#monitors"><span class="glyphicon glyphicon-eye-open"></span> Docker Monitors</a></li>
-    <li><a data-toggle="tab" href="#misc"><span class="glyphicon glyphicon-cog"></span> General</a></li>
+    <li class="active"><a data-toggle="tab" href="#ports"><span class="ti ti-arrows-exchange"></span> Ports</a></li>
+    <li><a data-toggle="tab" href="#countries"><span class="ti ti-world"></span> Country Block</a></li>
+    <li><a data-toggle="tab" href="#connections"><span class="ti ti-arrows-shuffle"></span> Connection Limits</a></li>
+    <li><a data-toggle="tab" href="#alerts"><span class="ti ti-mail"></span> Email Alerts</a></li>
+    <li><a data-toggle="tab" href="#cloudflare"><span class="ti ti-cloud"></span> CloudFlare</a></li>
+    <li><a data-toggle="tab" href="#security"><span class="ti ti-lock"></span> Security</a></li>
+    <li><a data-toggle="tab" href="#dyndns"><span class="ti ti-world"></span> Dynamic DNS</a></li>
+    <li><a data-toggle="tab" href="#services"><span class="ti ti-link"></span> Services &amp; LFD</a></li>
+    <li><a data-toggle="tab" href="#monitors"><span class="ti ti-eye"></span> Docker Monitors</a></li>
+    <li><a data-toggle="tab" href="#misc"><span class="ti ti-settings"></span> General</a></li>
 </ul>
 
 <div class="tab-content" style="margin-top:15px">
@@ -23,24 +23,24 @@
 <!-- ==================== PORT CONFIG ==================== -->
 <div class="tab-pane active" id="ports">
     <div class="panel panel-default">
-        <div class="panel-heading"><h4><span class="glyphicon glyphicon-transfer"></span> Port Configuration</h4></div>
+        <div class="panel-heading"><h4><span class="ti ti-arrows-exchange"></span> Port Configuration</h4></div>
         <div class="panel-body">
-            <div class="alert alert-info"><span class="glyphicon glyphicon-info-sign"></span> <strong>How it works:</strong> Only ports listed here can receive incoming connections. Click &times; to close a port, or type a number and click Add to open one. Common ports: 22=SSH, 80=HTTP, 443=HTTPS, 3000=Dokploy, 8750=CSFv2 UI, 51820=WireGuard.</div>
+            <div class="alert alert-info"><span class="ti ti-info-circle"></span> <strong>How it works:</strong> Only ports listed here can receive incoming connections. Click &times; to close a port, or type a number and click Add to open one. Common ports: 22=SSH, 80=HTTP, 443=HTTPS, 3000=Dokploy, 8750=CSFv2 UI, 51820=WireGuard.</div>
             <!-- Port Recommendations Panel -->
             <div class="panel panel-default" id="port-recommendations-panel">
                 <div class="panel-heading" style="cursor:pointer" onclick="togglePortRec()">
                     <h4 style="margin:0">
-                        <span class="glyphicon glyphicon-flash"></span> Port Recommendations
+                        <span class="ti ti-bolt"></span> Port Recommendations
                         <small class="text-muted" style="font-weight:normal"> — which ports each detected service needs</small>
                         <span class="pull-right">
                             <span id="port-rec-badge" class="badge" style="display:none"></span>
-                            <span class="glyphicon glyphicon-chevron-down" id="port-rec-chevron" style="margin-left:8px; font-size:12px"></span>
+                            <span class="ti ti-chevron-down" id="port-rec-chevron" style="margin-left:8px; font-size:12px"></span>
                         </span>
                     </h4>
                 </div>
                 <div id="port-rec-body" class="panel-body" style="display:none">
                     <div id="port-rec-loading" class="text-center text-muted" style="padding:10px">
-                        <span class="glyphicon glyphicon-refresh spin"></span> Scanning for services...
+                        <span class="ti ti-refresh spin"></span> Scanning for services...
                     </div>
                     <div id="port-rec-content" style="display:none"></div>
                 </div>
@@ -48,7 +48,7 @@
 
             <div style="margin-bottom:15px">
                 <button class="btn btn-warning" id="btn-smart-defaults" onclick="loadSmartDefaults()">
-                    <span class="glyphicon glyphicon-refresh"></span> Reset Ports to Smart Defaults
+                    <span class="ti ti-refresh"></span> Reset Ports to Smart Defaults
                 </button>
                 <small class="text-muted" style="margin-left:8px">Scans your server for running services and suggests matching port settings</small>
             </div>
@@ -72,7 +72,7 @@
                         <input type="text" class="form-control add-port-input" data-key="{{ key }}" placeholder="Add port (e.g. 8080)">
                         <span class="input-group-btn">
                             <button class="btn btn-default add-port-btn" data-key="{{ key }}">
-                                <span class="glyphicon glyphicon-plus"></span> Add
+                                <span class="ti ti-plus"></span> Add
                             </button>
                         </span>
                     </div>
@@ -87,13 +87,13 @@
 <!-- ==================== COUNTRY BLOCKING ==================== -->
 <div class="tab-pane" id="countries">
     <div class="panel panel-default">
-        <div class="panel-heading"><h4><span class="glyphicon glyphicon-globe"></span> Country Blocking</h4></div>
+        <div class="panel-heading"><h4><span class="ti ti-world"></span> Country Blocking</h4></div>
         <div class="panel-body">
-            <div class="alert alert-info"><span class="glyphicon glyphicon-info-sign"></span> <strong>How it works:</strong> Block entire countries from accessing your server, or allow only specific countries. Select a country from the dropdown and click Add. Uses MaxMind GeoIP database for accuracy.</div>
+            <div class="alert alert-info"><span class="ti ti-info-circle"></span> <strong>How it works:</strong> Block entire countries from accessing your server, or allow only specific countries. Select a country from the dropdown and click Add. Uses MaxMind GeoIP database for accuracy.</div>
             <div class="row">
                 <div class="col-md-6">
                     <div class="panel panel-danger">
-                        <div class="panel-heading"><strong><span class="glyphicon glyphicon-ban-circle"></span> Blocked Countries</strong> <small>— All traffic from these countries is denied</small></div>
+                        <div class="panel-heading"><strong><span class="ti ti-ban"></span> Blocked Countries</strong> <small>— All traffic from these countries is denied</small></div>
                         <div class="panel-body">
                             <div id="cc-deny-tags" class="cc-tags">
                                 {% for cc in country.CC_DENY.split(',') if cc.strip() %}
@@ -113,7 +113,7 @@
                                 </select>
                                 <span class="input-group-btn">
                                     <button class="btn btn-danger add-cc-btn" data-target="CC_DENY">
-                                        <span class="glyphicon glyphicon-plus"></span> Block
+                                        <span class="ti ti-plus"></span> Block
                                     </button>
                                 </span>
                             </div>
@@ -123,7 +123,7 @@
                 </div>
                 <div class="col-md-6">
                     <div class="panel panel-success">
-                        <div class="panel-heading"><strong><span class="glyphicon glyphicon-ok-circle"></span> Allowed Countries Only</strong> <small>— If set, ONLY these countries can connect</small></div>
+                        <div class="panel-heading"><strong><span class="ti ti-circle-check"></span> Allowed Countries Only</strong> <small>— If set, ONLY these countries can connect</small></div>
                         <div class="panel-body">
                             <div id="cc-allow-tags" class="cc-tags">
                                 {% for cc in country.CC_ALLOW.split(',') if cc.strip() %}
@@ -143,7 +143,7 @@
                                 </select>
                                 <span class="input-group-btn">
                                     <button class="btn btn-success add-cc-btn" data-target="CC_ALLOW">
-                                        <span class="glyphicon glyphicon-plus"></span> Allow
+                                        <span class="ti ti-plus"></span> Allow
                                     </button>
                                 </span>
                             </div>
@@ -153,7 +153,7 @@
                 </div>
             </div>
             <button class="btn btn-primary save-country-btn">
-                <span class="glyphicon glyphicon-floppy-disk"></span> Save Country Settings
+                <span class="ti ti-device-floppy"></span> Save Country Settings
             </button>
         </div>
     </div>
@@ -162,13 +162,13 @@
 <!-- ==================== CONNECTION LIMITS ==================== -->
 <div class="tab-pane" id="connections">
     <div class="panel panel-default">
-        <div class="panel-heading"><h4><span class="glyphicon glyphicon-random"></span> Connection &amp; Rate Limits</h4></div>
+        <div class="panel-heading"><h4><span class="ti ti-arrows-shuffle"></span> Connection &amp; Rate Limits</h4></div>
         <div class="panel-body">
-            <div class="alert alert-info"><span class="glyphicon glyphicon-info-sign"></span> <strong>How it works:</strong> These settings limit how many connections a single IP can make. This protects against DDoS attacks and brute-force attempts. The visual builders below let you add rules without remembering any syntax.</div>
+            <div class="alert alert-info"><span class="ti ti-info-circle"></span> <strong>How it works:</strong> These settings limit how many connections a single IP can make. This protects against DDoS attacks and brute-force attempts. The visual builders below let you add rules without remembering any syntax.</div>
             <form id="connForm">
                 <div class="row">
                     <div class="col-md-6">
-                        <h5><span class="glyphicon glyphicon-link"></span> Connection Tracking (DDoS Protection)</h5>
+                        <h5><span class="ti ti-link"></span> Connection Tracking (DDoS Protection)</h5>
                         <p class="text-muted" style="font-size:12px">Block IPs that open too many connections at once</p>
                         <div class="form-group">
                             <label>Max connections per IP <small class="text-muted">— 0 = disabled, good value: 100-300</small></label>
@@ -184,7 +184,7 @@
                         </div>
 
                         <hr>
-                        <h5><span class="glyphicon glyphicon-flash"></span> SYN Flood Protection</h5>
+                        <h5><span class="ti ti-bolt"></span> SYN Flood Protection</h5>
                         <p class="text-muted" style="font-size:12px">Protects against SYN flood DDoS attacks</p>
                         <div class="form-group">
                             <label>
@@ -202,28 +202,28 @@
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <h5><span class="glyphicon glyphicon-warning-sign"></span> Login Failure Limits</h5>
+                        <h5><span class="ti ti-alert-triangle"></span> Login Failure Limits</h5>
                         <p class="text-muted" style="font-size:12px">Block IPs after too many failed login attempts</p>
 
                         <div class="form-group">
-                            <label><span class="glyphicon glyphicon-console"></span> SSH failures before block</label>
+                            <label><span class="ti ti-terminal-2"></span> SSH failures before block</label>
                             <input type="number" class="form-control" name="LF_SSHD" value="{{ conn.LF_SSHD }}" min="0">
                             <p class="help-block" style="font-size:11px">Recommended: 5. Blocks brute-force SSH attacks.</p>
                         </div>
                         <div class="form-group">
-                            <label><span class="glyphicon glyphicon-folder-open"></span> FTP failures before block</label>
+                            <label><span class="ti ti-folder-open"></span> FTP failures before block</label>
                             <input type="number" class="form-control" name="LF_FTPD" value="{{ conn.LF_FTPD }}" min="0">
                         </div>
                         <div class="form-group">
-                            <label><span class="glyphicon glyphicon-envelope"></span> SMTP auth failures</label>
+                            <label><span class="ti ti-mail"></span> SMTP auth failures</label>
                             <input type="number" class="form-control" name="LF_SMTPAUTH" value="{{ conn.LF_SMTPAUTH }}" min="0">
                         </div>
                         <div class="form-group">
-                            <label><span class="glyphicon glyphicon-envelope"></span> POP3 failures</label>
+                            <label><span class="ti ti-mail"></span> POP3 failures</label>
                             <input type="number" class="form-control" name="LF_POP3D" value="{{ conn.LF_POP3D }}" min="0">
                         </div>
                         <div class="form-group">
-                            <label><span class="glyphicon glyphicon-envelope"></span> IMAP failures</label>
+                            <label><span class="ti ti-mail"></span> IMAP failures</label>
                             <input type="number" class="form-control" name="LF_IMAPD" value="{{ conn.LF_IMAPD }}" min="0">
                         </div>
                     </div>
@@ -231,33 +231,33 @@
 
                 <hr>
                 <!-- CONNLIMIT visual builder -->
-                <h5><span class="glyphicon glyphicon-resize-full"></span> Per-Port Connection Limits</h5>
+                <h5><span class="ti ti-arrows-maximize"></span> Per-Port Connection Limits</h5>
                 <p class="text-muted" style="font-size:12px">Limit how many simultaneous connections one IP can have to each port. Example: max 5 SSH connections + max 50 HTTP connections per IP.</p>
                 <div id="connlimit-builder">
                     <table class="table table-condensed table-bordered" style="max-width:600px">
                         <thead><tr><th style="width:40%">Port</th><th style="width:35%">Max Connections</th><th style="width:25%"></th></tr></thead>
                         <tbody id="connlimit-rows"></tbody>
                     </table>
-                    <button type="button" class="btn btn-sm btn-success" id="add-connlimit-row"><span class="glyphicon glyphicon-plus"></span> Add Port Limit</button>
+                    <button type="button" class="btn btn-sm btn-success" id="add-connlimit-row"><span class="ti ti-plus"></span> Add Port Limit</button>
                 </div>
                 <input type="hidden" name="CONNLIMIT" id="connlimit-hidden" value="{{ conn.CONNLIMIT }}">
 
                 <hr>
                 <!-- PORTFLOOD visual builder -->
-                <h5><span class="glyphicon glyphicon-fire"></span> Port Rate Limiting</h5>
+                <h5><span class="ti ti-flame"></span> Port Rate Limiting</h5>
                 <p class="text-muted" style="font-size:12px">Block an IP if it makes too many NEW connections to a port in a short time. Example: block if more than 20 new HTTP connections in 5 seconds.</p>
                 <div id="portflood-builder">
                     <table class="table table-condensed table-bordered" style="max-width:700px">
                         <thead><tr><th>Port</th><th>Max Connections</th><th>Within (seconds)</th><th>Protocol</th><th></th></tr></thead>
                         <tbody id="portflood-rows"></tbody>
                     </table>
-                    <button type="button" class="btn btn-sm btn-success" id="add-portflood-row"><span class="glyphicon glyphicon-plus"></span> Add Rate Limit</button>
+                    <button type="button" class="btn btn-sm btn-success" id="add-portflood-row"><span class="ti ti-plus"></span> Add Rate Limit</button>
                 </div>
                 <input type="hidden" name="PORTFLOOD" id="portflood-hidden" value="{{ conn.PORTFLOOD }}">
 
                 <hr>
                 <button type="submit" class="btn btn-primary">
-                    <span class="glyphicon glyphicon-floppy-disk"></span> Save Connection Settings
+                    <span class="ti ti-device-floppy"></span> Save Connection Settings
                 </button>
             </form>
         </div>
@@ -267,13 +267,13 @@
 <!-- ==================== EMAIL ALERTS ==================== -->
 <div class="tab-pane" id="alerts">
     <div class="panel panel-default">
-        <div class="panel-heading"><h4><span class="glyphicon glyphicon-envelope"></span> Email Alerts &amp; Notifications</h4></div>
+        <div class="panel-heading"><h4><span class="ti ti-mail"></span> Email Alerts &amp; Notifications</h4></div>
         <div class="panel-body">
-            <div class="alert alert-info"><span class="glyphicon glyphicon-info-sign"></span> <strong>How it works:</strong> CSF can email you when it blocks an IP, when someone logs in via SSH, or when suspicious activity is detected. Set your email below and pick which alerts you want.</div>
+            <div class="alert alert-info"><span class="ti ti-info-circle"></span> <strong>How it works:</strong> CSF can email you when it blocks an IP, when someone logs in via SSH, or when suspicious activity is detected. Set your email below and pick which alerts you want.</div>
             <form id="alertsForm">
                 <div class="row">
                     <div class="col-md-6">
-                        <h5><span class="glyphicon glyphicon-envelope"></span> Email Address</h5>
+                        <h5><span class="ti ti-mail"></span> Email Address</h5>
                         <div class="form-group">
                             <label>Send alerts to</label>
                             <input type="email" class="form-control" name="LF_ALERT_TO" value="{{ alerts.LF_ALERT_TO }}" placeholder="admin@yourdomain.com">
@@ -285,7 +285,7 @@
                         </div>
 
                         <hr>
-                        <h5><span class="glyphicon glyphicon-list-alt"></span> Daily Log Summary</h5>
+                        <h5><span class="ti ti-list-details"></span> Daily Log Summary</h5>
                         <div class="form-group">
                             <label>
                                 <input type="checkbox" name="LOGSCANNER" value="1" {{ 'checked' if alerts.LOGSCANNER == '1' }}>
@@ -302,7 +302,7 @@
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <h5><span class="glyphicon glyphicon-bell"></span> Which alerts do you want?</h5>
+                        <h5><span class="ti ti-bell"></span> Which alerts do you want?</h5>
                         <div class="form-group">
                             <label>
                                 <input type="checkbox" name="LF_EMAIL_ALERT" value="1" {{ 'checked' if alerts.LF_EMAIL_ALERT == '1' }}>
@@ -336,7 +336,7 @@
                             <p class="help-block" style="font-size:11px">When a repeat offender gets permanently banned.</p>
                         </div>
                         <hr>
-                        <h5><span class="glyphicon glyphicon-log-in"></span> Login Alerts</h5>
+                        <h5><span class="ti ti-login"></span> Login Alerts</h5>
                         <div class="form-group">
                             <label>
                                 <input type="checkbox" name="LF_SSH_EMAIL_ALERT" value="1" {{ 'checked' if alerts.LF_SSH_EMAIL_ALERT == '1' }}>
@@ -360,7 +360,7 @@
                 </div>
                 <hr>
                 <button type="submit" class="btn btn-primary">
-                    <span class="glyphicon glyphicon-floppy-disk"></span> Save Alert Settings
+                    <span class="ti ti-device-floppy"></span> Save Alert Settings
                 </button>
             </form>
         </div>
@@ -370,14 +370,14 @@
 <!-- ==================== CLOUDFLARE ==================== -->
 <div class="tab-pane" id="cloudflare">
     <div class="panel panel-default">
-        <div class="panel-heading"><h4><span class="glyphicon glyphicon-cloud"></span> CloudFlare Integration</h4></div>
+        <div class="panel-heading"><h4><span class="ti ti-cloud"></span> CloudFlare Integration</h4></div>
         <div class="panel-body">
             <div class="alert alert-warning">
-                <span class="glyphicon glyphicon-exclamation-sign"></span>
+                <span class="ti ti-alert-circle"></span>
                 <strong>What this is NOT:</strong> This does NOT add CloudFlare to your server. This does NOT enable CDN functionality.
             </div>
             <div class="alert alert-info">
-                <span class="glyphicon glyphicon-info-sign"></span>
+                <span class="ti ti-info-circle"></span>
                 <strong>What this IS:</strong> If your websites <em>already</em> use CloudFlare as a reverse proxy/CDN, enabling this tells CSF to <em>also</em> add blocked IPs to your CloudFlare firewall. This means attackers get blocked at CloudFlare's edge (before they even reach your server), which is more effective.
                 <br><br>
                 <strong>Don't use CloudFlare?</strong> Leave everything OFF. These settings do nothing without an existing CloudFlare setup.
@@ -405,7 +405,7 @@
                 </div>
                 <hr>
                 <button type="submit" class="btn btn-primary">
-                    <span class="glyphicon glyphicon-floppy-disk"></span> Save CloudFlare Settings
+                    <span class="ti ti-device-floppy"></span> Save CloudFlare Settings
                 </button>
             </form>
         </div>
@@ -415,13 +415,13 @@
 <!-- ==================== SECURITY ==================== -->
 <div class="tab-pane" id="security">
     <div class="panel panel-default">
-        <div class="panel-heading"><h4><span class="glyphicon glyphicon-lock"></span> Security &amp; Monitoring</h4></div>
+        <div class="panel-heading"><h4><span class="ti ti-lock"></span> Security &amp; Monitoring</h4></div>
         <div class="panel-body">
-            <div class="alert alert-info"><span class="glyphicon glyphicon-info-sign"></span> <strong>How it works:</strong> These features actively monitor your server for suspicious activity beyond just network attacks. They watch for runaway processes, port scanning, unauthorized file changes, and coordinated attacks.</div>
+            <div class="alert alert-info"><span class="ti ti-info-circle"></span> <strong>How it works:</strong> These features actively monitor your server for suspicious activity beyond just network attacks. They watch for runaway processes, port scanning, unauthorized file changes, and coordinated attacks.</div>
             <form id="securityForm">
                 <div class="row">
                     <div class="col-md-6">
-                        <h5><span class="glyphicon glyphicon-dashboard"></span> Process Tracking</h5>
+                        <h5><span class="ti ti-layout-dashboard"></span> Process Tracking</h5>
                         <p class="text-muted" style="font-size:12px">Alert when processes use too many resources (catches crypto miners, runaway scripts)</p>
                         <div class="form-group">
                             <label>Alert if a process runs longer than <small class="text-muted">(seconds, 0=off)</small></label>
@@ -450,7 +450,7 @@
                         </div>
 
                         <hr>
-                        <h5><span class="glyphicon glyphicon-search"></span> Port Scan Detection</h5>
+                        <h5><span class="ti ti-search"></span> Port Scan Detection</h5>
                         <p class="text-muted" style="font-size:12px">Block IPs that probe multiple ports looking for vulnerabilities</p>
                         <div class="form-group">
                             <label>Tracking window <small class="text-muted">(seconds, 0=off)</small></label>
@@ -464,7 +464,7 @@
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <h5><span class="glyphicon glyphicon-eye-open"></span> File &amp; Directory Monitoring</h5>
+                        <h5><span class="ti ti-eye"></span> File &amp; Directory Monitoring</h5>
                         <p class="text-muted" style="font-size:12px">Watch for unauthorized changes to critical system files</p>
                         <div class="form-group">
                             <label>Directory watch interval <small class="text-muted">(seconds, 0=off)</small></label>
@@ -478,7 +478,7 @@
                         </div>
 
                         <hr>
-                        <h5><span class="glyphicon glyphicon-warning-sign"></span> Attack Detection</h5>
+                        <h5><span class="ti ti-alert-triangle"></span> Attack Detection</h5>
                         <div class="form-group">
                             <label>
                                 <input type="checkbox" name="LF_DISTATTACK" value="1" {{ 'checked' if security.LF_DISTATTACK not in ('0', '') }}>
@@ -509,7 +509,7 @@
                         </div>
 
                         <hr>
-                        <h5><span class="glyphicon glyphicon-globe"></span> Web Server Protection</h5>
+                        <h5><span class="ti ti-world"></span> Web Server Protection</h5>
                         <div class="form-group">
                             <label>Block after 404 errors <small class="text-muted">(0=off)</small></label>
                             <input type="number" class="form-control" name="LF_APACHE_404" value="{{ security.LF_APACHE_404 }}" min="0">
@@ -524,7 +524,7 @@
                 </div>
                 <hr>
                 <button type="submit" class="btn btn-primary">
-                    <span class="glyphicon glyphicon-floppy-disk"></span> Save Security Settings
+                    <span class="ti ti-device-floppy"></span> Save Security Settings
                 </button>
             </form>
         </div>
@@ -534,9 +534,9 @@
 <!-- ==================== DYNAMIC DNS ==================== -->
 <div class="tab-pane" id="dyndns">
     <div class="panel panel-default">
-        <div class="panel-heading"><h4><span class="glyphicon glyphicon-globe"></span> Dynamic DNS Hostnames</h4></div>
+        <div class="panel-heading"><h4><span class="ti ti-world"></span> Dynamic DNS Hostnames</h4></div>
         <div class="panel-body">
-            <div class="alert alert-info"><span class="glyphicon glyphicon-info-sign"></span> <strong>How it works:</strong> If your home/office IP changes (most ISPs do this), add your dynamic DNS hostname here. CSF will automatically resolve it periodically and keep you whitelisted so you never lock yourself out.</div>
+            <div class="alert alert-info"><span class="ti ti-info-circle"></span> <strong>How it works:</strong> If your home/office IP changes (most ISPs do this), add your dynamic DNS hostname here. CSF will automatically resolve it periodically and keep you whitelisted so you never lock yourself out.</div>
 
             <div id="dyndns-list">
                 {% for entry in dyndns %}
@@ -544,7 +544,7 @@
                     <input type="text" class="form-control dyndns-entry" value="{{ entry }}" readonly>
                     <span class="input-group-btn">
                         <button class="btn btn-danger remove-dyndns" data-host="{{ entry }}">
-                            <span class="glyphicon glyphicon-trash"></span>
+                            <span class="ti ti-trash"></span>
                         </button>
                     </span>
                 </div>
@@ -555,7 +555,7 @@
                 <input type="text" class="form-control" id="new-dyndns" placeholder="myhome.dyndns.org">
                 <span class="input-group-btn">
                     <button class="btn btn-success" id="add-dyndns-btn">
-                        <span class="glyphicon glyphicon-plus"></span> Add Hostname
+                        <span class="ti ti-plus"></span> Add Hostname
                     </button>
                 </span>
             </div>
@@ -563,7 +563,7 @@
 
             <hr>
             <button class="btn btn-primary" id="save-dyndns-btn">
-                <span class="glyphicon glyphicon-floppy-disk"></span> Save Dynamic DNS
+                <span class="ti ti-device-floppy"></span> Save Dynamic DNS
             </button>
         </div>
     </div>
@@ -574,52 +574,52 @@
     <div class="panel panel-default">
         <div class="panel-heading">
             <h4>
-                <span class="glyphicon glyphicon-link"></span> Services &amp; LFD
+                <span class="ti ti-link"></span> Services &amp; LFD
                 <button class="btn btn-sm btn-info pull-right" id="detect-services-btn">
-                    <span class="glyphicon glyphicon-refresh"></span> Detect Services
+                    <span class="ti ti-refresh"></span> Detect Services
                 </button>
             </h4>
         </div>
         <div class="panel-body">
             <div class="alert alert-info">
-                <span class="glyphicon glyphicon-info-sign"></span>
+                <span class="ti ti-info-circle"></span>
                 <strong>What this does:</strong> When you run Docker, WireGuard, Netbird, Coolify or Dokploy, this panel auto-detects those services and checks two things: (1) whether the required firewall ports are open in TCP_IN / UDP_IN, and (2) whether their internal subnets are whitelisted so LFD stops raising false alarms.
             </div>
 
-            <div id="services-loading" style="display:none" class="text-center"><span class="glyphicon glyphicon-refresh spin"></span> Detecting services...</div>
+            <div id="services-loading" style="display:none" class="text-center"><span class="ti ti-refresh spin"></span> Detecting services...</div>
 
             <!-- Required Ports Check -->
-            <h5><span class="glyphicon glyphicon-transfer"></span> Required Firewall Ports</h5>
+            <h5><span class="ti ti-arrows-exchange"></span> Required Firewall Ports</h5>
             <p class="text-muted" style="font-size:12px">Checks whether the ports needed by your detected services are open in TCP_IN / UDP_IN.</p>
             <div id="service-port-check">
                 <div class="text-muted">Click "Detect Services" to check port requirements.</div>
             </div>
             <div id="service-port-fix-row" style="display:none; margin-top:10px">
                 <button class="btn btn-warning" id="add-service-ports-btn">
-                    <span class="glyphicon glyphicon-plus"></span> Add All Missing Ports
+                    <span class="ti ti-plus"></span> Add All Missing Ports
                 </button>
                 <small class="text-muted" style="margin-left:8px">Updates TCP_IN / UDP_IN — restart CSF to apply</small>
             </div>
 
             <hr>
             <!-- Detected Networks -->
-            <h5><span class="glyphicon glyphicon-hdd"></span> Detected Internal Networks</h5>
+            <h5><span class="ti ti-server"></span> Detected Internal Networks</h5>
             <p class="text-muted" style="font-size:12px">These are the private subnets used by your services. Toggle each one to add/remove from the LFD ignore list (csf.ignore).</p>
             <div id="detected-networks">
                 <div class="text-muted">Click "Detect Services" to scan your server.</div>
             </div>
 
             <hr>
-            <h5><span class="glyphicon glyphicon-flash"></span> Quick Fix: Services &amp; LFD Noise</h5>
+            <h5><span class="ti ti-bolt"></span> Quick Fix: Services &amp; LFD Noise</h5>
             <p class="text-muted" style="font-size:12px">One-click fix: whitelists detected Docker/WireGuard/Netbird networks and supported service processes, and changes the noisy stock PT_USERTIME=1800 setting to 0. Explicit custom thresholds are preserved.</p>
             <button class="btn btn-success" id="autofix-services-btn">
-                <span class="glyphicon glyphicon-ok-circle"></span> Auto-Fix All Services
+                <span class="ti ti-circle-check"></span> Auto-Fix All Services
             </button>
             <div id="autofix-results" style="display:none; margin-top:15px"></div>
 
             <hr>
             <!-- Process Ignores -->
-            <h5><span class="glyphicon glyphicon-tasks"></span> Process Tracking Exemptions</h5>
+            <h5><span class="ti ti-list-check"></span> Process Tracking Exemptions</h5>
             <p class="text-muted" style="font-size:12px">LFD's process tracker flags long-running or high-resource processes. Container services like PostgreSQL and Nginx run legitimately for a long time. Add them here so LFD ignores them (csf.pignore).</p>
             <div id="process-ignores">
                 <div class="text-muted">Click "Detect Services" to see current status.</div>
@@ -627,7 +627,7 @@
 
             <hr>
             <!-- Manual Add -->
-            <h5><span class="glyphicon glyphicon-plus"></span> Manually Add to Ignore Lists</h5>
+            <h5><span class="ti ti-plus"></span> Manually Add to Ignore Lists</h5>
             <div class="row">
                 <div class="col-md-6">
                     <div class="panel panel-default">
@@ -636,7 +636,7 @@
                             <div class="input-group">
                                 <input type="text" class="form-control" id="manual-ignore-ip" placeholder="e.g. 172.21.0.0/16">
                                 <span class="input-group-btn">
-                                    <button class="btn btn-success" id="manual-ignore-add"><span class="glyphicon glyphicon-plus"></span> Add</button>
+                                    <button class="btn btn-success" id="manual-ignore-add"><span class="ti ti-plus"></span> Add</button>
                                 </span>
                             </div>
                         </div>
@@ -649,7 +649,7 @@
                             <div class="input-group">
                                 <input type="text" class="form-control" id="manual-pignore-entry" placeholder="e.g. exe:/usr/sbin/mysqld">
                                 <span class="input-group-btn">
-                                    <button class="btn btn-success" id="manual-pignore-add"><span class="glyphicon glyphicon-plus"></span> Add</button>
+                                    <button class="btn btn-success" id="manual-pignore-add"><span class="ti ti-plus"></span> Add</button>
                                 </span>
                             </div>
                             <p class="help-block" style="font-size:11px">Formats: <code>exe:/path/to/binary</code>, <code>user:username</code>, <code>pexe:/regex/pattern.*</code></p>
@@ -666,20 +666,20 @@
     <div class="panel panel-default">
         <div class="panel-heading">
             <h4>
-                <span class="glyphicon glyphicon-eye-open"></span> Docker Service Monitors
+                <span class="ti ti-eye"></span> Docker Service Monitors
                 <button class="btn btn-sm btn-info pull-right" id="scan-monitors-btn">
-                    <span class="glyphicon glyphicon-refresh"></span> Scan Now
+                    <span class="ti ti-refresh"></span> Scan Now
                 </button>
             </h4>
         </div>
         <div class="panel-body">
-            <div class="alert alert-info"><span class="glyphicon glyphicon-info-sign"></span> <strong>How it works:</strong> CSFv2 watches Docker container logs for failed login attempts. If a container gets brute-forced, CSFv2 can block the attacker's IP just like it does for SSH.</div>
+            <div class="alert alert-info"><span class="ti ti-info-circle"></span> <strong>How it works:</strong> CSFv2 watches Docker container logs for failed login attempts. If a container gets brute-forced, CSFv2 can block the attacker's IP just like it does for SSH.</div>
 
             <div id="monitor-status">
                 {% for name, info in monitor_status.items() %}
                 <div class="panel panel-{{ 'success' if info.installed else 'default' }}">
                     <div class="panel-heading">
-                        <span class="glyphicon glyphicon-{{ 'ok-circle text-success' if info.installed else 'remove-circle text-muted' }}"></span>
+                        <i class="ti ti-{{ 'circle-check text-success' if info.installed else 'circle-x text-muted' }}"></i>
                         <strong>{{ name|title }}</strong>
                         <span class="pull-right">
                             {% if info.installed %}
@@ -711,7 +711,7 @@
 <!-- ==================== GENERAL SETTINGS ==================== -->
 <div class="tab-pane" id="misc">
     <div class="panel panel-default">
-        <div class="panel-heading"><h4><span class="glyphicon glyphicon-cog"></span> General Settings</h4></div>
+        <div class="panel-heading"><h4><span class="ti ti-settings"></span> General Settings</h4></div>
         <div class="panel-body">
             <form id="miscForm">
                 <div class="row">
@@ -754,14 +754,14 @@
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <h5><span class="glyphicon glyphicon-lock"></span> API Keys</h5>
+                        <h5><span class="ti ti-lock"></span> API Keys</h5>
                         <div class="form-group">
                             <label>AbuseIPDB API Key</label>
                             <div class="input-group">
                                 <input type="password" class="form-control" id="abuseipdb_key" value="{{ api_keys.ABUSEIPDB_KEY }}" placeholder="Paste your API key here">
                                 <span class="input-group-btn">
                                     <button class="btn btn-default toggle-key-vis" type="button" title="Show/hide">
-                                        <span class="glyphicon glyphicon-eye-open"></span>
+                                        <span class="ti ti-eye"></span>
                                     </button>
                                 </span>
                             </div>
@@ -770,7 +770,7 @@
                             </p>
                         </div>
                         <button class="btn btn-success btn-sm" id="saveApiKeys">
-                            <span class="glyphicon glyphicon-floppy-disk"></span> Save API Key
+                            <span class="ti ti-device-floppy"></span> Save API Key
                         </button>
                         <hr>
 
@@ -805,7 +805,7 @@
                 </div>
                 <hr>
                 <button type="submit" class="btn btn-primary">
-                    <span class="glyphicon glyphicon-floppy-disk"></span> Save General Settings
+                    <span class="ti ti-device-floppy"></span> Save General Settings
                 </button>
             </form>
         </div>
@@ -819,7 +819,7 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="redirect_to" value="/qconfig">
         <button type="submit" class="btn btn-warning confirmButton" data-query="Restart CSF to apply changes?" data-action="/action/restart">
-            <span class="glyphicon glyphicon-refresh"></span> Restart CSF &amp; Apply
+            <span class="ti ti-refresh"></span> Restart CSF &amp; Apply
         </button>
     </form>
 
@@ -937,7 +937,7 @@ $(function() {
                 '<tr>' +
                 '<td><input type="number" class="form-control input-sm cl-port" value="' + r.port + '" min="1" max="65535">' + portName + '</td>' +
                 '<td><input type="number" class="form-control input-sm cl-limit" value="' + r.limit + '" min="1"></td>' +
-                '<td><button type="button" class="btn btn-sm btn-danger cl-remove"><span class="glyphicon glyphicon-trash"></span></button></td>' +
+                '<td><button type="button" class="btn btn-sm btn-danger cl-remove"><span class="ti ti-trash"></span></button></td>' +
                 '</tr>'
             );
         });
@@ -964,7 +964,7 @@ $(function() {
             '<tr>' +
             '<td><input type="number" class="form-control input-sm cl-port" placeholder="e.g. 80" min="1" max="65535"></td>' +
             '<td><input type="number" class="form-control input-sm cl-limit" placeholder="e.g. 50" min="1"></td>' +
-            '<td><button type="button" class="btn btn-sm btn-danger cl-remove"><span class="glyphicon glyphicon-trash"></span></button></td>' +
+            '<td><button type="button" class="btn btn-sm btn-danger cl-remove"><span class="ti ti-trash"></span></button></td>' +
             '</tr>'
         );
     });
@@ -997,7 +997,7 @@ $(function() {
                 '<td><input type="number" class="form-control input-sm pf-count" value="' + r.count + '" min="1"></td>' +
                 '<td><input type="number" class="form-control input-sm pf-interval" value="' + r.interval + '" min="1"></td>' +
                 '<td><select class="form-control input-sm pf-proto"><option value="tcp"' + (r.proto==='tcp'?' selected':'') + '>TCP</option><option value="udp"' + (r.proto==='udp'?' selected':'') + '>UDP</option></select></td>' +
-                '<td><button type="button" class="btn btn-sm btn-danger pf-remove"><span class="glyphicon glyphicon-trash"></span></button></td>' +
+                '<td><button type="button" class="btn btn-sm btn-danger pf-remove"><span class="ti ti-trash"></span></button></td>' +
                 '</tr>'
             );
         });
@@ -1028,7 +1028,7 @@ $(function() {
             '<td><input type="number" class="form-control input-sm pf-count" placeholder="e.g. 20" min="1"></td>' +
             '<td><input type="number" class="form-control input-sm pf-interval" placeholder="e.g. 5" min="1"></td>' +
             '<td><select class="form-control input-sm pf-proto"><option value="tcp">TCP</option><option value="udp">UDP</option></select></td>' +
-            '<td><button type="button" class="btn btn-sm btn-danger pf-remove"><span class="glyphicon glyphicon-trash"></span></button></td>' +
+            '<td><button type="button" class="btn btn-sm btn-danger pf-remove"><span class="ti ti-trash"></span></button></td>' +
             '</tr>'
         );
     });
@@ -1110,7 +1110,7 @@ $(function() {
             '<div class="input-group" style="margin-bottom:5px">' +
             '<input type="text" class="form-control dyndns-entry" value="' + host + '" readonly>' +
             '<span class="input-group-btn"><button class="btn btn-danger remove-dyndns" data-host="' + host + '">' +
-            '<span class="glyphicon glyphicon-trash"></span></button></span></div>'
+            '<span class="ti ti-trash"></span></button></span></div>'
         );
         $('#new-dyndns').val('');
     });
@@ -1133,7 +1133,7 @@ $(function() {
     /* ===== DOCKER MONITORS ===== */
     $('#scan-monitors-btn').click(function() {
         var btn = $(this);
-        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh spin"></span> Scanning...');
+        btn.prop('disabled', true).html('<span class="ti ti-refresh spin"></span> Scanning...');
         $.getJSON('/api/docker/scan', function(data) {
             var html = '';
             for (var name in data) {
@@ -1156,7 +1156,7 @@ $(function() {
             $('#scan-output').html(html);
             $('#scan-results').show();
         }).always(function() {
-            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-refresh"></span> Scan Now');
+            btn.prop('disabled', false).html('<span class="ti ti-refresh"></span> Scan Now');
         });
     });
 
@@ -1248,12 +1248,12 @@ $(function() {
                      && svc.settings.every(function(s) { return s.ok; });
 
             var statusBadge = allOk
-                ? '<span class="label label-success pull-right"><span class="glyphicon glyphicon-ok"></span> All open</span>'
-                : '<span class="label label-warning pull-right"><span class="glyphicon glyphicon-warning-sign"></span> Needs attention</span>';
+                ? '<span class="label label-success pull-right"><span class="ti ti-check"></span> All open</span>'
+                : '<span class="label label-warning pull-right"><span class="ti ti-alert-triangle"></span> Needs attention</span>';
 
             html += '<div class="panel panel-' + (allOk ? 'success' : 'warning') + '" style="margin-bottom:8px">';
             html += '<div class="panel-heading" style="padding:6px 12px">';
-            html += '<strong><span class="glyphicon ' + svc.icon + '"></span> ' + svc.label + '</strong>';
+            html += '<strong><i class="ti ti-' + CSFv2.ti(svc.icon) + '"></i> ' + svc.label + '</strong>';
             html += statusBadge;
             html += '</div>';
             html += '<div class="panel-body" style="padding:6px 12px">';
@@ -1263,12 +1263,12 @@ $(function() {
             svc.port_checks.forEach(function(pc) {
                 var statusCell, addBtn = '';
                 if (pc.open) {
-                    statusCell = '<span class="label label-success"><span class="glyphicon glyphicon-ok"></span> Open</span>';
+                    statusCell = '<span class="label label-success"><span class="ti ti-check"></span> Open</span>';
                 } else if (pc.country_restricted) {
-                    statusCell = '<span class="label label-info" title="Open to specific countries only via CC_ALLOW_PORTS"><span class="glyphicon glyphicon-flag"></span> Country restricted</span>';
+                    statusCell = '<span class="label label-info" title="Open to specific countries only via CC_ALLOW_PORTS"><span class="ti ti-flag"></span> Country restricted</span>';
                 } else {
-                    statusCell = '<span class="label label-danger"><span class="glyphicon glyphicon-remove"></span> Missing</span>';
-                    addBtn = '<button class="btn btn-xs btn-success svc-add-one-port" data-rule="' + pc.rule + '" data-port="' + pc.port + '"><span class="glyphicon glyphicon-plus"></span> Add</button>';
+                    statusCell = '<span class="label label-danger"><span class="ti ti-x"></span> Missing</span>';
+                    addBtn = '<button class="btn btn-xs btn-success svc-add-one-port" data-rule="' + pc.rule + '" data-port="' + pc.port + '"><span class="ti ti-plus"></span> Add</button>';
                     if (missingByRule[pc.rule]) missingByRule[pc.rule].push(pc.port);
                 }
                 html += '<tr>';
@@ -1283,9 +1283,9 @@ $(function() {
             svc.settings.forEach(function(s) {
                 var statusCell, fixNote = '';
                 if (s.ok) {
-                    statusCell = '<span class="label label-success"><span class="glyphicon glyphicon-ok"></span> Set</span>';
+                    statusCell = '<span class="label label-success"><span class="ti ti-check"></span> Set</span>';
                 } else {
-                    statusCell = '<span class="label label-danger"><span class="glyphicon glyphicon-remove"></span> Off</span>';
+                    statusCell = '<span class="label label-danger"><span class="ti ti-x"></span> Off</span>';
                     fixNote = '<a href="/config#' + s.key + '" class="btn btn-xs btn-warning">Fix in Config</a>';
                 }
                 html += '<tr>';
@@ -1317,21 +1317,21 @@ $(function() {
         var btn = $(this);
         var rule = btn.data('rule');
         var port = btn.data('port');
-        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span>');
+        btn.prop('disabled', true).html('<span class="ti ti-hourglass"></span>');
         $.post('/api/ports/add-port', {key: rule, port: port}, function(r) {
             if (r.success) {
                 showToast('Port ' + port + ' added to ' + rule, 'success');
                 $('#detect-services-btn').click();
             } else {
                 showToast(r.error || 'Failed', 'danger');
-                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-plus"></span> Add');
+                btn.prop('disabled', false).html('<span class="ti ti-plus"></span> Add');
             }
         });
     });
 
     $('#add-service-ports-btn').on('click', function() {
         var btn = $(this);
-        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh spin"></span> Adding...');
+        btn.prop('disabled', true).html('<span class="ti ti-refresh spin"></span> Adding...');
         /* Collect all missing ports from the current rendered table */
         var pending = [];
         $('#service-port-check .svc-add-one-port').each(function() {
@@ -1340,13 +1340,13 @@ $(function() {
             if (rule && port) pending.push($.post('/api/ports/add-port', {key: rule, port: port}));
         });
         if (pending.length === 0) {
-            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-plus"></span> Add All Missing Ports');
+            btn.prop('disabled', false).html('<span class="ti ti-plus"></span> Add All Missing Ports');
             return;
         }
         $.when.apply($, pending).always(function() {
             showToast('All missing ports added. Restart CSF to apply.', 'success');
             $('#detect-services-btn').click();
-            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-plus"></span> Add All Missing Ports');
+            btn.prop('disabled', false).html('<span class="ti ti-plus"></span> Add All Missing Ports');
         });
     });
 
@@ -1403,7 +1403,7 @@ $(function() {
 
     $('#autofix-services-btn').click(function() {
         var btn = $(this);
-        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh spin"></span> Fixing...');
+        btn.prop('disabled', true).html('<span class="ti ti-refresh spin"></span> Fixing...');
         $.post('/qconfig/services/autofix', function(r) {
             if (r.success) {
                 var html = '<div class="alert alert-success"><strong>' + r.message + '</strong></div>';
@@ -1412,7 +1412,7 @@ $(function() {
                     r.fixes.forEach(function(f) {
                         var label = f.name || f.subnet || f.entry;
                         var msg = f.result ? f.result.message : 'Done';
-                        html += '<li class="list-group-item"><span class="glyphicon glyphicon-ok text-success"></span> ' + label + ' — ' + msg + '</li>';
+                        html += '<li class="list-group-item"><span class="ti ti-check text-success"></span> ' + label + ' — ' + msg + '</li>';
                     });
                     html += '</ul>';
                 } else {
@@ -1424,7 +1424,7 @@ $(function() {
                 showToast('Auto-fix failed', 'danger');
             }
         }).always(function() {
-            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-ok-circle"></span> Auto-Fix All Services');
+            btn.prop('disabled', false).html('<span class="ti ti-circle-check"></span> Auto-Fix All Services');
         });
     });
 
@@ -1468,13 +1468,13 @@ function togglePortRec() {
     _portRecOpen = !_portRecOpen;
     if (_portRecOpen) {
         $('#port-rec-body').slideDown(200);
-        $('#port-rec-chevron').removeClass('glyphicon-chevron-down').addClass('glyphicon-chevron-up');
+        $('#port-rec-chevron').removeClass('ti-chevron-down').addClass('ti-chevron-up');
         if ($('#port-rec-content').is(':empty') || $('#port-rec-loading').is(':visible')) {
             loadPortRec();
         }
     } else {
         $('#port-rec-body').slideUp(200);
-        $('#port-rec-chevron').removeClass('glyphicon-chevron-up').addClass('glyphicon-chevron-down');
+        $('#port-rec-chevron').removeClass('ti-chevron-up').addClass('ti-chevron-down');
     }
 }
 
@@ -1529,10 +1529,10 @@ function renderPortRec(data) {
                 html += '<td><button class="btn btn-xs btn-success add-rec-port-btn"'
                     + ' data-key="' + entry.key + '" data-port="' + entry.port + '"'
                     + ' data-svc="' + svc.id + '">'
-                    + '<span class="glyphicon glyphicon-plus"></span> Add</button></td>';
+                    + '<span class="ti ti-plus"></span> Add</button></td>';
             } else if (isCC) {
                 html += '<td><span class="label label-info" title="Open to specific countries only via CC_ALLOW_PORTS">'
-                    + '<span class="glyphicon glyphicon-flag"></span> Country restricted</span></td>';
+                    + '<span class="ti ti-flag"></span> Country restricted</span></td>';
                 html += '<td class="text-muted" style="font-size:11px">Allowed for specific countries</td>';
             } else {
                 html += '<td><span class="label label-success">Open</span></td>';
@@ -1547,7 +1547,7 @@ function renderPortRec(data) {
     if (missingCount > 0) {
         html += '<div style="margin-top:10px">'
             + '<button class="btn btn-warning btn-sm" id="add-all-rec-btn">'
-            + '<span class="glyphicon glyphicon-plus"></span> Add All Missing Ports</button>'
+            + '<span class="ti ti-plus"></span> Add All Missing Ports</button>'
             + '<small class="text-muted" style="margin-left:8px">Adds every missing port to its required rule at once</small>'
             + '</div>';
     }
@@ -1559,7 +1559,7 @@ function renderPortRec(data) {
         var btn = $(this);
         var key = btn.data('key');
         var port = btn.data('port');
-        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span>');
+        btn.prop('disabled', true).html('<span class="ti ti-hourglass"></span>');
         $.post('/api/ports/add-port', {key: key, port: port}, function(r) {
             if (r.success) {
                 showToast('Port ' + port + ' added to ' + key, 'success');
@@ -1567,7 +1567,7 @@ function renderPortRec(data) {
                 reloadPortTag(key);
             } else {
                 showToast(r.error || 'Failed', 'danger');
-                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-plus"></span> Add');
+                btn.prop('disabled', false).html('<span class="ti ti-plus"></span> Add');
             }
         });
     });
@@ -1575,7 +1575,7 @@ function renderPortRec(data) {
     /* Add all missing */
     $(document).off('click.recall').on('click.recall', '#add-all-rec-btn', function() {
         var btn = $(this);
-        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Adding...');
+        btn.prop('disabled', true).html('<span class="ti ti-hourglass"></span> Adding...');
         var pending = [];
         recs.forEach(function(svc) {
             svc.gaps.forEach(function(g) {
@@ -1587,7 +1587,7 @@ function renderPortRec(data) {
             showToast('All missing ports added. Restart CSF to apply.', 'success');
             loadPortRec();
             ['TCP_IN','TCP_OUT','UDP_IN','UDP_OUT'].forEach(reloadPortTag);
-            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-plus"></span> Add All Missing Ports');
+            btn.prop('disabled', false).html('<span class="ti ti-plus"></span> Add All Missing Ports');
         });
     });
 }
@@ -1619,7 +1619,7 @@ $('#configTabs a[href="#ports"]').on('shown.bs.tab', function() {
     if (!_portRecOpen) {
         _portRecOpen = true;
         $('#port-rec-body').show();
-        $('#port-rec-chevron').removeClass('glyphicon-chevron-down').addClass('glyphicon-chevron-up');
+        $('#port-rec-chevron').removeClass('ti-chevron-down').addClass('ti-chevron-up');
         loadPortRec();
     }
 });
@@ -1629,12 +1629,12 @@ var _portLabels = {{ ports_json|safe }};
 
 function loadSmartDefaults() {
     var btn = $('#btn-smart-defaults');
-    btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Scanning server...');
+    btn.prop('disabled', true).html('<span class="ti ti-hourglass"></span> Scanning server...');
     $.getJSON('/api/port-defaults', function(data) {
-        btn.prop('disabled', false).html('<span class="glyphicon glyphicon-refresh"></span> Reset Ports to Smart Defaults');
+        btn.prop('disabled', false).html('<span class="ti ti-refresh"></span> Reset Ports to Smart Defaults');
         showSmartDefaultsModal(data);
     }).fail(function() {
-        btn.prop('disabled', false).html('<span class="glyphicon glyphicon-refresh"></span> Reset Ports to Smart Defaults');
+        btn.prop('disabled', false).html('<span class="ti ti-refresh"></span> Reset Ports to Smart Defaults');
         showToast('Failed to scan server services', 'danger');
     });
 }
@@ -1664,7 +1664,7 @@ function showSmartDefaultsModal(data) {
 
     var portKeys = ['TCP_IN', 'TCP_OUT', 'UDP_IN', 'UDP_OUT'];
     var compHtml = '<table class="table table-bordered table-condensed" style="font-size:12px">';
-    compHtml += '<thead><tr><th>Setting</th><th>Current</th><th><span class="glyphicon glyphicon-arrow-right"></span> New Default</th></tr></thead><tbody>';
+    compHtml += '<thead><tr><th>Setting</th><th>Current</th><th><span class="ti ti-arrow-right"></span> New Default</th></tr></thead><tbody>';
     portKeys.forEach(function(key) {
         var curPorts = current[key] ? current[key].split(',').map(function(p){return p.trim()}).filter(Boolean) : [];
         var newPorts = defaults[key] ? defaults[key].split(',').map(function(p){return p.trim()}).filter(Boolean) : [];
@@ -1690,18 +1690,18 @@ function showSmartDefaultsModal(data) {
         + '<div class="modal-dialog modal-lg"><div class="modal-content">'
         + '<div class="modal-header" style="border-bottom:2px solid #f0ad4e">'
         + '<button type="button" class="close" data-dismiss="modal">&times;</button>'
-        + '<h4 class="modal-title"><span class="glyphicon glyphicon-search"></span> Smart Port Defaults — Detected Services</h4>'
+        + '<h4 class="modal-title"><span class="ti ti-search"></span> Smart Port Defaults — Detected Services</h4>'
         + '</div>'
         + '<div class="modal-body">'
-        + '<h5><span class="glyphicon glyphicon-th-list"></span> Services Found on This Server</h5>'
+        + '<h5><span class="ti ti-list"></span> Services Found on This Server</h5>'
         + svcHtml
-        + '<h5 style="margin-top:15px"><span class="glyphicon glyphicon-transfer"></span> Port Changes Preview</h5>'
+        + '<h5 style="margin-top:15px"><span class="ti ti-arrows-exchange"></span> Port Changes Preview</h5>'
         + '<p class="text-muted" style="font-size:12px">Yellow rows will change. Review carefully before applying.</p>'
         + compHtml
         + '</div>'
         + '<div class="modal-footer">'
         + '<button class="btn btn-default" data-dismiss="modal">Cancel</button>'
-        + '<button class="btn btn-warning" onclick="applySmartDefaults()"><span class="glyphicon glyphicon-ok"></span> Apply These Defaults</button>'
+        + '<button class="btn btn-warning" onclick="applySmartDefaults()"><span class="ti ti-check"></span> Apply These Defaults</button>'
         + '</div>'
         + '</div></div></div>';
 
@@ -1721,7 +1721,7 @@ function applySmartDefaults() {
             selections[k.replace('TCP_', 'TCP6_').replace('UDP_', 'UDP6_')] = window._smartDefaults[k];
         }
     });
-    $('#smartDefaultsModal .btn-warning').prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Applying...');
+    $('#smartDefaultsModal .btn-warning').prop('disabled', true).html('<span class="ti ti-hourglass"></span> Applying...');
     $.ajax({
         url: '/api/port-defaults/apply',
         method: 'POST',
@@ -1738,7 +1738,7 @@ function applySmartDefaults() {
         },
         error: function() {
             showToast('Failed to apply defaults', 'danger');
-            $('#smartDefaultsModal .btn-warning').prop('disabled', false).html('<span class="glyphicon glyphicon-ok"></span> Apply These Defaults');
+            $('#smartDefaultsModal .btn-warning').prop('disabled', false).html('<span class="ti ti-check"></span> Apply These Defaults');
         }
     });
 }

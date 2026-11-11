@@ -5,7 +5,7 @@
 <!-- Plain-English Rule Builder -->
 <div class="panel panel-primary">
     <div class="panel-heading">
-        <h4 style="margin:0"><span class="glyphicon glyphicon-comment"></span> Plain-English Rule Builder</h4>
+        <h4 style="margin:0"><span class="ti ti-message"></span> Plain-English Rule Builder</h4>
     </div>
     <div class="panel-body">
         <p class="text-muted">Type what you want in plain English. No technical knowledge needed.</p>
@@ -15,7 +15,7 @@
                     <input type="text" class="form-control" id="nlp-input" placeholder="e.g. Block all traffic from China" autofocus>
                     <span class="input-group-btn">
                         <button class="btn btn-primary" id="nlp-parse">
-                            <span class="glyphicon glyphicon-flash"></span> Build Rule
+                            <span class="ti ti-bolt"></span> Build Rule
                         </button>
                     </span>
                 </div>
@@ -23,7 +23,7 @@
             <div class="col-md-3">
                 <div class="dropdown">
                     <button class="btn btn-default btn-lg btn-block dropdown-toggle" data-toggle="dropdown">
-                        <span class="glyphicon glyphicon-list"></span> Examples <span class="caret"></span>
+                        <span class="ti ti-list"></span> Examples <span class="caret"></span>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-right" style="width:100%">
                         <li><a href="#" class="nlp-example">Block all traffic from China</a></li>
@@ -48,7 +48,7 @@
 
 <div class="panel panel-default">
     <div class="panel-heading">
-        <h4><span class="glyphicon glyphicon-wrench"></span> Firewall Rule Builder</h4>
+        <h4><span class="ti ti-tool"></span> Firewall Rule Builder</h4>
     </div>
     <div class="panel-body">
         <div class="bs-callout bs-callout-info">
@@ -110,7 +110,7 @@
                     <label>&nbsp;</label>
                     <div>
                         <button type="submit" class="btn btn-primary btn-block">
-                            <span class="glyphicon glyphicon-plus"></span> Add Rule
+                            <span class="ti ti-plus"></span> Add Rule
                         </button>
                     </div>
                 </div>
@@ -133,7 +133,7 @@
 <!-- Bulk Operations -->
 <div class="panel panel-default">
     <div class="panel-heading">
-        <h4><span class="glyphicon glyphicon-list"></span> Bulk IP Operations</h4>
+        <h4><span class="ti ti-list"></span> Bulk IP Operations</h4>
     </div>
     <div class="panel-body">
         <form id="bulkForm">
@@ -165,7 +165,7 @@
                 <div class="col-md-3">
                     <label>&nbsp;</label>
                     <button type="submit" class="btn btn-warning btn-block">
-                        <span class="glyphicon glyphicon-flash"></span> Execute Bulk Action
+                        <span class="ti ti-bolt"></span> Execute Bulk Action
                     </button>
                 </div>
             </div>
@@ -183,7 +183,7 @@
 <!-- IP Lookup -->
 <div class="panel panel-default">
     <div class="panel-heading">
-        <h4><span class="glyphicon glyphicon-globe"></span> IP Lookup</h4>
+        <h4><span class="ti ti-world"></span> IP Lookup</h4>
     </div>
     <div class="panel-body">
         <div class="row">
@@ -192,10 +192,10 @@
                     <input type="text" class="form-control" id="lookupIp" placeholder="Enter IP address">
                     <span class="input-group-btn">
                         <button class="btn btn-info" id="geoLookupBtn" type="button">
-                            <span class="glyphicon glyphicon-map-marker"></span> Geolocation
+                            <span class="ti ti-map-pin"></span> Geolocation
                         </button>
                         <button class="btn btn-warning" id="repLookupBtn" type="button">
-                            <span class="glyphicon glyphicon-alert"></span> Reputation
+                            <span class="ti ti-alert-triangle"></span> Reputation
                         </button>
                     </span>
                 </div>
@@ -347,14 +347,14 @@ $('#nlp-parse').on('click', function() {
                 r.rules.forEach(function(rule, i) {
                     html += '<div class="panel panel-info" style="margin-bottom:8px">' +
                         '<div class="panel-body">' +
-                        '<h5 style="margin-top:0"><span class="glyphicon glyphicon-ok-circle text-success"></span> ' + rule.description + '</h5>' +
+                        '<h5 style="margin-top:0"><span class="ti ti-circle-check text-success"></span> ' + rule.description + '</h5>' +
                         '<p><strong>Action:</strong> <code>' + rule.action + '</code></p>';
                     if (rule.warning) {
                         html += '<div class="alert alert-warning" style="margin-bottom:8px; padding:6px 10px"><small>' +
-                            '<span class="glyphicon glyphicon-warning-sign"></span> ' + rule.warning + '</small></div>';
+                            '<span class="ti ti-alert-triangle"></span> ' + rule.warning + '</small></div>';
                     }
                     html += '<button class="btn btn-success btn-sm nlp-apply" data-index="' + i + '">' +
-                        '<span class="glyphicon glyphicon-flash"></span> Apply This Rule</button>' +
+                        '<span class="ti ti-bolt"></span> Apply This Rule</button>' +
                         '</div></div>';
                 });
                 $('#nlp-result').html(html).show();
@@ -374,7 +374,7 @@ $(document).on('click', '.nlp-apply', function() {
     var btn = $(this);
     var idx = btn.data('index');
     var rule = window._nlpRules[idx];
-    btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Applying...');
+    btn.prop('disabled', true).html('<span class="ti ti-hourglass"></span> Applying...');
     $.ajax({
         url: '/api/rules/apply',
         method: 'POST',
@@ -383,15 +383,15 @@ $(document).on('click', '.nlp-apply', function() {
         success: function(r) {
             if (r.success) {
                 showToast(r.output || 'Rule applied!', 'success');
-                btn.html('<span class="glyphicon glyphicon-ok"></span> Applied').removeClass('btn-success').addClass('btn-default');
+                btn.html('<span class="ti ti-check"></span> Applied').removeClass('btn-success').addClass('btn-default');
             } else {
                 showToast(r.error || 'Failed', 'danger');
-                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-flash"></span> Apply This Rule');
+                btn.prop('disabled', false).html('<span class="ti ti-bolt"></span> Apply This Rule');
             }
         },
         error: function() {
             showToast('Request failed', 'danger');
-            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-flash"></span> Apply This Rule');
+            btn.prop('disabled', false).html('<span class="ti ti-bolt"></span> Apply This Rule');
         }
     });
 });

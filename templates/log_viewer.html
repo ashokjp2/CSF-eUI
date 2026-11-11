@@ -33,7 +33,7 @@
                     <input type="text" class="form-control" id="log-search" placeholder="Search by IP, text...">
                     <span class="input-group-btn">
                         <button class="btn btn-primary" onclick="refreshLog()">
-                            <span class="glyphicon glyphicon-search"></span>
+                            <span class="ti ti-search"></span>
                         </button>
                     </span>
                 </div>
@@ -57,7 +57,7 @@
                     <input type="checkbox" id="auto-refresh"> Auto-refresh (10s)
                 </label>
                 <button class="btn btn-default btn-sm" onclick="refreshLog()">
-                    <span class="glyphicon glyphicon-refresh"></span> Refresh
+                    <span class="ti ti-refresh"></span> Refresh
                 </button>
             </div>
         </div>
@@ -69,7 +69,7 @@
     <div class="panel-body" style="padding:0">
         <div id="log-entries" style="max-height:600px; overflow-y:auto; font-family:monospace; font-size:12px">
             <div class="text-center text-muted" style="padding:40px">
-                <span class="glyphicon glyphicon-hourglass"></span> Loading...
+                <span class="ti ti-hourglass"></span> Loading...
             </div>
         </div>
     </div>
@@ -86,7 +86,7 @@ function refreshLog() {
     var search = $('#log-search').val();
     var lines = $('#log-lines').val();
 
-    $('#log-entries').html('<div class="text-center text-muted" style="padding:20px"><span class="glyphicon glyphicon-hourglass"></span> Loading...</div>');
+    $('#log-entries').html('<div class="text-center text-muted" style="padding:20px"><span class="ti ti-hourglass"></span> Loading...</div>');
 
     $.getJSON('/api/logs/view', {
         log: logname,

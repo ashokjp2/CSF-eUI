@@ -8,14 +8,14 @@
             <input type="text" class="form-control" id="ip-input" placeholder="Enter IP address (e.g. 192.168.1.1)" value="{{ ip or '' }}">
             <span class="input-group-btn">
                 <button class="btn btn-primary" id="btn-lookup">
-                    <span class="glyphicon glyphicon-search"></span> Lookup
+                    <span class="ti ti-search"></span> Lookup
                 </button>
             </span>
         </div>
 
         <div id="lookup-results" style="display:none">
             <div id="lookup-loading" class="text-center" style="padding:40px; display:none">
-                <span class="glyphicon glyphicon-hourglass" style="font-size:24px"></span>
+                <span class="ti ti-hourglass" style="font-size:24px"></span>
                 <p class="text-muted">Looking up IP information...</p>
             </div>
             <div id="lookup-content"></div>
@@ -27,7 +27,7 @@
             <div class="panel panel-{{ 'danger' if section['status'] == 'blocked' else 'success' if section['status'] == 'allowed' else 'warning' if section['status'] == 'temp_blocked' else 'default' }}">
                 <div class="panel-heading">
                     <h4 class="panel-title" style="margin:0">
-                        <span class="glyphicon glyphicon-{{ section['icon'] }}"></span> {{ section['title'] }}
+                        <i class="ti ti-{{ section['icon']|ti }}"></i> {{ section['title'] }}
                     </h4>
                 </div>
                 <div class="panel-body">
@@ -54,14 +54,14 @@
                 <strong>Quick Actions for {{ ip }}:</strong>
                 <form method="POST" action="/quick/allow" style="display:inline; margin-left:10px">
                     <input type="hidden" name="ip" value="{{ ip }}">
-                    <button class="btn btn-success btn-xs"><span class="glyphicon glyphicon-ok"></span> Allow</button>
+                    <button class="btn btn-success btn-xs"><span class="ti ti-check"></span> Allow</button>
                 </form>
                 <form method="POST" action="/quick/deny" style="display:inline; margin-left:5px">
                     <input type="hidden" name="ip" value="{{ ip }}">
-                    <button class="btn btn-danger btn-xs"><span class="glyphicon glyphicon-ban-circle"></span> Block</button>
+                    <button class="btn btn-danger btn-xs"><span class="ti ti-ban"></span> Block</button>
                 </form>
                 <a href="/logs?search={{ ip }}" class="btn btn-default btn-xs" style="margin-left:5px">
-                    <span class="glyphicon glyphicon-list-alt"></span> View in Logs
+                    <span class="ti ti-list-details"></span> View in Logs
                 </a>
             </div>
         </div>
@@ -89,7 +89,7 @@ $(function() {
             data.sections.forEach(function(s) {
                 var panelClass = s.status === 'blocked' ? 'danger' : s.status === 'allowed' ? 'success' : s.status === 'temp_blocked' ? 'warning' : 'default';
                 html += '<div class="panel panel-' + panelClass + '">';
-                html += '<div class="panel-heading"><h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-' + s.icon + '"></span> ' + s.title + '</h4></div>';
+                html += '<div class="panel-heading"><h4 class="panel-title" style="margin:0"><i class="ti ti-' + CSFv2.ti(s.icon) + '"></i> ' + s.title + '</h4></div>';
                 html += '<div class="panel-body"><table class="table table-condensed" style="margin:0">';
                 s.items.forEach(function(item) {
                     html += '<tr><td style="width:150px;font-weight:bold">' + item.key + '</td><td>' + $('<span>').text(item.value).html() + '</td></tr>';
@@ -104,9 +104,9 @@ $(function() {
                 html += '</div></div>';
             });
             html += '<div class="well well-sm"><strong>Quick Actions for ' + $('<span>').text(ip).html() + ':</strong>';
-            html += ' <form method="POST" action="/quick/allow" style="display:inline;margin-left:10px"><input type="hidden" name="ip" value="' + ip + '"><button class="btn btn-success btn-xs"><span class="glyphicon glyphicon-ok"></span> Allow</button></form>';
-            html += ' <form method="POST" action="/quick/deny" style="display:inline;margin-left:5px"><input type="hidden" name="ip" value="' + ip + '"><button class="btn btn-danger btn-xs"><span class="glyphicon glyphicon-ban-circle"></span> Block</button></form>';
-            html += ' <a href="/logs?search=' + encodeURIComponent(ip) + '" class="btn btn-default btn-xs" style="margin-left:5px"><span class="glyphicon glyphicon-list-alt"></span> View in Logs</a>';
+            html += ' <form method="POST" action="/quick/allow" style="display:inline;margin-left:10px"><input type="hidden" name="ip" value="' + ip + '"><button class="btn btn-success btn-xs"><span class="ti ti-check"></span> Allow</button></form>';
+            html += ' <form method="POST" action="/quick/deny" style="display:inline;margin-left:5px"><input type="hidden" name="ip" value="' + ip + '"><button class="btn btn-danger btn-xs"><span class="ti ti-ban"></span> Block</button></form>';
+            html += ' <a href="/logs?search=' + encodeURIComponent(ip) + '" class="btn btn-default btn-xs" style="margin-left:5px"><span class="ti ti-list-details"></span> View in Logs</a>';
             html += '</div>';
             $('#lookup-content').html(html);
         }).fail(function() {

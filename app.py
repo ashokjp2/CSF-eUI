@@ -114,6 +114,44 @@ def inject_csrf_token():
     return {"csrf_token": _get_csrf_token()}
 
 
+# Legacy glyphicon name -> Tabler icon name, for backend data that still carries glyphicon names
+_TI_MAP = {
+    "refresh": "refresh", "plus": "plus", "info-sign": "info-circle", "ok": "check", "hourglass": "hourglass",
+    "trash": "trash", "warning-sign": "alert-triangle", "floppy-disk": "device-floppy", "search": "search",
+    "ok-circle": "circle-check", "globe": "world", "flash": "bolt", "cog": "settings", "ban-circle": "ban",
+    "remove": "x", "upload": "upload", "transfer": "arrows-exchange", "lock": "lock", "envelope": "mail",
+    "wrench": "tool", "list-alt": "list-details", "eye-open": "eye", "th-list": "list", "cloud": "cloud",
+    "chevron-down": "chevron-down", "repeat": "repeat", "play": "player-play", "list": "list", "link": "link",
+    "certificate": "certificate", "time": "clock", "remove-sign": "circle-x", "random": "arrows-shuffle",
+    "pencil": "pencil", "floppy-save": "device-floppy", "fire": "flame", "exclamation-sign": "alert-circle",
+    "download": "download", "cloud-download": "cloud-download", "unchecked": "square", "question-sign": "help-circle",
+    "ok-sign": "circle-check", "chevron-up": "chevron-up", "stop": "player-stop", "shield": "shield",
+    "pause": "player-pause", "log-in": "login", "hdd": "server", "folder-open": "folder-open", "flag": "flag",
+    "file": "file", "edit": "edit", "console": "terminal-2", "check": "checkbox", "alert": "alert-triangle",
+    "user": "user", "tasks": "list-check", "star": "star", "signal": "antenna-bars-5", "share-alt": "share",
+    "send": "send", "resize-full": "arrows-maximize", "remove-circle": "circle-x", "open": "upload", "off": "power",
+    "minus": "minus", "map-marker": "map-pin", "filter": "filter", "dashboard": "layout-dashboard",
+    "comment": "message", "bell": "bell", "arrow-right": "arrow-right", "arrow-left": "arrow-left",
+    "eye-close": "eye-off", "ban": "ban", "heart": "heart", "calendar": "calendar", "home": "home",
+    "tag": "tag", "tags": "tags", "book": "book", "briefcase": "briefcase", "stats": "chart-bar",
+    "phone": "phone", "earphone": "phone", "bullhorn": "speakerphone", "equalizer": "adjustments",
+    "th": "layout-grid", "inbox": "inbox", "lamp": "bulb", "log": "file-text", "plane": "plane",
+    "picture": "photo", "copy": "copy", "import": "file-import", "export": "file-export", "pushpin": "pin",
+    "question": "help-circle", "exclamation": "alert-circle", "list-check": "list-check", "save": "device-floppy",
+    "new-window": "external-link", "cloud-upload": "cloud-upload", "knight": "chess-knight", "flask": "flask",
+    "tower": "building-broadcast-tower", "road": "road", "leaf": "leaf", "tint": "droplet", "sort": "arrows-sort",
+}
+
+
+@app.template_filter("ti")
+def ti_icon(name):
+    """Jinja filter: map a glyphicon name (optionally followed by extra classes) to Tabler classes."""
+    parts = str(name or "").replace("glyphicon-", "").split()
+    if not parts:
+        return "circle-dot"
+    return " ".join([_TI_MAP.get(parts[0], parts[0])] + parts[1:])
+
+
 @app.before_request
 def check_csrf():
     if request.method not in ("POST", "PUT", "PATCH", "DELETE"):

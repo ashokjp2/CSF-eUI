@@ -39,7 +39,7 @@
             <div class="panel-heading">
                 <div class="pull-right">
                     <button class="btn btn-xs btn-primary" id="btn-load-map">
-                        <span class="glyphicon glyphicon-globe"></span> Load Map
+                        <span class="ti ti-world"></span> Load Map
                     </button>
                 </div>
                 <h4 class="panel-title" style="margin:0">World Map</h4>
@@ -87,7 +87,7 @@ $(function() {
 
     $('#btn-load-map').on('click', function() {
         var btn = $(this);
-        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Loading...');
+        btn.prop('disabled', true).html('<span class="ti ti-hourglass"></span> Loading...');
         $.getJSON('/api/geoip-map', function(data) {
             $('#stat-total').text(data.total_ips);
             $('#stat-mapped').text(data.mapped);
@@ -131,10 +131,10 @@ $(function() {
                 map.fitBounds(bounds, { padding: [30, 30] });
             }
 
-            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-globe"></span> Reload');
+            btn.prop('disabled', false).html('<span class="ti ti-world"></span> Reload');
         }).fail(function() {
             showToast('Failed to load GeoIP data', 'danger');
-            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-globe"></span> Load Map');
+            btn.prop('disabled', false).html('<span class="ti ti-world"></span> Load Map');
         });
     });
 });

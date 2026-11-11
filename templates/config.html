@@ -13,7 +13,7 @@
 {% block content %}
 <div class="panel panel-default">
     <div class="panel-heading">
-        <h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-cog"></span> Firewall Configuration - csf.conf</h4>
+        <h4 class="panel-title" style="margin:0"><span class="ti ti-settings"></span> Firewall Configuration - csf.conf</h4>
     </div>
     <div class="panel-body">
         <div class="bs-callout bs-callout-warning">
@@ -22,7 +22,7 @@
 
         <div class="alert alert-info alert-dismissible" style="font-size:13px">
             <button type="button" class="close" data-dismiss="alert">&times;</button>
-            <span class="glyphicon glyphicon-info-sign"></span>
+            <span class="ti ti-info-circle"></span>
             <strong>Tip:</strong> For common settings like ports, country blocking, and connection limits, use the
             <a href="/qconfig"><strong>Quick Config</strong></a> page — it's easier and has visual controls.
             This page is for advanced/full configuration.
@@ -30,10 +30,10 @@
 
         <!-- Search/Filter -->
         <div class="input-group" style="margin-bottom:15px">
-            <span class="input-group-addon"><span class="glyphicon glyphicon-search"></span></span>
+            <span class="input-group-addon"><span class="ti ti-search"></span></span>
             <input type="text" class="form-control" id="configSearch" placeholder="Search settings (e.g. TCP_IN, TESTING, DOCKER)...">
             <span class="input-group-btn">
-                <button class="btn btn-default" type="button" id="clearSearch"><span class="glyphicon glyphicon-remove"></span></button>
+                <button class="btn btn-default" type="button" id="clearSearch"><span class="ti ti-x"></span></button>
             </span>
         </div>
 
@@ -81,7 +81,7 @@
 
             <div class="text-center" style="margin-top:15px">
                 <button type="submit" class="btn btn-primary btn-lg">
-                    <span class="glyphicon glyphicon-floppy-disk"></span> Save Changes
+                    <span class="ti ti-device-floppy"></span> Save Changes
                 </button>
             </div>
         </form>
@@ -89,7 +89,7 @@
             <form method="POST" action="/action/restartboth" style="display:inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <button type="submit" class="btn btn-warning btn-lg">
-                    <span class="glyphicon glyphicon-refresh"></span> Restart csf+lfd
+                    <span class="ti ti-refresh"></span> Restart csf+lfd
                 </button>
             </form>
         </div>
@@ -348,8 +348,8 @@ var HELP = {
     URLPROXY: 'HTTP proxy for downloading blocklists.',
 
     /* Country Codes */
-    MM_LICENSE_KEY: '<span class="text-info"><span class="glyphicon glyphicon-question-sign"></span> <strong>MaxMind GeoLite2 license key</strong> — needed for accurate country-based blocking.</span><br>Free: <a href="https://www.maxmind.com/en/geolite2/signup" target="_blank">maxmind.com/en/geolite2/signup</a> → create account → My Account → Manage License Keys → Generate New License Key → copy and paste here.',
-    IPINFO_TOKEN: '<span class="text-info"><span class="glyphicon glyphicon-question-sign"></span> <strong>IPinfo.io API token</strong> — alternative geolocation provider.</span><br>Free (50K lookups/month): <a href="https://ipinfo.io/signup" target="_blank">ipinfo.io/signup</a> → create account → copy token from your dashboard.',
+    MM_LICENSE_KEY: '<span class="text-info"><span class="ti ti-help-circle"></span> <strong>MaxMind GeoLite2 license key</strong> — needed for accurate country-based blocking.</span><br>Free: <a href="https://www.maxmind.com/en/geolite2/signup" target="_blank">maxmind.com/en/geolite2/signup</a> → create account → My Account → Manage License Keys → Generate New License Key → copy and paste here.',
+    IPINFO_TOKEN: '<span class="text-info"><span class="ti ti-help-circle"></span> <strong>IPinfo.io API token</strong> — alternative geolocation provider.</span><br>Free (50K lookups/month): <a href="https://ipinfo.io/signup" target="_blank">ipinfo.io/signup</a> → create account → copy token from your dashboard.',
     CC_SRC: 'Source for country code data. 1=MaxMind GeoLite2, 2=ipinfo.io.',
     CC_DENY: 'Block ALL traffic from these countries. 2-letter codes, comma-separated. E.g. <code>CN,RU,KP</code>. <a href="/qconfig">Easier in Quick Config →</a>',
     CC_ALLOW: 'Allow ONLY these countries (blocks all others). Use very carefully! <a href="/qconfig">Easier in Quick Config →</a>',
@@ -650,7 +650,7 @@ $(function() {
         var sectionName = $(this).text().trim();
         var desc = SECTION_HELP[sectionName];
         if (desc) {
-            $(this).after('<div class="alert alert-info" style="font-size:12px; margin-top:5px; margin-bottom:10px"><span class="glyphicon glyphicon-info-sign"></span> ' + desc + '</div>');
+            $(this).after('<div class="alert alert-info" style="font-size:12px; margin-top:5px; margin-bottom:10px"><span class="ti ti-info-circle"></span> ' + desc + '</div>');
         }
     });
 
@@ -674,7 +674,7 @@ $(function() {
             seenGroups[rel.group] = true;
             $(this).before('<tr class="related-group-label"><td colspan="2" style="background:' +
                 rel.color + '15; border-left:4px solid ' + rel.color +
-                '; padding:6px 12px; font-size:12px"><span class="glyphicon glyphicon-link" style="color:' +
+                '; padding:6px 12px; font-size:12px"><span class="ti ti-link" style="color:' +
                 rel.color + '"></span> <strong style="color:' + rel.color + '">' + rel.label + '</strong></td></tr>');
         }
     });
@@ -762,7 +762,7 @@ $(function() {
             return;
         }
         var btn = $(this).find('button[type=submit]');
-        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh spinning"></span> Saving...');
+        btn.prop('disabled', true).html('<span class="ti ti-refresh spinning"></span> Saving...');
         $.ajax({
             url: '/config/save',
             method: 'POST',
@@ -772,7 +772,7 @@ $(function() {
                 if (data.success) {
                     var toast = $('<div class="alert alert-warning alert-dismissible" style="position:fixed;top:70px;right:20px;z-index:9999;min-width:350px">' +
                         '<button type="button" class="close" data-dismiss="alert">&times;</button>' +
-                        '<span class="glyphicon glyphicon-ok-sign"></span> <strong>Configuration saved!</strong><br>' +
+                        '<span class="ti ti-circle-check"></span> <strong>Configuration saved!</strong><br>' +
                         'Click <strong>Restart csf+lfd</strong> to apply changes.</div>');
                     $('body').append(toast);
                     setTimeout(function(){ toast.fadeOut(500, function(){ toast.remove(); }); }, 6000);
@@ -784,7 +784,7 @@ $(function() {
                 alert('Failed to save. Check server connection.');
             },
             complete: function() {
-                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-floppy-disk"></span> Save Changes');
+                btn.prop('disabled', false).html('<span class="ti ti-device-floppy"></span> Save Changes');
             }
         });
     });
@@ -1192,11 +1192,11 @@ $(function() {
             var targetRow = $('tr[data-key="' + rule.target + '"]');
             if (!targetRow.length) return;
             var td = targetRow.find('td').eq(1);
-            var icon  = level === 'danger' ? 'glyphicon-remove-sign' : 'glyphicon-warning-sign';
+            var icon  = level === 'danger' ? 'ti-circle-x' : 'ti-alert-triangle';
             var color = level === 'danger' ? '#c0392b' : '#8a6d3b';
             var bg    = level === 'danger' ? '#fdf2f2' : '#fcf8e3';
             var border= level === 'danger' ? '#e3baba' : '#faebcc';
-            td.append('<div class="inline-field-warning" style="margin-top:6px;padding:5px 8px;border-radius:3px;font-size:12px;color:' + color + ';background:' + bg + ';border:1px solid ' + border + '"><span class="glyphicon ' + icon + '" style="margin-right:5px"></span>' + msg + '</div>');
+            td.append('<div class="inline-field-warning" style="margin-top:6px;padding:5px 8px;border-radius:3px;font-size:12px;color:' + color + ';background:' + bg + ';border:1px solid ' + border + '"><i class="ti ' + icon + '" style="margin-right:5px"></i>' + msg + '</div>');
         });
     }
 
@@ -1564,7 +1564,7 @@ $(function() {
         row.find('.field-val-error').remove();
         if (msg) {
             var el = $('<div class="field-val-error" style="color:#c0392b; font-size:11px; margin-top:3px">' +
-                '<span class="glyphicon glyphicon-exclamation-sign"></span> ' + msg + '</div>');
+                '<span class="ti ti-alert-circle"></span> ' + msg + '</div>');
             input.after(el);
             input.closest('td').css('background', '#fff5f5');
         } else {
@@ -1591,7 +1591,7 @@ $(function() {
             if (help) {
                 var riskColor = help.risk === 'high' ? '#d9534f' : help.risk === 'medium' ? '#f0ad4e' : '#5cb85c';
                 var riskLabel = help.risk === 'high' ? 'High Impact' : help.risk === 'medium' ? 'Medium' : 'Low';
-                var tipHtml = '<span class="glyphicon glyphicon-question-sign setting-help-icon" style="cursor:help; margin-left:6px; color:#999; font-size:12px" '
+                var tipHtml = '<span class="ti ti-help-circle setting-help-icon" style="cursor:help; margin-left:6px; color:#999; font-size:12px" '
                     + 'data-toggle="popover" data-trigger="hover" data-html="true" data-placement="top" '
                     + 'data-content="<div style=\'font-size:12px\'>' + help.plain.replace(/"/g, '&quot;');
                 if (help.tip) tipHtml += '<br><br><strong>Tip:</strong> ' + help.tip.replace(/"/g, '&quot;');

@@ -5,13 +5,13 @@
 <div class="panel panel-default">
     <div class="panel-heading">
         <h4 class="panel-title" style="margin:0">
-            <span class="glyphicon glyphicon-time"></span> Temporary IP Entries
+            <span class="ti ti-clock"></span> Temporary IP Entries
             <form method="POST" action="/action/flushtemp" class="pull-right" style="display:inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <button type="submit" class="btn btn-warning btn-sm confirmButton"
                         data-query="Flush all temporary entries?"
                         data-action="/action/flushtemp">
-                    <span class="glyphicon glyphicon-trash"></span> Flush All Temp
+                    <span class="ti ti-trash"></span> Flush All Temp
                 </button>
             </form>
         </h4>
@@ -48,13 +48,13 @@
                               action="/temp/remove/{{ 'deny' if entry.type == 'DENY' else 'allow' }}/{{ entry.ip }}"
                               style="display:inline">
                             <button type="submit" class="btn btn-xs btn-warning">
-                                <span class="glyphicon glyphicon-remove"></span> Remove
+                                <span class="ti ti-x"></span> Remove
                             </button>
                         </form>
                         {% if entry.type == 'DENY' %}
                         <form method="POST" action="/temp/toperm/{{ entry.ip }}" style="display:inline">
                             <button type="submit" class="btn btn-xs btn-danger">
-                                <span class="glyphicon glyphicon-ban-circle"></span> Make Permanent
+                                <span class="ti ti-ban"></span> Make Permanent
                             </button>
                         </form>
                         {% endif %}

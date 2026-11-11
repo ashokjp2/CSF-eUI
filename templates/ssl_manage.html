@@ -8,7 +8,7 @@
         <div class="panel panel-{{ 'success' if ssl.current_cert and not ssl.self_signed else 'warning' if ssl.current_cert else 'danger' }}">
             <div class="panel-heading">
                 <h4 class="panel-title" style="margin:0">
-                    <span class="glyphicon glyphicon-certificate"></span> Current Certificate
+                    <span class="ti ti-certificate"></span> Current Certificate
                 </h4>
             </div>
             <div class="panel-body">
@@ -34,27 +34,27 @@
                 </table>
                 <div style="margin-top:10px">
                     <a href="/api/ssl/download/cert" class="btn btn-default btn-sm">
-                        <span class="glyphicon glyphicon-download"></span> Download Cert
+                        <span class="ti ti-download"></span> Download Cert
                     </a>
                     <a href="/api/ssl/download/key" class="btn btn-default btn-sm">
-                        <span class="glyphicon glyphicon-download"></span> Download Key
+                        <span class="ti ti-download"></span> Download Key
                     </a>
                     {% if ssl.current_cert.provider != 'Self-Signed' %}
                     <button class="btn btn-danger btn-sm" id="btn-revoke" data-cert="{{ ssl.current_cert.cert_path }}">
-                        <span class="glyphicon glyphicon-ban-circle"></span> Revoke
+                        <span class="ti ti-ban"></span> Revoke
                     </button>
                     {% endif %}
                 </div>
                 {% if ssl.self_signed %}
                 <div class="alert alert-warning" style="margin-top:10px; margin-bottom:0">
-                    <span class="glyphicon glyphicon-warning-sign"></span>
+                    <span class="ti ti-alert-triangle"></span>
                     You're using a self-signed certificate. Browsers will show security warnings.
                     Consider getting a free Let's Encrypt certificate below.
                 </div>
                 {% endif %}
                 {% else %}
                 <div class="alert alert-danger" style="margin-bottom:0">
-                    <span class="glyphicon glyphicon-remove-sign"></span>
+                    <span class="ti ti-circle-x"></span>
                     No SSL certificate configured. CSFv2 may not be using HTTPS.
                 </div>
                 {% endif %}
@@ -67,13 +67,13 @@
                 <div class="panel panel-success">
                     <div class="panel-heading">
                         <h4 class="panel-title" style="margin:0">
-                            <span class="glyphicon glyphicon-globe"></span> Let's Encrypt (Free, Trusted)
+                            <span class="ti ti-world"></span> Let's Encrypt (Free, Trusted)
                         </h4>
                     </div>
                     <div class="panel-body">
                         {% if not ssl.certbot_installed %}
                         <div class="alert alert-info" style="padding:8px 12px">
-                            <span class="glyphicon glyphicon-info-sign"></span>
+                            <span class="ti ti-info-circle"></span>
                             Certbot will be auto-installed when you request a certificate.
                         </div>
                         {% endif %}
@@ -104,7 +104,7 @@
                             <label><input type="checkbox" id="le-auto-renew" checked> Set up auto-renewal</label>
                         </div>
                         <button class="btn btn-success btn-block" id="btn-le-request">
-                            <span class="glyphicon glyphicon-certificate"></span> Request Certificate
+                            <span class="ti ti-certificate"></span> Request Certificate
                         </button>
 
                         {% if ssl.certbot_certs %}
@@ -117,7 +117,7 @@
                             Expires: {{ cert.expiry }}<br>
                             <button class="btn btn-xs btn-primary btn-apply-le"
                                     data-cert="{{ cert.cert_path }}" data-key="{{ cert.key_path }}">
-                                <span class="glyphicon glyphicon-ok"></span> Use This
+                                <span class="ti ti-check"></span> Use This
                             </button>
                         </div>
                         {% endfor %}
@@ -131,7 +131,7 @@
                 <div class="panel panel-info">
                     <div class="panel-heading">
                         <h4 class="panel-title" style="margin:0">
-                            <span class="glyphicon glyphicon-cloud"></span> ZeroSSL (Free Backup Provider)
+                            <span class="ti ti-cloud"></span> ZeroSSL (Free Backup Provider)
                         </h4>
                     </div>
                     <div class="panel-body">
@@ -160,7 +160,7 @@
                             <small class="text-muted">Document root of your nginx/apache/Dokploy server.</small>
                         </div>
                         <button class="btn btn-info btn-block" id="btn-zs-request">
-                            <span class="glyphicon glyphicon-certificate"></span> Request ZeroSSL Certificate
+                            <span class="ti ti-certificate"></span> Request ZeroSSL Certificate
                         </button>
                     </div>
                 </div>
@@ -173,7 +173,7 @@
                 <div class="panel panel-warning">
                     <div class="panel-heading">
                         <h4 class="panel-title" style="margin:0">
-                            <span class="glyphicon glyphicon-file"></span> Self-Signed Certificate
+                            <span class="ti ti-file"></span> Self-Signed Certificate
                         </h4>
                     </div>
                     <div class="panel-body">
@@ -183,7 +183,7 @@
                             <input type="text" class="form-control" id="ss-domain" placeholder="e.g. fw.example.com" value="{{ ssl.hostname }}">
                         </div>
                         <button class="btn btn-warning btn-block" id="btn-ss-generate">
-                            <span class="glyphicon glyphicon-refresh"></span> Generate Self-Signed Certificate
+                            <span class="ti ti-refresh"></span> Generate Self-Signed Certificate
                         </button>
                     </div>
                 </div>
@@ -194,21 +194,21 @@
                 <div class="panel panel-default">
                     <div class="panel-heading">
                         <h4 class="panel-title" style="margin:0">
-                            <span class="glyphicon glyphicon-repeat"></span> Auto-Renewal
+                            <span class="ti ti-repeat"></span> Auto-Renewal
                         </h4>
                     </div>
                     <div class="panel-body">
                         {% if ssl.renewal_timer %}
-                        <span class="label label-success"><span class="glyphicon glyphicon-ok"></span> Active</span>
+                        <span class="label label-success"><span class="ti ti-check"></span> Active</span>
                         <span class="text-muted" style="margin-left:8px">Certbot timer is running</span>
                         {% else %}
-                        <span class="label label-default"><span class="glyphicon glyphicon-remove"></span> Not Active</span>
+                        <span class="label label-default"><span class="ti ti-x"></span> Not Active</span>
                         <span class="text-muted" style="margin-left:8px">Request a certificate to enable auto-renewal</span>
                         {% endif %}
                         {% if ssl.certbot_installed %}
                         <div style="margin-top:10px">
                             <button class="btn btn-default btn-sm" id="btn-test-renewal">
-                                <span class="glyphicon glyphicon-check"></span> Test Renewal (Dry Run)
+                                <span class="ti ti-checkbox"></span> Test Renewal (Dry Run)
                             </button>
                         </div>
                         {% endif %}
@@ -223,7 +223,7 @@
                 <div class="panel panel-default">
                     <div class="panel-heading">
                         <h4 class="panel-title" style="margin:0">
-                            <span class="glyphicon glyphicon-upload"></span> Upload Certificate
+                            <span class="ti ti-upload"></span> Upload Certificate
                         </h4>
                     </div>
                     <div class="panel-body">
@@ -238,7 +238,7 @@
                                 <input type="file" id="upload-key" name="key" accept=".key,.pem">
                             </div>
                             <button type="submit" class="btn btn-primary btn-block" id="btn-upload-cert">
-                                <span class="glyphicon glyphicon-upload"></span> Upload & Apply
+                                <span class="ti ti-upload"></span> Upload & Apply
                             </button>
                         </form>
                     </div>
@@ -250,7 +250,7 @@
                 <div class="panel panel-default">
                     <div class="panel-heading">
                         <h4 class="panel-title" style="margin:0">
-                            <span class="glyphicon glyphicon-transfer"></span> IP Protocol Preference
+                            <span class="ti ti-arrows-exchange"></span> IP Protocol Preference
                         </h4>
                     </div>
                     <div class="panel-body">
@@ -263,7 +263,7 @@
                             </select>
                         </div>
                         <button class="btn btn-default btn-block" id="btn-ip-pref">
-                            <span class="glyphicon glyphicon-ok"></span> Save Preference
+                            <span class="ti ti-check"></span> Save Preference
                         </button>
                     </div>
                 </div>
@@ -276,7 +276,7 @@
 <script>
 $(function() {
     function sslAction(url, data, btn, origHtml) {
-        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Working...');
+        btn.prop('disabled', true).html('<span class="ti ti-hourglass"></span> Working...');
         $.ajax({
             url: url,
             method: 'POST',
@@ -330,7 +330,7 @@ $(function() {
         var autoRenew = $('#le-auto-renew').is(':checked');
         if (!domain) { showToast('Enter a domain name', 'warning'); return; }
         sslAction('/api/ssl/letsencrypt', {domain: domain, email: email, auto_renew: autoRenew, method: method, webroot_path: webroot}, $(this),
-            '<span class="glyphicon glyphicon-certificate"></span> Request Certificate');
+            '<span class="ti ti-certificate"></span> Request Certificate');
     });
 
     $('#btn-zs-request').on('click', function() {
@@ -341,32 +341,32 @@ $(function() {
         if (!domain) { showToast('Enter a domain name', 'warning'); return; }
         if (!email) { showToast('Email is required for ZeroSSL', 'warning'); return; }
         sslAction('/api/ssl/zerossl', {domain: domain, email: email, method: method, webroot_path: webroot}, $(this),
-            '<span class="glyphicon glyphicon-certificate"></span> Request ZeroSSL Certificate');
+            '<span class="ti ti-certificate"></span> Request ZeroSSL Certificate');
     });
 
     $('#btn-ss-generate').on('click', function() {
         var domain = $('#ss-domain').val().trim();
         sslAction('/api/ssl/self-signed', {domain: domain}, $(this),
-            '<span class="glyphicon glyphicon-refresh"></span> Generate Self-Signed Certificate');
+            '<span class="ti ti-refresh"></span> Generate Self-Signed Certificate');
     });
 
     $('.btn-apply-le').on('click', function() {
         var cert = $(this).data('cert');
         var key = $(this).data('key');
         sslAction('/api/ssl/apply', {cert_path: cert, key_path: key}, $(this),
-            '<span class="glyphicon glyphicon-ok"></span> Use This');
+            '<span class="ti ti-check"></span> Use This');
     });
 
     $('#btn-test-renewal').on('click', function() {
         var btn = $(this);
-        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Testing...');
+        btn.prop('disabled', true).html('<span class="ti ti-hourglass"></span> Testing...');
         $.getJSON('/api/ssl/test-renewal', function(r) {
             if (r.success) {
                 showToast(r.message, 'success');
             } else {
                 showToast(r.error || 'Test failed', 'danger');
             }
-            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-check"></span> Test Renewal (Dry Run)');
+            btn.prop('disabled', false).html('<span class="ti ti-checkbox"></span> Test Renewal (Dry Run)');
         });
     });
 
@@ -375,7 +375,7 @@ $(function() {
         if (!confirm('Are you sure you want to revoke this certificate? This cannot be undone.')) return;
         var certPath = $(this).data('cert');
         sslAction('/api/ssl/revoke', {cert_path: certPath}, $(this),
-            '<span class="glyphicon glyphicon-ban-circle"></span> Revoke');
+            '<span class="ti ti-ban"></span> Revoke');
     });
 
     // Upload certificate
@@ -388,7 +388,7 @@ $(function() {
         formData.append('cert', cert);
         formData.append('key', key);
         var btn = $('#btn-upload-cert');
-        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Uploading...');
+        btn.prop('disabled', true).html('<span class="ti ti-hourglass"></span> Uploading...');
         $.ajax({
             url: '/api/ssl/upload',
             method: 'POST',
@@ -402,12 +402,12 @@ $(function() {
                     setTimeout(function(){ location.reload(); }, 2000);
                 } else {
                     showToast(r.error || 'Upload failed', 'danger');
-                    btn.prop('disabled', false).html('<span class="glyphicon glyphicon-upload"></span> Upload & Apply');
+                    btn.prop('disabled', false).html('<span class="ti ti-upload"></span> Upload & Apply');
                 }
             },
             error: function() {
                 showToast('Upload failed', 'danger');
-                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-upload"></span> Upload & Apply');
+                btn.prop('disabled', false).html('<span class="ti ti-upload"></span> Upload & Apply');
             }
         });
     });

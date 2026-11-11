@@ -7,7 +7,7 @@
         <div class="panel panel-{{ 'success' if not info.update_available else 'warning' }}">
             <div class="panel-heading">
                 <h4 class="panel-title" style="margin:0">
-                    <span class="glyphicon glyphicon-info-sign"></span> Version Information
+                    <span class="ti ti-info-circle"></span> Version Information
                 </h4>
             </div>
             <div class="panel-body">
@@ -36,14 +36,14 @@
                         <td><strong>Repository</strong></td>
                         <td>
                             <a href="https://github.com/ashokjp2/CSF-eUI" target="_blank" rel="noopener">
-                                <span class="glyphicon glyphicon-link"></span> ashokjp2/CSF-eUI
+                                <span class="ti ti-link"></span> ashokjp2/CSF-eUI
                             </a>
                         </td>
                     </tr>
                 </table>
                 <div style="margin-top:12px">
                     <button class="btn btn-default btn-sm" id="btn-check">
-                        <span class="glyphicon glyphicon-refresh"></span> Check Now
+                        <span class="ti ti-refresh"></span> Check Now
                     </button>
                 </div>
             </div>
@@ -54,13 +54,13 @@
         <div class="panel panel-default">
             <div class="panel-heading">
                 <h4 class="panel-title" style="margin:0">
-                    <span class="glyphicon glyphicon-cloud-download"></span> Update Application
+                    <span class="ti ti-cloud-download"></span> Update Application
                 </h4>
             </div>
             <div class="panel-body">
                 {% if info.update_available %}
                 <div class="alert alert-warning" style="padding:8px 12px; margin-bottom:12px">
-                    <span class="glyphicon glyphicon-exclamation-sign"></span>
+                    <span class="ti ti-alert-circle"></span>
                     <strong>v{{ info.latest }}</strong> is available. The app will restart after updating.
                 </div>
                 {% else %}
@@ -68,13 +68,13 @@
                 {% endif %}
 
                 <div class="alert alert-info" style="padding:8px 12px; margin-bottom:12px; font-size:12px">
-                    <span class="glyphicon glyphicon-info-sign"></span>
+                    <span class="ti ti-info-circle"></span>
                     Update pulls from GitHub, installs any new dependencies, then restarts the service.
                     Your configuration (<code>/etc/csf/</code>) is never touched.
                 </div>
 
                 <button class="btn btn-{{ 'warning' if info.update_available else 'default' }} btn-block" id="btn-update">
-                    <span class="glyphicon glyphicon-cloud-download"></span>
+                    <span class="ti ti-cloud-download"></span>
                     {{ 'Update to v' + info.latest if info.update_available else 'Force re-install current release' }}
                 </button>
             </div>
@@ -86,7 +86,7 @@
 <div class="panel panel-default" id="log-panel" style="display:none">
     <div class="panel-heading">
         <h4 class="panel-title" style="margin:0">
-            <span class="glyphicon glyphicon-list-alt"></span> Update Log
+            <span class="ti ti-list-details"></span> Update Log
             <span class="pull-right" id="log-status"></span>
         </h4>
     </div>
@@ -102,7 +102,7 @@
 <div class="panel panel-default">
     <div class="panel-heading">
         <h4 class="panel-title" style="margin:0">
-            <span class="glyphicon glyphicon-cog"></span> Auto-Update Settings
+            <span class="ti ti-settings"></span> Auto-Update Settings
             <span class="pull-right" id="autoupdate-save-status"></span>
         </h4>
     </div>
@@ -113,7 +113,7 @@
                 <div class="col-md-6">
                     <div class="form-group" style="margin-bottom:16px">
                         <label style="font-weight:600">
-                            <span class="glyphicon glyphicon-search"></span> Version Checks
+                            <span class="ti ti-search"></span> Version Checks
                         </label>
                         <div class="checkbox" style="margin-top:4px">
                             <label>
@@ -133,7 +133,7 @@
                         </p>
                         <div class="checkbox" style="padding-left:20px; margin-top:0">
                             <label>
-                                <span class="glyphicon glyphicon-time" style="margin-right:4px"></span>
+                                <span class="ti ti-clock" style="margin-right:4px"></span>
                                 <span id="timer-status-inline" class="text-muted">Checking timer...</span>
                             </label>
                         </div>
@@ -142,7 +142,7 @@
                 <div class="col-md-6">
                     <div class="form-group" style="margin-bottom:16px">
                         <label style="font-weight:600">
-                            <span class="glyphicon glyphicon-cloud-download"></span> Installation
+                            <span class="ti ti-cloud-download"></span> Installation
                         </label>
                         <div style="margin-top:4px">
                             <div class="radio" style="margin-top:4px">
@@ -159,14 +159,14 @@
                             </div>
                         </div>
                         <div id="au-auto-warning" class="alert alert-warning" style="padding:8px 12px; font-size:12px; margin-top:8px; display:none">
-                            <span class="glyphicon glyphicon-warning-sign"></span>
+                            <span class="ti ti-alert-triangle"></span>
                             Auto-install restarts the app without warning. Only enable this if the server is not production-critical.
                         </div>
                     </div>
                 </div>
             </div>
             <button class="btn btn-primary btn-sm" id="au-save">
-                <span class="glyphicon glyphicon-floppy-disk"></span> Save Settings
+                <span class="ti ti-device-floppy"></span> Save Settings
             </button>
         </div>
     </div>
@@ -179,7 +179,7 @@ $(function() {
     // Check for updates button
     $('#btn-check').on('click', function() {
         var btn = $(this);
-        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh spin"></span> Checking...');
+        btn.prop('disabled', true).html('<span class="ti ti-refresh spin"></span> Checking...');
         $.getJSON('/api/version/check?force=1', function(r) {
             showToast(r.update_available
                 ? 'Update available: v' + r.latest
@@ -187,7 +187,7 @@ $(function() {
             setTimeout(function(){ location.reload(); }, 1200);
         }).fail(function() {
             showToast('Check failed', 'danger');
-            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-refresh"></span> Check Now');
+            btn.prop('disabled', false).html('<span class="ti ti-refresh"></span> Check Now');
         });
     });
 
@@ -195,7 +195,7 @@ $(function() {
     $('#btn-update').on('click', function() {
         if (!confirm('This will pull the latest code from GitHub and restart the app. Continue?')) return;
         var btn = $(this);
-        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Updating...');
+        btn.prop('disabled', true).html('<span class="ti ti-hourglass"></span> Updating...');
         $('#log-panel').show();
         $('#log-status').html('<span class="label label-info">Running...</span>');
         var log = $('#update-log');
@@ -215,7 +215,7 @@ $(function() {
             if (e.data === '__DONE_ERROR__') {
                 es.close();
                 $('#log-status').html('<span class="label label-danger">Failed</span>');
-                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-cloud-download"></span> Retry Update');
+                btn.prop('disabled', false).html('<span class="ti ti-cloud-download"></span> Retry Update');
                 return;
             }
             log.append(e.data + '\n');
@@ -297,13 +297,13 @@ $(function() {
     $.getJSON('/api/version/timer-status', function(r) {
         var txt;
         if (r.active) {
-            txt = '<span class="text-success"><span class="glyphicon glyphicon-ok"></span> Timer active</span>';
+            txt = '<span class="text-success"><span class="ti ti-check"></span> Timer active</span>';
         } else if (r.installed) {
-            txt = '<span class="text-warning"><span class="glyphicon glyphicon-warning-sign"></span> Timer installed but inactive'
+            txt = '<span class="text-warning"><span class="ti ti-alert-triangle"></span> Timer installed but inactive'
                 + (r.state ? ' (' + $('<div>').text(r.state).html() + ')' : '')
                 + ' — run install.sh to repair it</span>';
         } else {
-            txt = '<span class="text-warning"><span class="glyphicon glyphicon-warning-sign"></span> Timer not installed — run install.sh once on this server to enable it</span>';
+            txt = '<span class="text-warning"><span class="ti ti-alert-triangle"></span> Timer not installed — run install.sh once on this server to enable it</span>';
         }
         $('#timer-status-inline').html(txt);
     }).fail(function() {

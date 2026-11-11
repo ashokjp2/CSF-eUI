@@ -11,7 +11,7 @@
                     <input type="text" class="form-control" id="backup-label" placeholder="Optional label (e.g. before-upgrade)">
                     <span class="input-group-btn">
                         <button class="btn btn-success" id="btn-create-backup">
-                            <span class="glyphicon glyphicon-floppy-save"></span> Create Backup
+                            <span class="ti ti-device-floppy"></span> Create Backup
                         </button>
                     </span>
                 </div>
@@ -20,7 +20,7 @@
         </div>
 
         <div class="panel panel-info">
-            <div class="panel-heading"><h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-upload"></span> Upload Backup</h4></div>
+            <div class="panel-heading"><h4 class="panel-title" style="margin:0"><span class="ti ti-upload"></span> Upload Backup</h4></div>
             <div class="panel-body">
                 <form id="form-upload-backup" enctype="multipart/form-data">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -31,7 +31,7 @@
                         </div>
                         <div class="col-md-4">
                             <button type="submit" class="btn btn-info btn-block" id="btn-upload-backup">
-                                <span class="glyphicon glyphicon-upload"></span> Upload Backup
+                                <span class="ti ti-upload"></span> Upload Backup
                             </button>
                         </div>
                     </div>
@@ -43,7 +43,7 @@
             <div class="panel-heading">
                 <div class="pull-right">
                     <button class="btn btn-xs btn-default" id="btn-refresh">
-                        <span class="glyphicon glyphicon-refresh"></span> Refresh
+                        <span class="ti ti-refresh"></span> Refresh
                     </button>
                 </div>
                 <h4 class="panel-title" style="margin:0">Existing Backups</h4>
@@ -70,9 +70,9 @@ $(function() {
                     '<td>' + b.size_human + '</td>' +
                     '<td>' + (b.ssl_included ? '<span class="label label-success">Included</span>' : '—') + '</td>' +
                     '<td>' +
-                    '<a href="/api/backups/download/' + encodeURIComponent(b.filename) + '" class="btn btn-xs btn-default"><span class="glyphicon glyphicon-download"></span></a> ' +
-                    '<button class="btn btn-xs btn-warning btn-restore" data-file="' + b.filename + '"><span class="glyphicon glyphicon-open"></span> Restore</button> ' +
-                    '<button class="btn btn-xs btn-danger btn-delete" data-file="' + b.filename + '"><span class="glyphicon glyphicon-trash"></span></button>' +
+                    '<a href="/api/backups/download/' + encodeURIComponent(b.filename) + '" class="btn btn-xs btn-default"><span class="ti ti-download"></span></a> ' +
+                    '<button class="btn btn-xs btn-warning btn-restore" data-file="' + b.filename + '"><span class="ti ti-upload"></span> Restore</button> ' +
+                    '<button class="btn btn-xs btn-danger btn-delete" data-file="' + b.filename + '"><span class="ti ti-trash"></span></button>' +
                     '</td></tr>';
             });
             $('#backup-table').html(html || '<tr><td colspan="5" class="text-muted">No backups yet</td></tr>');
@@ -98,7 +98,7 @@ $(function() {
         if (file.size > 50 * 1024 * 1024) { showToast('Backup file is too large (maximum 50 MB)', 'warning'); return; }
 
         var btn = $('#btn-upload-backup');
-        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Uploading...');
+        btn.prop('disabled', true).html('<span class="ti ti-hourglass"></span> Uploading...');
         $.ajax({
             url: '/api/backups/upload',
             method: 'POST',
@@ -114,11 +114,11 @@ $(function() {
                 } else {
                     showToast(r.error || 'Upload failed', 'danger');
                 }
-                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-upload"></span> Upload Backup');
+                btn.prop('disabled', false).html('<span class="ti ti-upload"></span> Upload Backup');
             },
             error: function(xhr) {
                 showToast((xhr.responseJSON && xhr.responseJSON.error) || 'Upload failed', 'danger');
-                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-upload"></span> Upload Backup');
+                btn.prop('disabled', false).html('<span class="ti ti-upload"></span> Upload Backup');
             }
         });
     });

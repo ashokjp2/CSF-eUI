@@ -5,7 +5,7 @@
 <div class="panel panel-info">
     <div class="panel-heading">
         <h4 style="margin:0">
-            <span class="glyphicon glyphicon-cloud"></span>
+            <span class="ti ti-cloud"></span>
             Docker{% if is_coolify %} / Coolify{% endif %} Management
             <span class="pull-right text-muted" style="font-size:14px">{{ docker_version }}</span>
         </h4>
@@ -58,18 +58,18 @@
                             <td>
                                 <div class="btn-group">
                                     <a href="/docker/container/{{ c.get('ID', '') }}" class="btn btn-xs btn-info">
-                                        <span class="glyphicon glyphicon-eye-open"></span>
+                                        <span class="ti ti-eye"></span>
                                     </a>
                                     {% if 'Up' in c.get('Status', '') %}
                                     <button class="btn btn-xs btn-warning docker-ctl" data-id="{{ c.get('ID', '') }}" data-action="restart" title="Restart">
-                                        <span class="glyphicon glyphicon-refresh"></span>
+                                        <span class="ti ti-refresh"></span>
                                     </button>
                                     <button class="btn btn-xs btn-danger docker-ctl" data-id="{{ c.get('ID', '') }}" data-action="stop" title="Stop">
-                                        <span class="glyphicon glyphicon-stop"></span>
+                                        <span class="ti ti-player-stop"></span>
                                     </button>
                                     {% else %}
                                     <button class="btn btn-xs btn-success docker-ctl" data-id="{{ c.get('ID', '') }}" data-action="start" title="Start">
-                                        <span class="glyphicon glyphicon-play"></span>
+                                        <span class="ti ti-player-play"></span>
                                     </button>
                                     {% endif %}
                                 </div>
@@ -166,7 +166,7 @@
     <!-- Coolify -->
     <div class="tab-pane" id="coolify">
         <div class="panel panel-default">
-            <div class="panel-heading"><h4><span class="glyphicon glyphicon-cloud"></span> Coolify Managed Containers</h4></div>
+            <div class="panel-heading"><h4><span class="ti ti-cloud"></span> Coolify Managed Containers</h4></div>
             <div class="panel-body">
                 {% if coolify_containers %}
                 <table class="table table-bordered table-striped">
@@ -211,7 +211,7 @@
                 </div>
 
                 <button type="button" class="btn btn-primary" id="generateRules">
-                    <span class="glyphicon glyphicon-cog"></span> Generate CSF Rules for Docker
+                    <span class="ti ti-settings"></span> Generate CSF Rules for Docker
                 </button>
 
                 <pre class="comment" id="generatedRules" style="margin-top:15px; display:none; font-size:12px"></pre>
@@ -219,7 +219,7 @@
                 <div id="applyRulesBtn" style="display:none; margin-top:10px">
                     <p class="text-info">Copy these rules to <code>csf.allow</code> to ensure Docker ports remain accessible after CSF restarts.</p>
                     <a href="/files/allow" class="btn btn-success">
-                        <span class="glyphicon glyphicon-edit"></span> Edit csf.allow
+                        <span class="ti ti-edit"></span> Edit csf.allow
                     </a>
                 </div>
             </div>

@@ -1,6 +1,17 @@
 /* CSFv2 - Enhanced JavaScript */
 
+/* Legacy glyphicon name -> Tabler icon name (backend still emits glyphicon names in a few JSON feeds) */
+var TI_MAP = {"refresh":"refresh","plus":"plus","info-sign":"info-circle","ok":"check","hourglass":"hourglass","trash":"trash","warning-sign":"alert-triangle","floppy-disk":"device-floppy","search":"search","ok-circle":"circle-check","globe":"world","flash":"bolt","cog":"settings","ban-circle":"ban","remove":"x","upload":"upload","transfer":"arrows-exchange","lock":"lock","envelope":"mail","wrench":"tool","list-alt":"list-details","eye-open":"eye","th-list":"list","cloud":"cloud","chevron-down":"chevron-down","repeat":"repeat","play":"player-play","list":"list","link":"link","certificate":"certificate","time":"clock","remove-sign":"circle-x","random":"arrows-shuffle","pencil":"pencil","floppy-save":"device-floppy","fire":"flame","exclamation-sign":"alert-circle","download":"download","cloud-download":"cloud-download","unchecked":"square","question-sign":"help-circle","ok-sign":"circle-check","chevron-up":"chevron-up","stop":"player-stop","shield":"shield","pause":"player-pause","log-in":"login","hdd":"server","folder-open":"folder-open","flag":"flag","file":"file","edit":"edit","console":"terminal-2","check":"checkbox","alert":"alert-triangle","user":"user","tasks":"list-check","star":"star","signal":"antenna-bars-5","share-alt":"share","send":"send","resize-full":"arrows-maximize","remove-circle":"circle-x","open":"upload","off":"power","minus":"minus","map-marker":"map-pin","filter":"filter","dashboard":"layout-dashboard","comment":"message","bell":"bell","arrow-right":"arrow-right","arrow-left":"arrow-left","eye-close":"eye-off","ban":"ban","heart":"heart","calendar":"calendar","home":"home","asterisk":"asterisk","tag":"tag","cloud-upload":"cloud-upload","import":"file-import","export":"file-export","copy":"copy","th":"layout-grid","book":"book","briefcase":"briefcase","chevron-right":"chevron-right","chevron-left":"chevron-left","exclamation":"alert-circle","stats":"chart-bar","save":"device-floppy","new-window":"external-link","phone":"phone","earphone":"phone","bullhorn":"speakerphone","equalizer":"adjustments","road":"road","plane":"plane","question":"help-circle","log":"file-text","plus-sign":"circle-plus","minus-sign":"circle-minus","tags":"tags","folder-close":"folder","arrow-up":"arrow-up","arrow-down":"arrow-down","share":"share","knight":"chess-knight","tower":"building-broadcast-tower","flask":"flask","list-check":"list-check","sort":"arrows-sort","inbox":"inbox","lamp":"bulb","leaf":"leaf","tint":"droplet","picture":"photo","camera":"camera","print":"printer","zoom-in":"zoom-in","zoom-out":"zoom-out","fullscreen":"arrows-maximize","thumbs-up":"thumb-up","thumbs-down":"thumb-down","pushpin":"pin","bookmark":"bookmark","gift":"gift","magnet":"magnet","music":"music","scale":"scale","education":"school","credit-card":"credit-card","bitcoin":"currency-bitcoin","usd":"currency-dollar","sunglasses":"sunglasses","king":"crown","queen":"chess-queen","pawn":"chess","bishop":"chess-bishop","tree-conifer":"christmas-tree","tree-deciduous":"tree","cutlery":"tools-kitchen-2","glass":"glass","headphones":"headphones","paperclip":"paperclip","font":"typography","bold":"bold","italic":"italic","align-left":"align-left","align-right":"align-right","align-center":"align-center","align-justify":"align-justified","move":"arrows-move","retweet":"repeat","eject":"player-eject","forward":"player-skip-forward","backward":"player-skip-back","fast-forward":"player-track-next","step-forward":"player-skip-forward","play-circle":"player-play","volume-up":"volume","volume-down":"volume-2","volume-off":"volume-off","qrcode":"qrcode","barcode":"barcode","adjust":"contrast","erase":"eraser","scissors":"scissors","level-up":"arrow-up","resize-small":"arrows-minimize","resize-vertical":"arrows-vertical","resize-horizontal":"arrows-horizontal","menu-hamburger":"menu-2","menu-down":"caret-down","menu-up":"caret-up","menu-left":"caret-left","menu-right":"caret-right","triangle-right":"caret-right","triangle-left":"caret-left","triangle-top":"caret-up","triangle-bottom":"caret-down","log-out":"logout","moon":"moon","sun":"sun","option-horizontal":"dots","star-empty":"star","heart-empty":"heart","download-alt":"download","th-large":"layout-grid","screenshot":"screenshot","facetime-video":"video","sort-by-alphabet":"sort-a-z","sort-by-alphabet-alt":"sort-z-a","sort-by-attributes":"sort-ascending","sort-by-attributes-alt":"sort-descending","sort-by-order":"sort-ascending","sort-by-order-alt":"sort-descending","modal-window":"app-window","compressed":"file-zip","cd":"disc","circle-arrow-right":"circle-arrow-right","circle-arrow-down":"circle-arrow-down","circle-arrow-up":"circle-arrow-up","hand-right":"hand-move","hand-left":"hand-move","hand-up":"hand-move","hand-down":"hand-move","text-size":"text-size","text-height":"text-size","text-width":"text-size","header":"heading","superscript":"superscript","subscript":"subscript","indent-left":"indent-decrease","indent-right":"indent-increase","oil":"flame","grain":"grain","tent":"tent","blackboard":"chalkboard","bed":"bed","apple":"brand-apple","piggy-bank":"pig-money","ruble":"currency-rubel","gbp":"currency-pound","eur":"currency-euro","yen":"currency-yen","ice-lolly":"ice-cream","sound-dolby":"volume","duplicate":"copy","object-align-top":"layout-align-top"};
+
 var CSFv2 = {
+    /* Map a legacy glyphicon name (possibly with trailing classes) to a Tabler class list */
+    ti: function(name) {
+        name = String(name || '').replace(/^glyphicon-/, '');
+        var parts = name.split(/\s+/);
+        var base = parts.shift();
+        return [TI_MAP[base] || base || 'circle-dot'].concat(parts).join(' ');
+    },
+
     // Toast notification system
     _toastMax: 5,
     _dismissAllBtn: null,
@@ -58,14 +69,14 @@ var CSFv2 = {
         var toast = document.createElement('div');
         toast.className = 'toast toast-' + type;
         var icons = {
-            success: 'glyphicon-ok-circle',
-            danger: 'glyphicon-remove-circle',
-            warning: 'glyphicon-warning-sign',
-            info: 'glyphicon-info-sign'
+            success: 'ti-circle-check',
+            danger: 'ti-circle-x',
+            warning: 'ti-alert-triangle',
+            info: 'ti-info-circle'
         };
-        toast.innerHTML = '<span class="glyphicon ' + (icons[type] || icons.info) + '"></span> ' +
+        toast.innerHTML = '<i class="ti ' + (icons[type] || icons.info) + '"></i> ' +
             '<span style="flex:1">' + message + '</span>' +
-            '<span class="toast-close glyphicon glyphicon-remove"></span>';
+            '<span class="toast-close ti ti-x"></span>';
         container.appendChild(toast);
         this._updateDismissAll();
 

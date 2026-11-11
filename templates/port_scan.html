@@ -3,12 +3,12 @@
 
 {% block content %}
 <button class="btn btn-primary btn-lg" id="ps-scan" style="margin-bottom:15px">
-            <span class="glyphicon glyphicon-play"></span> Scan My Server
+            <span class="ti ti-player-play"></span> Scan My Server
         </button>
         <span class="text-muted" style="font-size:12px; margin-left:8px">Add/Remove updates TCP_IN in csf.conf; restart CSF to apply.</span>
 
         <div id="ps-loading" style="display:none; text-align:center; padding:30px">
-            <span class="glyphicon glyphicon-hourglass" style="font-size:24px"></span>
+            <span class="ti ti-hourglass" style="font-size:24px"></span>
             <p>Scanning ports...</p>
         </div>
 
@@ -68,7 +68,7 @@ $(function() {
             if (d.warnings.length > 0) {
                 var whtml = '';
                 d.warnings.forEach(function(w) {
-                    whtml += '<div class="alert alert-warning" style="padding:8px 12px; margin-bottom:4px"><span class="glyphicon glyphicon-warning-sign"></span> ' + w + '</div>';
+                    whtml += '<div class="alert alert-warning" style="padding:8px 12px; margin-bottom:4px"><span class="ti ti-alert-triangle"></span> ' + w + '</div>';
                 });
                 $('#ps-warnings').html(whtml).show();
             }
@@ -84,16 +84,16 @@ $(function() {
                 var action = '';
                 if (r.status === 'filtered') {
                     action = '<button type="button" class="btn btn-xs btn-success ps-rule-action" data-action="add" data-port="' + r.port + '">' +
-                        '<span class="glyphicon glyphicon-plus"></span> Add TCP_IN</button>';
+                        '<span class="ti ti-plus"></span> Add TCP_IN</button>';
                 } else if (r.status === 'allowed_unused') {
                     action = '<button type="button" class="btn btn-xs btn-warning ps-rule-action" data-action="remove" data-port="' + r.port + '">' +
-                        '<span class="glyphicon glyphicon-trash"></span> Remove TCP_IN</button>';
+                        '<span class="ti ti-trash"></span> Remove TCP_IN</button>';
                 }
 
                 html += '<tr class="' + rowCls + '">' +
                     '<td><strong>' + r.port + '</strong></td>' +
                     '<td>' + r.service + '</td>' +
-                    '<td>' + (r.listening ? '<span class="glyphicon glyphicon-ok text-success"></span> Yes' : '<span class="glyphicon glyphicon-remove text-muted"></span> No') + '</td>' +
+                    '<td>' + (r.listening ? '<span class="ti ti-check text-success"></span> Yes' : '<span class="ti ti-x text-muted"></span> No') + '</td>' +
                     '<td>' + (r.firewall_allowed ? '<span class="label label-success">Allowed</span>' : '<span class="label label-default">Blocked</span>') + '</td>' +
                     '<td><span class="label label-' + r.severity + '">' + r.status.replace('_', ' ') + '</span></td>' +
                     '<td style="font-size:11px">' + r.note + '</td>' +
@@ -124,7 +124,7 @@ $(function() {
             return;
         }
 
-        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh"></span> Applying...');
+        btn.prop('disabled', true).html('<span class="ti ti-refresh"></span> Applying...');
         $.ajax({
             url: '/api/port-scan/rule',
             method: 'POST',
@@ -137,16 +137,16 @@ $(function() {
                 } else {
                     showToast(r.error || ('Could not ' + verb), 'danger');
                     btn.prop('disabled', false).html(action === 'remove' ?
-                        '<span class="glyphicon glyphicon-trash"></span> Remove TCP_IN' :
-                        '<span class="glyphicon glyphicon-plus"></span> Add TCP_IN');
+                        '<span class="ti ti-trash"></span> Remove TCP_IN' :
+                        '<span class="ti ti-plus"></span> Add TCP_IN');
                 }
             },
             error: function(xhr) {
                 var msg = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : 'Request failed';
                 showToast(msg, 'danger');
                 btn.prop('disabled', false).html(action === 'remove' ?
-                    '<span class="glyphicon glyphicon-trash"></span> Remove TCP_IN' :
-                    '<span class="glyphicon glyphicon-plus"></span> Add TCP_IN');
+                    '<span class="ti ti-trash"></span> Remove TCP_IN' :
+                    '<span class="ti ti-plus"></span> Add TCP_IN');
             }
         });
     });

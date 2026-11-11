@@ -8,7 +8,7 @@
                 <button class="btn btn-default pm-sort" data-sort="rss">Sort by Memory</button>
             </div>
             <button class="btn btn-info" id="pm-refresh" style="margin-left:8px">
-                <span class="glyphicon glyphicon-refresh"></span> Refresh
+                <span class="ti ti-refresh"></span> Refresh
             </button>
             <div class="pull-right">
                 <input type="text" class="form-control" id="pm-filter" placeholder="Filter processes..." style="width:250px; display:inline-block">
@@ -19,8 +19,8 @@
         <div class="panel panel-info">
             <div class="panel-heading" data-toggle="collapse" data-target="#ports-body" style="cursor:pointer">
                 <h4 class="panel-title" style="margin:0">
-                    <span class="glyphicon glyphicon-transfer"></span> Listening Ports
-                    <span class="glyphicon glyphicon-chevron-down pull-right"></span>
+                    <span class="ti ti-arrows-exchange"></span> Listening Ports
+                    <span class="ti ti-chevron-down pull-right"></span>
                 </h4>
             </div>
             <div id="ports-body" class="panel-collapse collapse in">
@@ -34,7 +34,7 @@
         <!-- Process Table -->
         <div class="panel panel-default">
             <div class="panel-heading">
-                <h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-th-list"></span> Running Processes <span class="badge" id="pm-count">0</span></h4>
+                <h4 class="panel-title" style="margin:0"><span class="ti ti-list"></span> Running Processes <span class="badge" id="pm-count">0</span></h4>
             </div>
             <div class="table-responsive">
                 <table class="table table-condensed table-hover" style="margin:0; font-size:12px">
@@ -65,7 +65,7 @@ $(function() {
                     '<td>' + p.start + '</td>' +
                     '<td>' + p.time + '</td>' +
                     '<td style="max-width:400px; word-break:break-all; font-family:monospace">' + $('<span>').text(p.command).html() + '</td>' +
-                    '<td><button class="btn btn-xs btn-danger pm-kill" data-pid="' + p.pid + '" title="Kill"><span class="glyphicon glyphicon-off"></span></button></td>' +
+                    '<td><button class="btn btn-xs btn-danger pm-kill" data-pid="' + p.pid + '" title="Kill"><span class="ti ti-power"></span></button></td>' +
                     '</tr>';
             });
             $('#pm-tbody').html(html);

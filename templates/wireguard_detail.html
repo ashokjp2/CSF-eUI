@@ -5,7 +5,7 @@
 <div class="panel panel-info">
     <div class="panel-heading">
         <h4 style="margin:0">
-            <span class="glyphicon glyphicon-lock"></span> WireGuard: {{ iface }}
+            <span class="ti ti-lock"></span> WireGuard: {{ iface }}
             {% if wg_status %}
             <span class="label label-success pull-right">UP</span>
             {% else %}
@@ -70,7 +70,7 @@
                             <button type="submit" class="btn btn-xs btn-danger confirmButton"
                                     data-query="Remove this peer?"
                                     data-action="/wireguard/{{ iface }}/removepeer">
-                                <span class="glyphicon glyphicon-trash"></span> Remove
+                                <span class="ti ti-trash"></span> Remove
                             </button>
                         </form>
                     </td>
@@ -116,7 +116,7 @@
                 </div>
             </div>
             <button type="submit" class="btn btn-success">
-                <span class="glyphicon glyphicon-plus"></span> Add Peer
+                <span class="ti ti-plus"></span> Add Peer
             </button>
         </form>
     </div>
@@ -131,11 +131,11 @@
                       style="font-family:monospace; font-size:13px">{{ config_content }}</textarea>
             <div style="margin-top:10px">
                 <button type="submit" class="btn btn-primary">
-                    <span class="glyphicon glyphicon-floppy-disk"></span> Save Config
+                    <span class="ti ti-device-floppy"></span> Save Config
                 </button>
                 <form method="POST" action="/wireguard/{{ iface }}/restart" style="display:inline; margin-left:10px">
                     <button type="submit" class="btn btn-warning">
-                        <span class="glyphicon glyphicon-refresh"></span> Restart Interface
+                        <span class="ti ti-refresh"></span> Restart Interface
                     </button>
                 </form>
             </div>
@@ -175,7 +175,7 @@
             </div>
         </div>
         <button type="button" class="btn btn-primary" id="genClientBtn">
-            <span class="glyphicon glyphicon-random"></span> Generate Client Config
+            <span class="ti ti-arrows-shuffle"></span> Generate Client Config
         </button>
         <div id="clientOutput" style="display:none; margin-top:15px">
             <div class="row">
@@ -187,7 +187,7 @@
                     <h5>Scan with WireGuard App</h5>
                     <div id="qrcode" class="qr-container"></div>
                     <button class="btn btn-sm btn-default" id="downloadConfig" style="margin-top:10px">
-                        <span class="glyphicon glyphicon-download"></span> Download .conf
+                        <span class="ti ti-download"></span> Download .conf
                     </button>
                 </div>
             </div>

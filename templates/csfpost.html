@@ -8,7 +8,7 @@
 <div class="panel panel-primary">
     <div class="panel-heading">
         <h4 class="panel-title">
-            <span class="glyphicon glyphicon-wrench"></span>
+            <span class="ti ti-tool"></span>
             {{ info.title }}
             <small style="color:rgba(255,255,255,.7)">({{ info.path }})</small>
             <div class="pull-right" style="margin-top:-2px">
@@ -20,7 +20,7 @@
     <div class="panel-body">
         <p class="lead" style="margin-bottom:5px;font-size:14px">{{ info.description }}</p>
         <p class="text-muted" style="margin:0;font-size:12px">
-            <span class="glyphicon glyphicon-info-sign"></span>
+            <span class="ti ti-info-circle"></span>
             Changes require a <strong>CSF + LFD restart</strong> to take effect.
         </p>
     </div>
@@ -31,9 +31,9 @@
 
 <!-- Tabs -->
 <ul class="nav nav-tabs" style="margin-bottom:0;border-bottom:none">
-    <li class="active"><a href="#tab-editor" data-toggle="tab"><span class="glyphicon glyphicon-pencil"></span> Script Editor</a></li>
-    <li><a href="#tab-rules" data-toggle="tab"><span class="glyphicon glyphicon-list-alt"></span> Parsed Rules <span class="badge" id="rules-badge">{{ info.rules|length }}</span></a></li>
-    <li><a href="#tab-builder" data-toggle="tab"><span class="glyphicon glyphicon-plus"></span> Rule Builder</a></li>
+    <li class="active"><a href="#tab-editor" data-toggle="tab"><span class="ti ti-pencil"></span> Script Editor</a></li>
+    <li><a href="#tab-rules" data-toggle="tab"><span class="ti ti-list-details"></span> Parsed Rules <span class="badge" id="rules-badge">{{ info.rules|length }}</span></a></li>
+    <li><a href="#tab-builder" data-toggle="tab"><span class="ti ti-plus"></span> Rule Builder</a></li>
 </ul>
 
 <div class="tab-content" style="border:1px solid #ddd;border-top:none;padding:15px;background:#fff">
@@ -43,16 +43,16 @@
         <div class="row" style="margin-bottom:8px">
             <div class="col-sm-8">
                 <span class="text-muted" style="font-size:12px">
-                    <span class="glyphicon glyphicon-info-sign"></span>
+                    <span class="ti ti-info-circle"></span>
                     Edit the script below. Click <strong>Check Syntax</strong> before saving.
                 </span>
             </div>
             <div class="col-sm-4 text-right">
                 <button class="btn btn-default btn-sm" id="check-btn">
-                    <span class="glyphicon glyphicon-ok-circle"></span> Check Syntax
+                    <span class="ti ti-circle-check"></span> Check Syntax
                 </button>
                 <button class="btn btn-primary btn-sm" id="save-btn">
-                    <span class="glyphicon glyphicon-floppy-disk"></span> Save
+                    <span class="ti ti-device-floppy"></span> Save
                 </button>
             </div>
         </div>
@@ -66,12 +66,12 @@
         <div class="row" style="margin-top:12px">
             <div class="col-sm-6">
                 <button class="btn btn-warning btn-sm" id="restart-btn">
-                    <span class="glyphicon glyphicon-refresh"></span> Restart CSF+LFD
+                    <span class="ti ti-refresh"></span> Restart CSF+LFD
                 </button>
             </div>
             <div class="col-sm-6 text-right">
                 <button class="btn btn-default btn-sm" id="reload-btn">
-                    <span class="glyphicon glyphicon-repeat"></span> Reload from Disk
+                    <span class="ti ti-repeat"></span> Reload from Disk
                 </button>
             </div>
         </div>
@@ -81,7 +81,7 @@
     <div class="tab-pane" id="tab-rules">
         {% if info.rules %}
         <p class="text-muted" style="font-size:12px;margin-bottom:10px">
-            <span class="glyphicon glyphicon-info-sign"></span>
+            <span class="ti ti-info-circle"></span>
             Active iptables/ip6tables commands detected in the script. Commented lines are ignored and commands continued with <code>\</code> are grouped as one rule. Click a row to jump to its starting line.
         </p>
         <div class="table-responsive">
@@ -114,7 +114,7 @@
         </div>
         {% else %}
         <div class="text-center text-muted" style="padding:40px 0">
-            <span class="glyphicon glyphicon-search" style="font-size:32px;opacity:.4"></span>
+            <span class="ti ti-search" style="font-size:32px;opacity:.4"></span>
             <p style="margin-top:10px">No iptables rules found in the current script.</p>
             <p style="font-size:12px">Use the <a href="#tab-builder" data-toggle="tab">Rule Builder</a> to generate rules, then save.</p>
         </div>
@@ -124,7 +124,7 @@
     <!-- RULE BUILDER TAB -->
     <div class="tab-pane" id="tab-builder">
         <p class="text-muted" style="font-size:12px;margin-bottom:12px">
-            <span class="glyphicon glyphicon-info-sign"></span>
+            <span class="ti ti-info-circle"></span>
             Choose a rule type, fill in the details, and the generated line will be inserted into the script editor.
         </p>
 
@@ -187,20 +187,20 @@
                                 <label>Generated rule:</label>
                                 <pre id="built-rule" style="background:#f5f5f5;padding:8px;border-radius:3px;font-size:12px;white-space:pre-wrap;word-break:break-all"></pre>
                                 <button class="btn btn-success btn-sm" id="insert-rule-btn">
-                                    <span class="glyphicon glyphicon-share-alt"></span> Insert into Editor
+                                    <span class="ti ti-share"></span> Insert into Editor
                                 </button>
                             </div>
 
                             <div class="text-right" style="margin-top:12px">
                                 <button class="btn btn-primary btn-sm" id="build-btn">
-                                    <span class="glyphicon glyphicon-cog"></span> Generate Rule
+                                    <span class="ti ti-settings"></span> Generate Rule
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div id="builder-placeholder" class="text-center text-muted" style="padding:40px 0">
-                    <span class="glyphicon glyphicon-arrow-left" style="font-size:28px;opacity:.4"></span>
+                    <span class="ti ti-arrow-left" style="font-size:28px;opacity:.4"></span>
                     <p style="margin-top:10px">Select a rule type to get started</p>
                 </div>
             </div>
@@ -229,7 +229,7 @@
         var icon = type === 'success' ? 'ok-sign' : type === 'danger' ? 'exclamation-sign' : 'info-sign';
         var html = '<div class="alert alert-'+type+' alert-dismissible" style="margin-bottom:10px">' +
             '<button type="button" class="close" data-dismiss="alert">&times;</button>' +
-            '<span class="glyphicon glyphicon-'+icon+'"></span> '+msg+'</div>';
+            '<i class="ti ti-'+CSFv2.ti(icon)+'"></i> '+msg+'</div>';
         $(area).prepend(html);
         setTimeout(function(){ $(area+' .alert').first().fadeOut(); }, 6000);
     }
@@ -241,7 +241,7 @@
     // ---- Syntax check ----
     $('#check-btn').on('click', function() {
         var btn = $(this);
-        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh spinning"></span> Checking...');
+        btn.prop('disabled', true).html('<span class="ti ti-refresh spinning"></span> Checking...');
         $.ajax({
             url: '/api/csfpost/check',
             method: 'POST',
@@ -251,22 +251,22 @@
                 var box = $('#syntax-result');
                 if (r.valid) {
                     var msg = r.note ? r.note : 'Syntax OK — no errors found.';
-                    box.html('<div class="alert alert-success" style="margin:0;padding:6px 12px"><span class="glyphicon glyphicon-ok"></span> '+msg+'</div>');
+                    box.html('<div class="alert alert-success" style="margin:0;padding:6px 12px"><span class="ti ti-check"></span> '+msg+'</div>');
                 } else {
                     var errs = (r.errors || []).map(function(e){ return '<li>'+esc(e)+'</li>'; }).join('');
-                    box.html('<div class="alert alert-danger" style="margin:0;padding:6px 12px"><strong><span class="glyphicon glyphicon-exclamation-sign"></span> Syntax errors:</strong><ul style="margin:4px 0 0 0">'+errs+'</ul></div>');
+                    box.html('<div class="alert alert-danger" style="margin:0;padding:6px 12px"><strong><span class="ti ti-alert-circle"></span> Syntax errors:</strong><ul style="margin:4px 0 0 0">'+errs+'</ul></div>');
                 }
                 box.show();
             },
             error: function() { showAlert('danger', 'Syntax check request failed'); },
-            complete: function() { btn.prop('disabled', false).html('<span class="glyphicon glyphicon-ok-circle"></span> Check Syntax'); }
+            complete: function() { btn.prop('disabled', false).html('<span class="ti ti-circle-check"></span> Check Syntax'); }
         });
     });
 
     // ---- Save ----
     $('#save-btn').on('click', function() {
         var btn = $(this);
-        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh spinning"></span> Saving...');
+        btn.prop('disabled', true).html('<span class="ti ti-refresh spinning"></span> Saving...');
         $.ajax({
             url: '/api/csfpost/save',
             method: 'POST',
@@ -282,7 +282,7 @@
                 }
             },
             error: function() { showAlert('danger', 'Save request failed'); },
-            complete: function() { btn.prop('disabled', false).html('<span class="glyphicon glyphicon-floppy-disk"></span> Save'); }
+            complete: function() { btn.prop('disabled', false).html('<span class="ti ti-device-floppy"></span> Save'); }
         });
     });
 
@@ -295,7 +295,7 @@
     // ---- Restart ----
     $('#restart-btn').on('click', function() {
         var btn = $(this);
-        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh spinning"></span> Restarting...');
+        btn.prop('disabled', true).html('<span class="ti ti-refresh spinning"></span> Restarting...');
         $.post('/api/restart', function(r) {
             if (r.success) {
                 showAlert('success', 'CSF+LFD restarted successfully');
@@ -305,7 +305,7 @@
         }).fail(function() {
             showAlert('danger', 'Restart request failed');
         }).always(function() {
-            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-refresh"></span> Restart CSF+LFD');
+            btn.prop('disabled', false).html('<span class="ti ti-refresh"></span> Restart CSF+LFD');
         });
     });
 

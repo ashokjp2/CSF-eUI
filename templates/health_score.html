@@ -51,7 +51,7 @@
                 </div>
 
                 {% if score.recommendations %}
-                <h4 style="margin-top:5px"><span class="glyphicon glyphicon-wrench"></span> Top Recommendations</h4>
+                <h4 style="margin-top:5px"><span class="ti ti-tool"></span> Top Recommendations</h4>
                 {% for rec in score.recommendations %}
                 <div style="padding:8px 12px; margin-bottom:6px; border-left:4px solid {{ '#d9534f' if rec.priority == 'critical' else '#f0ad4e' }}; background:{{ '#fdf2f2' if rec.priority == 'critical' else '#fef9f0' }}">
                     <div>
@@ -70,11 +70,11 @@
                     {% if rec.fix_value %}
                     <button class="btn btn-xs btn-warning js-quick-fix" style="margin-top:4px"
                             data-setting="{{ rec.setting }}" data-value="{{ rec.fix_value }}">
-                        <span class="glyphicon glyphicon-wrench"></span> Apply Fix: {{ rec.setting }} = {{ rec.fix_value }}
+                        <span class="ti ti-tool"></span> Apply Fix: {{ rec.setting }} = {{ rec.fix_value }}
                     </button>
                     {% else %}
                     <a href="/config" class="btn btn-xs btn-default" style="margin-top:4px">
-                        <span class="glyphicon glyphicon-cog"></span> Fix: {{ rec.setting }}
+                        <span class="ti ti-settings"></span> Fix: {{ rec.setting }}
                     </a>
                     {% endif %}
                     {% endif %}
@@ -85,19 +85,19 @@
         </div>
 
         <!-- Detailed results -->
-        <h4><span class="glyphicon glyphicon-list-alt"></span> Detailed Check Results</h4>
+        <h4><span class="ti ti-list-details"></span> Detailed Check Results</h4>
         {% for category in score.report.checks %}
         <div class="panel panel-default">
             <div class="panel-heading">
                 <h4 class="panel-title" style="margin:0">
                     {% if category.category == 'SSH Hardening' %}
-                    <span class="glyphicon glyphicon-lock"></span>
+                    <span class="ti ti-lock"></span>
                     {% elif category.category == 'CSF Firewall Settings' %}
-                    <span class="glyphicon glyphicon-fire"></span>
+                    <span class="ti ti-flame"></span>
                     {% elif category.category == 'System Security' %}
-                    <span class="glyphicon glyphicon-shield"></span>
+                    <span class="ti ti-shield"></span>
                     {% else %}
-                    <span class="glyphicon glyphicon-cog"></span>
+                    <span class="ti ti-settings"></span>
                     {% endif %}
                     {{ category.category }}
                     <span class="badge pull-right">{{ category["items"]|length }}</span>
@@ -107,7 +107,7 @@
                 {% for item in category["items"] %}
                 <div style="padding:8px 15px; border-bottom:1px solid #eee;
                     {% if item.status == 'fail' %}border-left:4px solid #d9534f; background:#fdf2f2{% elif item.status == 'warn' %}border-left:4px solid #f0ad4e; background:#fef9f0{% elif item.status == 'pass' %}border-left:4px solid #5cb85c{% elif item.status == 'info' %}border-left:4px solid #5bc0de; background:#f0f9ff{% endif %}">
-                    <span class="glyphicon glyphicon-{{ 'ok-sign text-success' if item.status == 'pass' else 'warning-sign text-warning' if item.status == 'warn' else 'remove-sign text-danger' if item.status == 'fail' else 'info-sign text-info' }}"></span>
+                    <i class="ti ti-{{ 'circle-check text-success' if item.status == 'pass' else 'alert-triangle text-warning' if item.status == 'warn' else 'circle-x text-danger' if item.status == 'fail' else 'info-circle text-info' }}"></i>
                     <strong>{{ item.title }}</strong>
                     {% if item.detail %}
                     <div style="margin-top:3px; padding-left:22px; font-size:12px" class="text-muted">{{ item.detail }}</div>
@@ -116,11 +116,11 @@
                     {% if item.fix_value %}
                     <button class="btn btn-xs btn-warning js-quick-fix" style="margin-left:22px; margin-top:3px"
                             data-setting="{{ item.setting }}" data-value="{{ item.fix_value }}">
-                        <span class="glyphicon glyphicon-wrench"></span> Apply Fix
+                        <span class="ti ti-tool"></span> Apply Fix
                     </button>
                     {% else %}
                     <a href="/config" class="btn btn-xs btn-default" style="margin-left:22px; margin-top:3px">
-                        <span class="glyphicon glyphicon-cog"></span> Edit {{ item.setting }}
+                        <span class="ti ti-settings"></span> Edit {{ item.setting }}
                     </a>
                     {% endif %}
                     {% endif %}
@@ -143,7 +143,7 @@ $(function () {
         var value = $btn.data('value');
         var $row = $btn.closest('div[style]');
 
-        $btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh"></span> Applying…');
+        $btn.prop('disabled', true).html('<span class="ti ti-refresh"></span> Applying…');
 
         $.ajax({
             url: '/api/health/quick-fix',
@@ -154,25 +154,25 @@ $(function () {
                 if (r.success) {
                     $btn.replaceWith(
                         '<span class="label label-success" style="margin-left:4px">' +
-                        '<span class="glyphicon glyphicon-ok"></span> Fixed — reload page to refresh score</span>'
+                        '<span class="ti ti-check"></span> Fixed — reload page to refresh score</span>'
                     );
                 } else {
                     $btn.prop('disabled', false)
-                        .html('<span class="glyphicon glyphicon-wrench"></span> Apply Fix');
+                        .html('<span class="ti ti-tool"></span> Apply Fix');
                     $row.find('.js-fix-error').remove();
                     $row.append(
                         '<div class="text-danger js-fix-error" style="margin-top:4px;font-size:12px">' +
-                        '<span class="glyphicon glyphicon-remove"></span> ' +
+                        '<span class="ti ti-x"></span> ' +
                         (r.error || 'Fix failed') + '</div>'
                     );
                 }
             },
             error: function (xhr) {
                 $btn.prop('disabled', false)
-                    .html('<span class="glyphicon glyphicon-wrench"></span> Apply Fix');
+                    .html('<span class="ti ti-tool"></span> Apply Fix');
                 $row.find('.js-fix-error').remove();
                 var msg = (xhr.responseJSON && xhr.responseJSON.error) ? xhr.responseJSON.error : 'Request failed — check logs (HTTP ' + xhr.status + ').';
-                $row.append('<div class="text-danger js-fix-error" style="margin-top:4px;font-size:12px"><span class="glyphicon glyphicon-remove"></span> ' + msg + '</div>');
+                $row.append('<div class="text-danger js-fix-error" style="margin-top:4px;font-size:12px"><span class="ti ti-x"></span> ' + msg + '</div>');
             }
         });
     });

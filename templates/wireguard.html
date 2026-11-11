@@ -5,7 +5,7 @@
 <div class="panel panel-info">
     <div class="panel-heading">
         <h4 style="margin:0">
-            <span class="glyphicon glyphicon-lock"></span> WireGuard VPN Management
+            <span class="ti ti-lock"></span> WireGuard VPN Management
             <span class="pull-right text-muted" style="font-size:14px">{{ wg_version }}</span>
         </h4>
     </div>
@@ -52,23 +52,23 @@
                     </td>
                     <td>
                         <a href="/wireguard/{{ conf.interface }}" class="btn btn-xs btn-info">
-                            <span class="glyphicon glyphicon-eye-open"></span> Details
+                            <span class="ti ti-eye"></span> Details
                         </a>
                         {% if conf.active %}
                         <form method="POST" action="/wireguard/{{ conf.interface }}/down" style="display:inline">
                             <button type="submit" class="btn btn-xs btn-danger">
-                                <span class="glyphicon glyphicon-stop"></span> Down
+                                <span class="ti ti-player-stop"></span> Down
                             </button>
                         </form>
                         <form method="POST" action="/wireguard/{{ conf.interface }}/restart" style="display:inline">
                             <button type="submit" class="btn btn-xs btn-warning">
-                                <span class="glyphicon glyphicon-refresh"></span> Restart
+                                <span class="ti ti-refresh"></span> Restart
                             </button>
                         </form>
                         {% else %}
                         <form method="POST" action="/wireguard/{{ conf.interface }}/up" style="display:inline">
                             <button type="submit" class="btn btn-xs btn-success">
-                                <span class="glyphicon glyphicon-play"></span> Up
+                                <span class="ti ti-player-play"></span> Up
                             </button>
                         </form>
                         {% endif %}
@@ -90,7 +90,7 @@
     <div class="panel-heading"><h4>Key Generation</h4></div>
     <div class="panel-body">
         <button type="button" class="btn btn-primary" id="genKeyBtn">
-            <span class="glyphicon glyphicon-random"></span> Generate Key Pair
+            <span class="ti ti-arrows-shuffle"></span> Generate Key Pair
         </button>
         <div id="keyOutput" style="display:none; margin-top:15px">
             <div class="form-group">

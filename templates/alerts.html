@@ -39,7 +39,7 @@
         <!-- Alerts list -->
         <div class="list-group" id="al-list"></div>
         <div id="al-loading" style="text-align:center; padding:30px">
-            <span class="glyphicon glyphicon-hourglass" style="font-size:24px"></span>
+            <span class="ti ti-hourglass" style="font-size:24px"></span>
         </div>
 {% endblock %}
 
@@ -76,7 +76,7 @@ $(function() {
             var ipLink = a.ip ? '<a href="/ip-lookup?ip=' + a.ip + '" class="label label-default">' + a.ip + '</a> ' : '';
 
             html += '<div class="list-group-item ' + cls + '" style="padding:6px 12px; font-size:12px" data-cat="' + a.category + '" data-search="' + a.line.toLowerCase() + '">' +
-                '<span class="glyphicon glyphicon-' + a.icon + '"></span> ' +
+                '<i class="ti ti-' + CSFv2.ti(a.icon) + '"></i> ' +
                 flag + ipLink +
                 '<span class="label label-' + a.severity + '" style="margin-right:4px">' + a.category + '</span> ' +
                 '<span style="font-family:monospace; word-break:break-all">' + $('<span>').text(a.line.substring(0, 150)).html() + '</span>' +

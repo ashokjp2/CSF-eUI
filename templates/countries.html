@@ -10,7 +10,7 @@
                 <div class="panel panel-danger">
                     <div class="panel-heading">
                         <h4 class="panel-title" style="margin:0">
-                            <span class="glyphicon glyphicon-ban-circle"></span> Blocked Countries (CC_DENY)
+                            <span class="ti ti-ban"></span> Blocked Countries (CC_DENY)
                             <span class="badge" id="deny-count">{{ countries.denied|length }}</span>
                         </h4>
                     </div>
@@ -24,7 +24,7 @@
                             </select>
                             <span class="input-group-btn">
                                 <button class="btn btn-danger" id="add-deny-btn">
-                                    <span class="glyphicon glyphicon-plus"></span> Block
+                                    <span class="ti ti-plus"></span> Block
                                 </button>
                             </span>
                         </div>
@@ -36,7 +36,7 @@
                                 <span style="flex:1">{{ c.name }}</span>
                                 <span class="label label-default" style="margin-right:8px">{{ c.code }}</span>
                                 <button class="btn btn-xs btn-success remove-country" data-list="deny" data-code="{{ c.code }}" title="Unblock">
-                                    <span class="glyphicon glyphicon-ok"></span>
+                                    <span class="ti ti-check"></span>
                                 </button>
                             </div>
                             {% endfor %}
@@ -49,7 +49,7 @@
 
                 <!-- Quick Block Presets -->
                 <div class="panel panel-default">
-                    <div class="panel-heading"><h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-flash"></span> Quick Presets</h4></div>
+                    <div class="panel-heading"><h4 class="panel-title" style="margin:0"><span class="ti ti-bolt"></span> Quick Presets</h4></div>
                     <div class="panel-body" style="padding:10px">
                         <button class="btn btn-sm btn-warning preset-btn" data-codes="CN,RU,KP,IR" data-list="deny" style="margin:2px">
                             Block Common Threats (CN, RU, KP, IR)
@@ -66,7 +66,7 @@
                 <div class="panel panel-success">
                     <div class="panel-heading">
                         <h4 class="panel-title" style="margin:0">
-                            <span class="glyphicon glyphicon-ok-circle"></span> Allowed Countries (CC_ALLOW)
+                            <span class="ti ti-circle-check"></span> Allowed Countries (CC_ALLOW)
                             <span class="badge" id="allow-count">{{ countries.allowed|length }}</span>
                         </h4>
                     </div>
@@ -80,7 +80,7 @@
                             </select>
                             <span class="input-group-btn">
                                 <button class="btn btn-success" id="add-allow-btn">
-                                    <span class="glyphicon glyphicon-plus"></span> Allow
+                                    <span class="ti ti-plus"></span> Allow
                                 </button>
                             </span>
                         </div>
@@ -92,7 +92,7 @@
                                 <span style="flex:1">{{ c.name }}</span>
                                 <span class="label label-default" style="margin-right:8px">{{ c.code }}</span>
                                 <button class="btn btn-xs btn-danger remove-country" data-list="allow" data-code="{{ c.code }}" title="Remove">
-                                    <span class="glyphicon glyphicon-remove"></span>
+                                    <span class="ti ti-x"></span>
                                 </button>
                             </div>
                             {% endfor %}
@@ -105,11 +105,11 @@
 
                 <!-- Info -->
                 <div class="panel panel-info">
-                    <div class="panel-heading"><h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-info-sign"></span> How It Works</h4></div>
+                    <div class="panel-heading"><h4 class="panel-title" style="margin:0"><span class="ti ti-info-circle"></span> How It Works</h4></div>
                     <div class="panel-body" style="font-size:12px">
                         <p><strong>CC_DENY:</strong> All traffic from these countries is blocked. Use this to stop attacks from countries you don't expect traffic from.</p>
                         <p><strong>CC_ALLOW:</strong> Only traffic from these countries is allowed. Use this if your service is for a specific region only.</p>
-                        <p class="text-warning" style="margin:0"><span class="glyphicon glyphicon-warning-sign"></span> <strong>Warning:</strong> Using CC_ALLOW blocks ALL other countries. Be careful not to lock yourself out!</p>
+                        <p class="text-warning" style="margin:0"><span class="ti ti-alert-triangle"></span> <strong>Warning:</strong> Using CC_ALLOW blocks ALL other countries. Be careful not to lock yourself out!</p>
                     </div>
                 </div>
             </div>

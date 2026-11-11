@@ -37,7 +37,7 @@ $(function() {
 
                 html += '<tr class="' + (cls ? 'bg-' + cls : '') + '" style="' + (cls ? 'background:rgba(0,0,0,0.03)' : '') + '">' +
                     '<td style="font-size:12px">' + e.ts + '</td>' +
-                    '<td><span class="glyphicon glyphicon-' + icon + '"></span> <span class="label label-' + (cls || 'default') + '">' + e.type + '</span></td>' +
+                    '<td><i class="ti ti-' + CSFv2.ti(icon) + '"></i> <span class="label label-' + (cls || 'default') + '">' + e.type + '</span></td>' +
                     '<td>' + (e.user || '-') + '</td>' +
                     '<td><code>' + (e.ip || '-') + '</code></td>' +
                     '<td style="font-size:12px">' + (e.detail || '-') + '</td>' +

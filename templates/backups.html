@@ -7,7 +7,7 @@
         <!-- Create backup -->
         <div class="panel panel-primary">
             <div class="panel-heading">
-                <h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-plus"></span> Create New Backup</h4>
+                <h4 class="panel-title" style="margin:0"><span class="ti ti-plus"></span> Create New Backup</h4>
             </div>
             <div class="panel-body">
                 <div class="row">
@@ -16,7 +16,7 @@
                             <input type="text" class="form-control" id="backup-label" placeholder="Optional label (e.g. before-port-change)">
                             <span class="input-group-btn">
                                 <button class="btn btn-primary" id="btn-backup">
-                                    <span class="glyphicon glyphicon-floppy-save"></span> Create Backup
+                                    <span class="ti ti-device-floppy"></span> Create Backup
                                 </button>
                             </span>
                         </div>
@@ -34,7 +34,7 @@
         <div class="panel panel-default">
             <div class="panel-heading">
                 <h4 class="panel-title" style="margin:0">
-                    <span class="glyphicon glyphicon-folder-open"></span> Saved Backups
+                    <span class="ti ti-folder-open"></span> Saved Backups
                     <span class="badge pull-right">{{ backups|length }}</span>
                 </h4>
             </div>
@@ -52,18 +52,18 @@
                 <tbody>
                     {% for b in backups %}
                     <tr>
-                        <td><span class="glyphicon glyphicon-time"></span> {{ b.created }}</td>
+                        <td><span class="ti ti-clock"></span> {{ b.created }}</td>
                         <td>{{ b.label or '—' }}</td>
                         <td>{{ b.files }}</td>
                         <td>{{ b.size_human }}</td>
                         <td>
                             <button class="btn btn-warning btn-xs btn-restore" data-file="{{ b.filename }}"
                                     title="Restore this backup (creates a safety backup first)">
-                                <span class="glyphicon glyphicon-repeat"></span> Restore
+                                <span class="ti ti-repeat"></span> Restore
                             </button>
                             <button class="btn btn-danger btn-xs btn-delete-backup" data-file="{{ b.filename }}"
                                     title="Delete this backup permanently">
-                                <span class="glyphicon glyphicon-trash"></span>
+                                <span class="ti ti-trash"></span>
                             </button>
                         </td>
                     </tr>
@@ -72,7 +72,7 @@
             </table>
             {% else %}
             <div class="panel-body text-center text-muted" style="padding:30px">
-                <span class="glyphicon glyphicon-floppy-disk" style="font-size:32px; opacity:0.3"></span>
+                <span class="ti ti-device-floppy" style="font-size:32px; opacity:0.3"></span>
                 <p style="margin-top:10px">No backups yet. Create one to get started.</p>
             </div>
             {% endif %}
@@ -85,7 +85,7 @@ $(function() {
     $('#btn-backup').on('click', function() {
         var btn = $(this);
         var label = $('#backup-label').val().trim();
-        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span> Creating...');
+        btn.prop('disabled', true).html('<span class="ti ti-hourglass"></span> Creating...');
         $.ajax({
             url: '/api/backup/create',
             method: 'POST',
@@ -97,12 +97,12 @@ $(function() {
                     setTimeout(function(){ location.reload(); }, 1000);
                 } else {
                     showToast(r.error || 'Backup failed', 'danger');
-                    btn.prop('disabled', false).html('<span class="glyphicon glyphicon-floppy-save"></span> Create Backup');
+                    btn.prop('disabled', false).html('<span class="ti ti-device-floppy"></span> Create Backup');
                 }
             },
             error: function() {
                 showToast('Backup failed', 'danger');
-                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-floppy-save"></span> Create Backup');
+                btn.prop('disabled', false).html('<span class="ti ti-device-floppy"></span> Create Backup');
             }
         });
     });
@@ -111,7 +111,7 @@ $(function() {
         var file = $(this).data('file');
         if (!confirm('Restore from "' + file + '"?\n\nA safety backup of your current config will be created first.')) return;
         var btn = $(this);
-        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-hourglass"></span>');
+        btn.prop('disabled', true).html('<span class="ti ti-hourglass"></span>');
         $.ajax({
             url: '/api/backup/restore',
             method: 'POST',
@@ -123,12 +123,12 @@ $(function() {
                     setTimeout(function(){ location.reload(); }, 1500);
                 } else {
                     showToast(r.error || 'Restore failed', 'danger');
-                    btn.prop('disabled', false).html('<span class="glyphicon glyphicon-repeat"></span> Restore');
+                    btn.prop('disabled', false).html('<span class="ti ti-repeat"></span> Restore');
                 }
             },
             error: function() {
                 showToast('Restore failed', 'danger');
-                btn.prop('disabled', false).html('<span class="glyphicon glyphicon-repeat"></span> Restore');
+                btn.prop('disabled', false).html('<span class="ti ti-repeat"></span> Restore');
             }
         });
     });

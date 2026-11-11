@@ -4,13 +4,13 @@
 {% block content %}
 <div class="panel panel-default">
     <div class="panel-heading">
-        <h4 class="panel-title" style="margin:0"><span class="glyphicon glyphicon-eye-open"></span> System Logs</h4>
+        <h4 class="panel-title" style="margin:0"><span class="ti ti-eye"></span> System Logs</h4>
     </div>
     <div class="panel-body">
         <ul class="nav nav-tabs" style="margin-bottom:15px">
-            <li class="active"><a data-toggle="tab" href="#smartview"><span class="glyphicon glyphicon-th-list"></span> Smart View</a></li>
-            <li><a data-toggle="tab" href="#logtail"><span class="glyphicon glyphicon-console"></span> Raw Logs</a></li>
-            <li><a data-toggle="tab" href="#loggrep"><span class="glyphicon glyphicon-search"></span> Search</a></li>
+            <li class="active"><a data-toggle="tab" href="#smartview"><span class="ti ti-list"></span> Smart View</a></li>
+            <li><a data-toggle="tab" href="#logtail"><span class="ti ti-terminal-2"></span> Raw Logs</a></li>
+            <li><a data-toggle="tab" href="#loggrep"><span class="ti ti-search"></span> Search</a></li>
         </ul>
 
         <div class="tab-content">
@@ -44,7 +44,7 @@
                     </div>
                     <div class="col-md-3">
                         <button class="btn btn-primary" id="smartLoad">
-                            <span class="glyphicon glyphicon-refresh"></span> Load
+                            <span class="ti ti-refresh"></span> Load
                         </button>
                         <label class="checkbox-inline" style="margin-left:10px">
                             <input type="checkbox" id="smartAuto"> Auto-refresh
@@ -116,16 +116,16 @@
                         <label>&nbsp;</label>
                         <div>
                             <button type="button" class="btn btn-primary" id="startTail">
-                                <span class="glyphicon glyphicon-play"></span> Start
+                                <span class="ti ti-player-play"></span> Start
                             </button>
                             <button type="button" class="btn btn-warning" id="pauseTail" disabled>
-                                <span class="glyphicon glyphicon-pause"></span> Pause
+                                <span class="ti ti-player-pause"></span> Pause
                             </button>
                             <button type="button" class="btn btn-default" id="refreshTail">
-                                <span class="glyphicon glyphicon-refresh"></span> Refresh
+                                <span class="ti ti-refresh"></span> Refresh
                             </button>
                             <span id="CSFrefreshing" style="display:none" class="text-info">
-                                <span class="glyphicon glyphicon-refresh spinning"></span> Refreshing...
+                                <span class="ti ti-refresh spinning"></span> Refreshing...
                             </span>
                         </div>
                     </div>
@@ -165,7 +165,7 @@
                     </div>
                 </div>
                 <button type="button" class="btn btn-primary" id="searchBtn">
-                    <span class="glyphicon glyphicon-search"></span> Search
+                    <span class="ti ti-search"></span> Search
                 </button>
                 <pre class="comment log-output" id="grepOutput" style="max-height:500px; overflow-y:auto; font-size:12px; margin-top:10px">Enter a search pattern and click Search.</pre>
             </div>
@@ -297,7 +297,7 @@ function loadSmart() {
 
             // Left: icon + label
             html += '<div class="col-xs-2 col-md-1 text-center">';
-            html += '<span class="glyphicon glyphicon-' + e.icon + ' text-' + color + '" style="font-size:20px"></span>';
+            html += '<i class="ti ti-' + CSFv2.ti(e.icon) + ' text-' + color + '" style="font-size:20px"></i>';
             html += '</div>';
 
             // Center: details
@@ -314,9 +314,9 @@ function loadSmart() {
             if (e.time) html += '<small class="text-muted">' + e.time + '</small> ';
             if (e.ip) {
                 html += '<div class="btn-group btn-group-xs" style="margin-left:5px">';
-                html += '<a href="/search?ip=' + e.ip + '" class="btn btn-default" title="Lookup"><span class="glyphicon glyphicon-search"></span></a>';
-                html += '<button class="btn btn-success quick-allow" data-ip="' + e.ip + '" title="Allow"><span class="glyphicon glyphicon-ok"></span></button>';
-                html += '<button class="btn btn-danger quick-deny" data-ip="' + e.ip + '" title="Deny"><span class="glyphicon glyphicon-ban-circle"></span></button>';
+                html += '<a href="/search?ip=' + e.ip + '" class="btn btn-default" title="Lookup"><span class="ti ti-search"></span></a>';
+                html += '<button class="btn btn-success quick-allow" data-ip="' + e.ip + '" title="Allow"><span class="ti ti-check"></span></button>';
+                html += '<button class="btn btn-danger quick-deny" data-ip="' + e.ip + '" title="Deny"><span class="ti ti-ban"></span></button>';
                 html += '</div>';
             }
             html += '</div>';
@@ -464,8 +464,8 @@ $('#startTail').on('click', function() {
 $('#pauseTail').on('click', function() {
     tailPaused = !tailPaused;
     $(this).html(tailPaused ?
-        '<span class="glyphicon glyphicon-play"></span> Resume' :
-        '<span class="glyphicon glyphicon-pause"></span> Pause'
+        '<span class="ti ti-player-play"></span> Resume' :
+        '<span class="ti ti-player-pause"></span> Pause'
     );
 });
 

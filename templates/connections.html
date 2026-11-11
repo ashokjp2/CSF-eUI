@@ -5,18 +5,18 @@
 <p class="text-muted" style="margin-bottom:15px">Live view of established network connections</p>
 
 <button class="btn btn-info btn-sm" id="conn-refresh" style="margin-bottom:15px">
-    <span class="glyphicon glyphicon-refresh"></span> Refresh
+    <span class="ti ti-refresh"></span> Refresh
 </button>
 
 <!-- Summary -->
 <div class="stat-row">
     <div class="stat-card stat-accent">
-        <span class="stat-icon glyphicon glyphicon-transfer"></span>
+        <span class="stat-icon ti ti-arrows-exchange"></span>
         <div class="stat-value" id="conn-total">-</div>
         <div class="stat-label">Total Connections</div>
     </div>
     <div class="stat-card stat-info">
-        <span class="stat-icon glyphicon glyphicon-globe"></span>
+        <span class="stat-icon ti ti-world"></span>
         <div class="stat-value" id="conn-ips">-</div>
         <div class="stat-label">Unique Remote IPs</div>
     </div>
@@ -79,8 +79,8 @@ $(function() {
                     '<td><code>' + c.remote_ip + '</code></td>' +
                     '<td>' + c.remote_port + '</td>' +
                     '<td>' +
-                    '<a href="/ip-lookup?ip=' + c.remote_ip + '" class="btn btn-xs btn-info" title="Lookup"><span class="glyphicon glyphicon-search"></span></a> ' +
-                    '<button class="btn btn-xs btn-danger conn-block" data-ip="' + c.remote_ip + '" title="Block"><span class="glyphicon glyphicon-ban-circle"></span></button>' +
+                    '<a href="/ip-lookup?ip=' + c.remote_ip + '" class="btn btn-xs btn-info" title="Lookup"><span class="ti ti-search"></span></a> ' +
+                    '<button class="btn btn-xs btn-danger conn-block" data-ip="' + c.remote_ip + '" title="Block"><span class="ti ti-ban"></span></button>' +
                     '</td></tr>';
             });
             $('#conn-tbody').html(html || '<tr><td colspan="6" class="text-center text-muted">No active connections</td></tr>');

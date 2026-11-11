@@ -8,7 +8,7 @@
         <div class="panel panel-primary">
             <div class="panel-heading">
                 <h4 class="panel-title">
-                    <span class="glyphicon glyphicon-{{ icon }}"></span>
+                    <i class="ti ti-{{ icon|ti }}"></i>
                     {{ info.title }}
                     <small style="color:rgba(255,255,255,.7)">({{ info.path }})</small>
                 </h3>
@@ -17,9 +17,9 @@
                 <p class="lead" style="margin-bottom:5px;font-size:14px">{{ info.description }}</p>
                 <p class="text-muted" style="margin:0;font-size:12px">
                     {% if info.restart == 'lfd' %}
-                    <span class="glyphicon glyphicon-info-sign"></span> Changes require an LFD restart to take effect.
+                    <span class="ti ti-info-circle"></span> Changes require an LFD restart to take effect.
                     {% elif info.restart == 'both' %}
-                    <span class="glyphicon glyphicon-info-sign"></span> Changes require a CSF + LFD restart to take effect.
+                    <span class="ti ti-info-circle"></span> Changes require a CSF + LFD restart to take effect.
                     {% endif %}
                 </p>
             </div>
@@ -28,7 +28,7 @@
         {% if filetype == 'blocklists' %}
         <!-- Add blocklist (on top) -->
         <div class="panel panel-success">
-            <div class="panel-heading"><h4 class="panel-title"><span class="glyphicon glyphicon-plus"></span> Add Block List</h4></div>
+            <div class="panel-heading"><h4 class="panel-title"><span class="ti ti-plus"></span> Add Block List</h4></div>
             <div class="panel-body">
                 <form id="add-form" class="form-horizontal">
                     <div class="form-group">
@@ -67,21 +67,21 @@
                     </div>
                     <div class="form-group">
                         <div class="col-sm-offset-3 col-sm-9">
-                            <button type="submit" class="btn btn-success"><span class="glyphicon glyphicon-plus"></span> Add Block List</button>
+                            <button type="submit" class="btn btn-success"><span class="ti ti-plus"></span> Add Block List</button>
                         </div>
                     </div>
                 </form>
 
                 <!-- Popular lists -->
                 <hr>
-                <h5><span class="glyphicon glyphicon-star"></span> Popular Threat Intelligence Lists</h5>
+                <h5><span class="ti ti-star"></span> Popular Threat Intelligence Lists</h5>
                 <div class="row" style="margin-top:10px">
                     <div class="col-md-6">
                         <div class="well well-sm" style="margin-bottom:8px">
                             <strong>Spamhaus DROP</strong><br>
                             <small class="text-muted">IPs hijacked by spammers &amp; cyber-criminals</small><br>
                             <button class="btn btn-xs btn-info quick-add" data-name="SPAMDROP" data-url="https://www.spamhaus.org/drop/drop.txt" data-interval="86400" data-max="0">
-                                <span class="glyphicon glyphicon-plus"></span> Quick Add
+                                <span class="ti ti-plus"></span> Quick Add
                             </button>
                         </div>
                     </div>
@@ -90,7 +90,7 @@
                             <strong>Spamhaus EDROP</strong><br>
                             <small class="text-muted">Extended DROP list — suballocated hijacked IPs</small><br>
                             <button class="btn btn-xs btn-info quick-add" data-name="SPAMEDROP" data-url="https://www.spamhaus.org/drop/edrop.txt" data-interval="86400" data-max="0">
-                                <span class="glyphicon glyphicon-plus"></span> Quick Add
+                                <span class="ti ti-plus"></span> Quick Add
                             </button>
                         </div>
                     </div>
@@ -99,7 +99,7 @@
                             <strong>DShield Top 20</strong><br>
                             <small class="text-muted">Most active attacking IPs reported to DShield</small><br>
                             <button class="btn btn-xs btn-info quick-add" data-name="DSHIELD" data-url="https://feeds.dshield.org/block.txt" data-interval="86400" data-max="0">
-                                <span class="glyphicon glyphicon-plus"></span> Quick Add
+                                <span class="ti ti-plus"></span> Quick Add
                             </button>
                         </div>
                     </div>
@@ -108,7 +108,7 @@
                             <strong>Blocklist.de All</strong><br>
                             <small class="text-muted">IPs reported for attacks (SSH, FTP, mail, etc.)</small><br>
                             <button class="btn btn-xs btn-info quick-add" data-name="BLOCKLIST_DE" data-url="https://lists.blocklist.de/lists/all.txt" data-interval="86400" data-max="0">
-                                <span class="glyphicon glyphicon-plus"></span> Quick Add
+                                <span class="ti ti-plus"></span> Quick Add
                             </button>
                         </div>
                     </div>
@@ -120,7 +120,7 @@
         <div class="panel panel-default">
             <div class="panel-heading">
                 <h4 class="panel-title">
-                    <span class="glyphicon glyphicon-list"></span> Active Block Lists
+                    <span class="ti ti-list"></span> Active Block Lists
                     <span class="badge" id="entry-count">{{ info.entries|length }}</span>
                 </h4>
             </div>
@@ -145,7 +145,7 @@
                                 <td><small class="text-muted" style="word-break:break-all">{{ entry.url }}</small></td>
                                 <td>
                                     <button class="btn btn-xs btn-danger remove-entry" data-idx="{{ loop.index0 }}" title="Remove">
-                                        <span class="glyphicon glyphicon-trash"></span>
+                                        <span class="ti ti-trash"></span>
                                     </button>
                                 </td>
                             </tr>
@@ -162,7 +162,7 @@
         {% else %}
         <!-- Add entry (on top) -->
         <div class="panel panel-success">
-            <div class="panel-heading"><h4 class="panel-title"><span class="glyphicon glyphicon-plus"></span> Add Entry</h4></div>
+            <div class="panel-heading"><h4 class="panel-title"><span class="ti ti-plus"></span> Add Entry</h4></div>
             <div class="panel-body">
                 <form id="add-form" class="form-inline">
                     <div class="form-group" style="margin-right:10px">
@@ -171,13 +171,13 @@
                     <div class="form-group" style="margin-right:10px">
                         <input type="text" class="form-control" id="add-comment" placeholder="Optional note" style="width:200px">
                     </div>
-                    <button type="submit" class="btn btn-success"><span class="glyphicon glyphicon-plus"></span> Add</button>
+                    <button type="submit" class="btn btn-success"><span class="ti ti-plus"></span> Add</button>
                 </form>
 
                 {% if info.examples %}
                 <div style="margin-top:12px">
                     <span class="text-muted" style="font-size:12px">
-                        <span class="glyphicon glyphicon-info-sign"></span>
+                        <span class="ti ti-info-circle"></span>
                         Examples:
                         {% for ex in info.examples %}
                         <button class="btn btn-xs btn-default example-fill" data-value="{{ ex }}" style="margin-left:4px">{{ ex }}</button>
@@ -188,7 +188,7 @@
 
                 {% if filetype == 'ignore' %}
                 <div class="alert alert-info" style="margin-top:12px;margin-bottom:0">
-                    <span class="glyphicon glyphicon-info-sign"></span>
+                    <span class="ti ti-info-circle"></span>
                     <strong>Tip:</strong> Use the
                     <a href="/qconfig#services">Service Integration</a>
                     panel to auto-detect and whitelist Docker, WireGuard, and Netbird networks.
@@ -201,7 +201,7 @@
         <div class="panel panel-default">
             <div class="panel-heading">
                 <h4 class="panel-title">
-                    <span class="glyphicon glyphicon-th-list"></span> Current Entries
+                    <span class="ti ti-list"></span> Current Entries
                     <span class="badge" id="entry-count">{{ info.entries|length }}</span>
                 </h4>
             </div>
@@ -227,7 +227,7 @@
                                 <td><small class="text-muted">{{ entry.comment }}</small></td>
                                 <td>
                                     <button class="btn btn-xs btn-danger remove-entry" data-idx="{{ loop.index0 }}" title="Remove">
-                                        <span class="glyphicon glyphicon-trash"></span>
+                                        <span class="ti ti-trash"></span>
                                     </button>
                                 </td>
                             </tr>
@@ -245,11 +245,11 @@
         <!-- Actions -->
         <div class="row">
             <div class="col-md-6">
-                <a href="/files/{{ filetype }}" class="btn btn-default" title="Raw file editor"><span class="glyphicon glyphicon-pencil"></span> Raw Editor</a>
+                <a href="/files/{{ filetype }}" class="btn btn-default" title="Raw file editor"><span class="ti ti-pencil"></span> Raw Editor</a>
             </div>
             <div class="col-md-6 text-right">
                 <button class="btn btn-warning" id="restart-btn">
-                    <span class="glyphicon glyphicon-refresh"></span>
+                    <span class="ti ti-refresh"></span>
                     {% if info.restart == 'both' %}Restart CSF + LFD{% else %}Restart LFD{% endif %}
                 </button>
             </div>
@@ -282,13 +282,13 @@
                     '<td>'+esc(e.interval)+' sec</td>' +
                     '<td>'+esc(e.max)+'</td>' +
                     '<td><small class="text-muted" style="word-break:break-all">'+esc(e.url)+'</small></td>' +
-                    '<td><button class="btn btn-xs btn-danger remove-entry" data-idx="'+i+'" title="Remove"><span class="glyphicon glyphicon-trash"></span></button></td>' +
+                    '<td><button class="btn btn-xs btn-danger remove-entry" data-idx="'+i+'" title="Remove"><span class="ti ti-trash"></span></button></td>' +
                     '</tr>';
             } else {
                 tr = '<tr data-idx="'+i+'">' +
                     '<td><code>'+esc(e.value)+'</code></td>' +
                     '<td><small class="text-muted">'+esc(e.comment || '')+'</small></td>' +
-                    '<td><button class="btn btn-xs btn-danger remove-entry" data-idx="'+i+'" title="Remove"><span class="glyphicon glyphicon-trash"></span></button></td>' +
+                    '<td><button class="btn btn-xs btn-danger remove-entry" data-idx="'+i+'" title="Remove"><span class="ti ti-trash"></span></button></td>' +
                     '</tr>';
             }
             tbody.append(tr);
@@ -321,7 +321,7 @@
         var icon = type === 'success' ? 'ok-sign' : type === 'danger' ? 'exclamation-sign' : 'info-sign';
         var html = '<div class="alert alert-'+type+' alert-dismissible" style="margin-bottom:10px">' +
             '<button type="button" class="close" data-dismiss="alert">&times;</button>' +
-            '<span class="glyphicon glyphicon-'+icon+'"></span> '+msg+'</div>';
+            '<i class="ti ti-'+CSFv2.ti(icon)+'"></i> '+msg+'</div>';
         $('.main-content').prepend(html);
         setTimeout(function(){ $('.main-content .alert').first().fadeOut(); }, 5000);
     }
@@ -395,17 +395,17 @@
     /* Restart */
     $('#restart-btn').on('click', function() {
         var btn = $(this);
-        btn.prop('disabled', true).html('<span class="glyphicon glyphicon-refresh spinning"></span> Restarting...');
+        btn.prop('disabled', true).html('<span class="ti ti-refresh spinning"></span> Restarting...');
         $.post('/api/restart', function(resp) {
             if (resp.success) {
                 showAlert('success', 'Restart completed');
             } else {
                 showAlert('danger', 'Restart failed: ' + (resp.error || 'Unknown'));
             }
-            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-refresh"></span> Restart');
+            btn.prop('disabled', false).html('<span class="ti ti-refresh"></span> Restart');
         }).fail(function() {
             showAlert('danger', 'Restart request failed');
-            btn.prop('disabled', false).html('<span class="glyphicon glyphicon-refresh"></span> Restart');
+            btn.prop('disabled', false).html('<span class="ti ti-refresh"></span> Restart');
         });
     });
 })();

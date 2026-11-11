@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="panel panel-default">
-    <div class="panel-heading"><h4 style="margin:0"><span class="glyphicon glyphicon-cog"></span> CSFv2 Settings</h4></div>
+    <div class="panel-heading"><h4 style="margin:0"><span class="ti ti-settings"></span> CSFv2 Settings</h4></div>
     <div class="panel-body">
         <h4>Change Password</h4>
         <form method="POST" action="/settings">
@@ -20,7 +20,7 @@
                        required minlength="8" style="max-width:400px">
             </div>
             <button type="submit" class="btn btn-primary">
-                <span class="glyphicon glyphicon-floppy-disk"></span> Change Password
+                <span class="ti ti-device-floppy"></span> Change Password
             </button>
         </form>
 
@@ -32,7 +32,7 @@
         </p>
         {% if not admin_email %}
         <div class="alert alert-warning" style="max-width:500px">
-            <span class="glyphicon glyphicon-warning-sign"></span>
+            <span class="ti ti-alert-triangle"></span>
             <strong>Email not configured.</strong>
             Username change requires an admin email address.
             Set <code>LF_ALERT_TO</code> in <a href="/config">CSF Settings</a> first.
@@ -56,7 +56,7 @@
                        required style="max-width:400px" {% if not admin_email %}disabled{% endif %}>
             </div>
             <button type="submit" class="btn btn-warning" {% if not admin_email %}disabled{% endif %}>
-                <span class="glyphicon glyphicon-envelope"></span> Send Verification Email
+                <span class="ti ti-mail"></span> Send Verification Email
             </button>
         </form>
 
