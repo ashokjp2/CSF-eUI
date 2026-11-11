@@ -28,7 +28,7 @@
             <img class="sidebar-logo-icon" src="{{ url_for('static', filename='img/csfv2-icon.svg', v=app_version) }}" alt="CSF-eUI">
             <span class="sidebar-logo-text">CSF-eUI</span>
             <button class="sidebar-close-btn" id="sidebar-close" title="Close menu">
-                <span class="glyphicon glyphicon-remove"></span>
+                <i class="ti ti-x"></i>
             </button>
         </div>
 
@@ -40,158 +40,102 @@
         </div>
         {% endif %}
 
-        <div class="sidebar-nav">
-            <div class="nav-section">
-                <div class="nav-section-label">Main</div>
-                <a class="nav-item{{ ' active' if request.path == '/' }}" href="/">
-                    <i class="ti ti-layout-dashboard"></i> Dashboard
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/status' }}" href="/status">
-                    <i class="ti ti-activity"></i> Firewall Status
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/config' }}" href="/config">
-                    <i class="ti ti-settings"></i> Configuration
-                </a>
-                <a class="nav-item{{ ' active' if '/qconfig' in request.path }}" href="/qconfig">
-                    <i class="ti ti-adjustments"></i> Quick Config
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/temp' }}" href="/temp">
-                    <i class="ti ti-clock-pause"></i> Temp Blocks
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/wizard' }}" href="/wizard">
-                    <i class="ti ti-wand"></i> Setup Wizard
-                </a>
+        <div class="sidebar-filter">
+            <i class="ti ti-search"></i>
+            <input type="text" id="nav-filter" placeholder="Filter menu" aria-label="Filter menu" autocomplete="off">
+        </div>
+
+        {# Navigation groups: (key, label, [(href, label, icon, match, item_id)]) — match is 'exact' or 'prefix' #}
+        {% set system_items = [
+            ('/backup-restore', 'Backup & Restore', 'database-export', 'exact', ''),
+            ('/email-alerts', 'Email Alerts', 'mail-exclamation', 'exact', ''),
+            ('/ssl', 'SSL Certificates', 'certificate', 'exact', ''),
+            ('/health', 'Health Check', 'heart-rate-monitor', 'exact', ''),
+        ] %}
+        {% if has_docker is defined and has_docker %}
+            {% set system_items = system_items + [('/docker', 'Docker', 'brand-docker', 'prefix', '')] %}
+        {% endif %}
+        {% if has_wireguard is defined and has_wireguard %}
+            {% set system_items = system_items + [('/wireguard', 'WireGuard', 'lock', 'prefix', '')] %}
+        {% endif %}
+        {% set system_items = system_items + [
+            ('/profiles', 'Profiles', 'briefcase', 'exact', ''),
+            ('/settings', 'Settings', 'adjustments-horizontal', 'exact', ''),
+            ('/updates', 'Updates', 'cloud-download', 'exact', 'nav-updates'),
+        ] %}
+        {% set nav_groups = [
+            ('main', 'Firewall', [
+                ('/', 'Dashboard', 'layout-dashboard', 'exact', ''),
+                ('/status', 'Firewall Status', 'activity', 'exact', ''),
+                ('/config', 'Configuration', 'settings', 'exact', ''),
+                ('/qconfig', 'Quick Config', 'adjustments', 'prefix', ''),
+                ('/temp', 'Temp Blocks', 'clock-pause', 'exact', 'nav-temp'),
+                ('/wizard', 'Setup Wizard', 'wand', 'exact', ''),
+            ]),
+            ('rules', 'Rules', [
+                ('/rules/builder', 'Rule Builder', 'hammer', 'exact', ''),
+                ('/ip-lists', 'Allow / Deny Lists', 'list-details', 'exact', ''),
+                ('/countries', 'Country Blocks', 'world', 'exact', ''),
+            ]),
+            ('logs', 'Logs & Security', [
+                ('/logs', 'Log Viewer', 'file-text', 'exact', ''),
+                ('/logs/search', 'Log Search', 'file-search', 'exact', ''),
+                ('/timeline', 'Firewall Timeline', 'timeline', 'exact', ''),
+                ('/analytics', 'Attack Analytics', 'chart-line', 'exact', ''),
+                ('/lfd-blocks', 'LFD Block Log', 'eye', 'exact', ''),
+                ('/geoip-map', 'GeoIP Map', 'map-pin', 'exact', ''),
+                ('/alerts', 'Alert History', 'bell', 'exact', ''),
+                ('/audit', 'Audit Log', 'book', 'exact', ''),
+            ]),
+            ('tools', 'Tools', [
+                ('/processes', 'Process Monitor', 'cpu', 'exact', ''),
+                ('/connections', 'Connections', 'arrows-exchange', 'exact', ''),
+                ('/port-scan', 'Port Scanner', 'radar', 'exact', ''),
+                ('/ip-lookup', 'IP Lookup', 'search', 'exact', ''),
+                ('/bandwidth', 'Bandwidth', 'chart-bar', 'exact', ''),
+                ('/scheduled-tasks', 'Scheduled Tasks', 'calendar', 'exact', ''),
+                ('/login-history', 'Login History', 'login', 'exact', ''),
+            ]),
+            ('files', 'Config Files', [
+                ('/files/allow', 'csf.allow', 'circle-check text-success-icon', 'exact', ''),
+                ('/files/deny', 'csf.deny', 'ban text-danger-icon', 'exact', ''),
+                ('/lfd/ignore', 'csf.ignore', 'eye-off', 'exact', ''),
+                ('/files/redirect', 'csf.redirect', 'arrows-shuffle', 'prefix', ''),
+                ('/lfd/blocklists', 'csf.blocklists', 'shield-x', 'prefix', ''),
+                ('/files/smtpauth', 'csf.smtpauth', 'mail', 'prefix', ''),
+                ('/templates', 'Email Templates', 'template', 'exact', ''),
+                ('/csfpost', 'csfpost.sh', 'terminal-2', 'exact', ''),
+            ]),
+            ('system', 'System', system_items),
+        ] %}
+
+        <div class="sidebar-nav" id="sidebar-nav">
+            <div class="nav-section nav-section-pinned" id="nav-pinned" style="display:none">
+                <div class="nav-section-label nav-section-static"><span>Pinned</span><i class="ti ti-pin"></i></div>
+                <div class="nav-section-items" id="nav-pinned-items"></div>
             </div>
 
-            <div class="nav-section">
-                <div class="nav-section-label">Rules</div>
-                <a class="nav-item{{ ' active' if request.path == '/rules/builder' }}" href="/rules/builder">
-                    <i class="ti ti-hammer"></i> Rule Builder
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/ip-lists' }}" href="/ip-lists">
-                    <i class="ti ti-list-details"></i> Allow / Deny Lists
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/countries' }}" href="/countries">
-                    <i class="ti ti-world"></i> Country Blocks
-                </a>
+            {% for gkey, glabel, items in nav_groups %}
+            <div class="nav-section" data-group="{{ gkey }}">
+                <div class="nav-section-label" role="button" tabindex="0" title="Collapse or expand">
+                    <span>{{ glabel }}</span>
+                    <span class="nav-group-badge" style="display:none"></span>
+                    <i class="ti ti-chevron-down nav-group-chevron"></i>
+                </div>
+                <div class="nav-section-items">
+                {% for href, label, icon, match, item_id in items %}
+                    {% set is_active = (request.path == href) if match == 'exact' else (request.path == href or request.path.startswith(href + '/')) %}
+                    {% if href == '/backup-restore' and request.path == '/backups' %}{% set is_active = True %}{% endif %}
+                    <a class="nav-item{{ ' active' if is_active }}" href="{{ href }}" data-label="{{ label }}"{% if item_id %} id="{{ item_id }}"{% endif %}>
+                        <i class="ti ti-{{ icon }}"></i><span class="nav-label">{{ label }}</span>
+                        {% if item_id == 'nav-temp' %}<span class="nav-badge nav-badge-warn" id="nav-temp-badge" style="display:none"></span>{% endif %}
+                        {% if item_id == 'nav-updates' %}<span class="nav-badge nav-badge-warn" id="update-badge" style="display:none">update</span>{% endif %}
+                        <span class="nav-pin ti ti-pin" title="Pin to top"></span>
+                    </a>
+                {% endfor %}
+                </div>
             </div>
-
-            <div class="nav-section">
-                <div class="nav-section-label">Logs &amp; Security</div>
-                <a class="nav-item{{ ' active' if request.path == '/logs' }}" href="/logs">
-                    <i class="ti ti-file-text"></i> Log Viewer
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/logs/search' }}" href="/logs/search">
-                    <i class="ti ti-file-search"></i> Log Search
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/timeline' }}" href="/timeline">
-                    <i class="ti ti-timeline"></i> Firewall Timeline
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/analytics' }}" href="/analytics">
-                    <i class="ti ti-chart-line"></i> Attack Analytics
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/lfd-blocks' }}" href="/lfd-blocks">
-                    <i class="ti ti-eye"></i> LFD Block Log
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/geoip-map' }}" href="/geoip-map">
-                    <i class="ti ti-map-pin"></i> GeoIP Map
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/alerts' }}" href="/alerts">
-                    <i class="ti ti-bell"></i> Alert History
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/audit' }}" href="/audit">
-                    <i class="ti ti-book"></i> Audit Log
-                </a>
-            </div>
-
-            <div class="nav-section">
-                <div class="nav-section-label">Tools</div>
-                <a class="nav-item{{ ' active' if request.path == '/processes' }}" href="/processes">
-                    <i class="ti ti-cpu"></i> Process Monitor
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/connections' }}" href="/connections">
-                    <i class="ti ti-arrows-exchange"></i> Connections
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/port-scan' }}" href="/port-scan">
-                    <i class="ti ti-radar"></i> Port Scanner
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/ip-lookup' }}" href="/ip-lookup">
-                    <i class="ti ti-search"></i> IP Lookup
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/bandwidth' }}" href="/bandwidth">
-                    <i class="ti ti-chart-bar"></i> Bandwidth
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/scheduled-tasks' }}" href="/scheduled-tasks">
-                    <i class="ti ti-calendar"></i> Scheduled Tasks
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/login-history' }}" href="/login-history">
-                    <i class="ti ti-login"></i> Login History
-                </a>
-            </div>
-
-            <div class="nav-section">
-                <div class="nav-section-label">Files</div>
-                <a class="nav-item{{ ' active' if request.path == '/files/allow' }}" href="/files/allow">
-                    <i class="ti ti-circle-check text-success-icon"></i> csf.allow
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/files/deny' }}" href="/files/deny">
-                    <i class="ti ti-ban text-danger-icon"></i> csf.deny
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/lfd/ignore' }}" href="/lfd/ignore">
-                    <i class="ti ti-eye-off"></i> csf.ignore
-                </a>
-                <a class="nav-item{{ ' active' if '/files/redirect' in request.path }}" href="/files/redirect">
-                    <i class="ti ti-arrows-shuffle"></i> csf.redirect
-                </a>
-                <a class="nav-item{{ ' active' if '/lfd/blocklists' in request.path }}" href="/lfd/blocklists">
-                    <i class="ti ti-shield-x"></i> csf.blocklists
-                </a>
-                <a class="nav-item{{ ' active' if '/files/smtpauth' in request.path }}" href="/files/smtpauth">
-                    <i class="ti ti-mail"></i> csf.smtpauth
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/templates' }}" href="/templates">
-                    <i class="ti ti-template"></i> Email Templates
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/csfpost' }}" href="/csfpost">
-                    <i class="ti ti-terminal-2"></i> csfpost.sh
-                </a>
-            </div>
-
-            <div class="nav-section">
-                <div class="nav-section-label">System</div>
-                <a class="nav-item{{ ' active' if request.path == '/backup-restore' or request.path == '/backups' }}" href="/backup-restore">
-                    <i class="ti ti-database-export"></i> Backup &amp; Restore
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/email-alerts' }}" href="/email-alerts">
-                    <i class="ti ti-mail-exclamation"></i> Email Alerts
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/ssl' }}" href="/ssl">
-                    <i class="ti ti-certificate"></i> SSL Certificates
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/health' }}" href="/health">
-                    <i class="ti ti-heart-rate-monitor"></i> Health Check
-                </a>
-                {% if has_docker is defined and has_docker %}
-                <a class="nav-item{{ ' active' if '/docker' in request.path }}" href="/docker">
-                    <i class="ti ti-brand-docker"></i> Docker
-                </a>
-                {% endif %}
-                {% if has_wireguard is defined and has_wireguard %}
-                <a class="nav-item{{ ' active' if '/wireguard' in request.path }}" href="/wireguard">
-                    <i class="ti ti-lock"></i> WireGuard
-                </a>
-                {% endif %}
-                <a class="nav-item{{ ' active' if request.path == '/profiles' }}" href="/profiles">
-                    <i class="ti ti-briefcase"></i> Profiles
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/settings' }}" href="/settings">
-                    <i class="ti ti-adjustments-horizontal"></i> Settings
-                </a>
-                <a class="nav-item{{ ' active' if request.path == '/updates' }}" href="/updates" id="nav-updates">
-                    <i class="ti ti-cloud-download"></i> Updates
-                    <span class="badge" id="update-badge" style="display:none; background:#e67e22; margin-left:4px">!</span>
-                </a>
-            </div>
+            {% endfor %}
         </div>
 
         <div class="sidebar-footer">
@@ -220,25 +164,41 @@
         <div class="topbar">
             <div class="topbar-left">
                 <button class="topbar-menu-btn" id="sidebar-toggle" title="Toggle sidebar">
-                    <span class="glyphicon glyphicon-menu-hamburger"></span>
+                    <i class="ti ti-menu-2"></i>
                 </button>
                 <h1 class="topbar-title">{% block page_title %}Dashboard{% endblock %}</h1>
             </div>
             <div class="topbar-right">
-                <form method="POST" action="/quick/search" class="topbar-search">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button type="button" class="topbar-search" id="palette-open" title="Search (Ctrl+K)">
                     <i class="ti ti-search"></i>
-                    <input type="text" name="ip" placeholder="Search IP or log" aria-label="Search IP" required>
-                </form>
+                    <span class="topbar-search-text">Search pages, IPs, settings</span>
+                    <kbd>Ctrl K</kbd>
+                </button>
                 <a href="#" class="topbar-btn theme-toggle" title="Toggle dark mode (Ctrl+Shift+D)">
-                    <span class="glyphicon glyphicon-moon"></span>
+                    <i class="ti ti-moon"></i>
                 </a>
                 <a href="#" class="topbar-btn" id="btn-restart-csfv2" title="Restart CSF-eUI">
-                    <span class="glyphicon glyphicon-refresh"></span>
+                    <i class="ti ti-refresh"></i>
                 </a>
                 <a href="/logout" class="topbar-btn" title="Logout">
-                    <span class="glyphicon glyphicon-log-out"></span>
+                    <i class="ti ti-logout"></i>
                 </a>
+            </div>
+        </div>
+
+        <!-- Command palette (Ctrl+K) -->
+        <div class="palette-backdrop" id="palette" style="display:none">
+            <div class="palette" role="dialog" aria-label="Search">
+                <div class="palette-input">
+                    <i class="ti ti-search"></i>
+                    <input type="text" id="palette-q" placeholder="Go to a page, look up an IP, or find a setting" autocomplete="off" aria-label="Search">
+                    <kbd>Esc</kbd>
+                </div>
+                <div class="palette-results" id="palette-results"></div>
+                <form method="POST" action="/quick/search" id="palette-search-form" style="display:none">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="ip" id="palette-search-ip">
+                </form>
             </div>
         </div>
 
@@ -249,10 +209,6 @@
             {% for category, message in messages %}
             <div class="alert alert-{{ category }} alert-dismissible" style="margin-bottom:10px">
                 <button type="button" class="close" data-dismiss="alert">&times;</button>
-                {% if category == 'success' %}<span class="glyphicon glyphicon-ok-sign"></span>
-                {% elif category == 'danger' %}<span class="glyphicon glyphicon-exclamation-sign"></span>
-                {% elif category == 'warning' %}<span class="glyphicon glyphicon-warning-sign"></span>
-                {% else %}<span class="glyphicon glyphicon-info-sign"></span>{% endif %}
                 {{ message }}
             </div>
             {% endfor %}
@@ -268,7 +224,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
-                    <h4 class="modal-title"><span class="glyphicon glyphicon-warning-sign text-warning"></span> Confirm Action</h4>
+                    <h4 class="modal-title"><i class="ti ti-alert-triangle text-warning"></i> Confirm Action</h4>
                 </div>
                 <div class="modal-body">
                     <p id="modal-text"></p>
@@ -403,6 +359,7 @@
         if (checked) {
             if (sessionStorage.getItem('csfv2-update-available') === '1') {
                 $('#update-badge').show();
+                CSFv2.syncGroupBadges();
             }
             return;
         }
@@ -411,6 +368,7 @@
             if (r.update_available) {
                 sessionStorage.setItem('csfv2-update-available', '1');
                 $('#update-badge').show();
+                CSFv2.syncGroupBadges();
                 if (window.location.pathname !== '/updates') {
                     showToast('CSF-eUI v' + r.latest + ' is available. <a href="/updates" style="color:#fff; text-decoration:underline">Update now</a>', 'warning', 8000);
                 }

@@ -725,6 +725,11 @@ $(function() {
     $('#clearSearch').on('click', function() {
         $('#configSearch').val('').trigger('input');
     });
+    /* Deep link from the command palette: /config?q=SETTING */
+    (function() {
+        var m = /[?&]q=([^&]+)/.exec(location.search);
+        if (m) { $('#configSearch').val(decodeURIComponent(m[1])).trigger('input'); }
+    })();
 
     /* AJAX save with feedback */
     $('#configForm').on('submit', function(e) {

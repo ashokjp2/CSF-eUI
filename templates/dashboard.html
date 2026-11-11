@@ -2,20 +2,46 @@
 {% block page_title %}Dashboard{% endblock %}
 
 {% block content %}
+{# Firewall / LFD controls shared by every banner state #}
+{% macro controls_menu(status) %}
+<div class="dropdown status-menu">
+    <button type="button" class="status-btn status-btn-icon dropdown-toggle" data-toggle="dropdown" title="Firewall and LFD controls" aria-label="Firewall and LFD controls">
+        <i class="ti ti-dots"></i>
+    </button>
+    <ul class="dropdown-menu dropdown-menu-right">
+        <li class="dropdown-header">Firewall</li>
+        <li><form method="POST" action="/action/restartboth"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit"><i class="ti ti-refresh"></i> Restart csf + lfd</button></form></li>
+        <li><form method="POST" action="/action/restartq"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit"><i class="ti ti-bolt"></i> Quick restart (reload rules)</button></form></li>
+        <li><form method="POST" action="/action/csftest"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit"><i class="ti ti-checkup-list"></i> Check server security</button></form></li>
+        <li><button type="button" class="confirmButton text-danger" data-query="Are you sure you want to stop the firewall?" data-action="/action/stop"><i class="ti ti-player-stop"></i> Stop csf</button></li>
+        <li><button type="button" class="confirmButton text-warning" data-query="Flush ALL permanent and temporary blocks?" data-action="/action/flushall"><i class="ti ti-trash"></i> Flush all blocks</button></li>
+        <li class="divider"></li>
+        <li class="dropdown-header">LFD</li>
+        <li><form method="POST" action="/action/lfdrestart"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit"><i class="ti ti-refresh"></i> Restart LFD</button></form></li>
+        {% if not status.lfd_running %}
+        <li><form method="POST" action="/action/lfdstart"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit"><i class="ti ti-player-play"></i> Start LFD</button></form></li>
+        {% else %}
+        <li><form method="POST" action="/action/lfdstop"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="text-danger"><i class="ti ti-player-stop"></i> Stop LFD</button></form></li>
+        {% endif %}
+    </ul>
+</div>
+{% endmacro %}
+
 <!-- Status Banner -->
 {% if status.enabled %}
     {% if status.testing %}
     <div class="status-hero status-warning">
-        <span class="status-dot"></span>
+        <i class="ti ti-shield-half status-icon"></i>
         <div class="status-text">
             <b>Firewall enabled &mdash; test mode</b>
             <span>Blocks are suppressed. No IPs are blocked until TESTING = 0.</span>
         </div>
-        <a href="/config" class="status-btn">Set TESTING = 0</a>
+        <a href="/config?q=TESTING" class="status-btn">Set TESTING = 0</a>
+        {{ controls_menu(status) }}
     </div>
     {% elif not status.lfd_running %}
     <div class="status-hero status-danger">
-        <span class="status-dot"></span>
+        <i class="ti ti-shield-x status-icon"></i>
         <div class="status-text">
             <b>Firewall active &mdash; LFD is down</b>
             <span>CSF rules are loaded, but automatic blocking is disabled until LFD runs.</span>
@@ -24,27 +50,25 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button type="submit" class="status-btn status-btn-primary">Start LFD</button>
         </form>
-        <form method="POST" action="/action/lfdrestart" class="status-form">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button type="submit" class="status-btn">Restart LFD</button>
-        </form>
+        {{ controls_menu(status) }}
     </div>
     {% else %}
     <div class="status-hero status-ok">
-        <span class="status-dot"></span>
+        <i class="ti ti-shield-check status-icon"></i>
         <div class="status-text">
             <b>Firewall enabled and running</b>
             <span>CSF rules active &middot; LFD monitoring{% if system %} &middot; {{ system.hostname }} &middot; up {{ system.uptime.formatted }}{% endif %}</span>
         </div>
-        <form method="POST" action="/action/lfdrestart" class="status-form">
+        <form method="POST" action="/action/restartq" class="status-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button type="submit" class="status-btn">Restart LFD</button>
+            <button type="submit" class="status-btn">Reload rules</button>
         </form>
+        {{ controls_menu(status) }}
     </div>
     {% endif %}
 {% else %}
     <div class="status-hero status-danger">
-        <span class="status-dot"></span>
+        <i class="ti ti-shield-off status-icon"></i>
         <div class="status-text">
             <b>Firewall disabled</b>
             <span>No firewall rules are active on this server.</span>
@@ -53,6 +77,7 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button type="submit" class="status-btn status-btn-primary">Enable firewall</button>
         </form>
+        {{ controls_menu(status) }}
     </div>
 {% endif %}
 
@@ -62,29 +87,95 @@
     <div class="stat-card stat-clickable" data-metric="cpu" title="Click for details">
         <div class="stat-head"><span>CPU</span><i class="ti ti-cpu"></i></div>
         <div class="stat-value" id="stat-cpu">{{ system.cpu_usage }}%</div>
+        <svg class="spark" id="spark-cpu" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"></svg>
         <div class="stat-progress"><div class="stat-progress-bar {{ 'green' if system.cpu_usage < 60 else 'yellow' if system.cpu_usage < 85 else 'red' }}" id="prog-cpu" style="width:{{ system.cpu_usage }}%"></div></div>
     </div>
     <div class="stat-card stat-clickable" data-metric="memory" title="Click for details">
         <div class="stat-head"><span>Memory</span><i class="ti ti-database"></i></div>
         <div class="stat-value" id="stat-mem">{{ system.memory.percent }}%</div>
+        <svg class="spark" id="spark-mem" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"></svg>
         <div class="stat-progress"><div class="stat-progress-bar {{ 'green' if system.memory.percent < 60 else 'yellow' if system.memory.percent < 85 else 'red' }}" id="prog-mem" style="width:{{ system.memory.percent }}%"></div></div>
     </div>
     <div class="stat-card stat-clickable" data-metric="connections" title="Click for details">
         <div class="stat-head"><span>Connections</span><i class="ti ti-arrows-exchange"></i></div>
         <div class="stat-value" id="stat-conn">{{ system.connections.established }}</div>
-        <div class="stat-progress"><div class="stat-progress-bar blue" style="width:{{ [ (system.connections.established / 5)|round|int, 100 ]|min }}%"></div></div>
+        <svg class="spark" id="spark-conn" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <div class="stat-progress"><div class="stat-progress-bar blue" id="prog-conn" style="width:{{ [ (system.connections.established / 5)|round|int, 100 ]|min }}%"></div></div>
     </div>
     <div class="stat-card stat-clickable" data-metric="blocked" title="Click for details">
         <div class="stat-head"><span>Blocked IPs</span><i class="ti ti-ban"></i></div>
-        <div class="stat-value" id="stat-blocked">{{ system.blocked_ips }}</div>
-        <div class="stat-progress"><div class="stat-progress-bar red" style="width:{{ [ (system.blocked_ips / 20)|round|int, 100 ]|min }}%"></div></div>
+        <div class="stat-value" id="stat-blocked">{{ system.blocked_ips }} <small class="stat-delta" id="stat-blocked-delta"></small></div>
+        <div class="stat-sub" id="stat-blocked-sub">&nbsp;</div>
+        <div class="stat-progress"><div class="stat-progress-bar red" id="prog-blocked" style="width:{{ [ (system.blocked_ips / 20)|round|int, 100 ]|min }}%"></div></div>
+    </div>
+</div>
+{% endif %}
+
+<!-- IP action: one box for allow / block / temp / ignore / unblock / lookup / search -->
+<div class="panel panel-default ipact" id="ipact">
+    <div class="panel-heading"><h4><i class="ti ti-bolt"></i> IP action</h4><span class="panel-hint">Pick an action, enter an IP or CIDR</span></div>
+    <div class="panel-body">
+        <form id="ipact-form" method="POST" action="/quick/allow" data-own-ip="{{ request.remote_addr }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="do" id="ipact-do" value="">
+            <div class="ipact-row">
+                <div class="ipact-input">
+                    <i class="ti ti-network"></i>
+                    <input type="text" class="form-control" name="ip" id="ipact-ip" placeholder="203.0.113.45 or 10.0.0.0/24" autocomplete="off" required>
+                </div>
+                <div class="seg" id="ipact-seg" role="tablist">
+                    <button type="button" class="seg-item active" data-act="allow">Allow</button>
+                    <button type="button" class="seg-item" data-act="deny">Block</button>
+                    <button type="button" class="seg-item" data-act="tempblock">Temp block</button>
+                    <button type="button" class="seg-item" data-act="tempallow">Temp allow</button>
+                    <button type="button" class="seg-item" data-act="ignore">Ignore</button>
+                    <button type="button" class="seg-item" data-act="unblock">Unblock</button>
+                    <button type="button" class="seg-item" data-act="lookup">Lookup</button>
+                    <button type="button" class="seg-item" data-act="search">Search</button>
+                </div>
+                <button type="submit" class="btn btn-primary ipact-go" id="ipact-go">Allow IP</button>
+            </div>
+            <div class="ipact-extra" id="ipact-temp" style="display:none">
+                <input type="number" class="form-control input-sm" name="timeout" value="1" min="1" aria-label="Timeout">
+                <select class="form-control input-sm" name="dur" aria-label="Duration unit">
+                    <option value="seconds">Sec</option>
+                    <option value="minutes">Min</option>
+                    <option value="hours" selected>Hours</option>
+                    <option value="days">Days</option>
+                </select>
+                <input type="text" class="form-control input-sm" name="ports" placeholder="Ports (* = all)" aria-label="Ports">
+            </div>
+            <div class="ipact-extra" id="ipact-comment-wrap">
+                <input type="text" class="form-control input-sm" name="comment" id="ipact-comment" placeholder="Comment (optional)" aria-label="Comment">
+            </div>
+            <div class="ipact-note" id="ipact-note"></div>
+        </form>
+    </div>
+</div>
+
+<!-- Recent blocks + 24h chart -->
+<div class="dash-split">
+    <div class="panel panel-default">
+        <div class="panel-heading"><h4>Recent blocks</h4><a href="/lfd-blocks" class="panel-link">View all</a></div>
+        <div class="panel-body" style="padding:4px 16px 8px">
+            <table class="table recent-blocks"><tbody id="recentBlocks">
+                <tr><td class="text-muted">Loading&hellip;</td></tr>
+            </tbody></table>
+        </div>
+    </div>
+    <div class="panel panel-default">
+        <div class="panel-heading"><h4>Blocks (24h)</h4><span class="panel-hint" id="chart-peak"></span></div>
+        <div class="panel-body" style="padding:4px 16px 10px">
+            <div class="hour-chart" id="hourChart"><span class="text-muted" style="font-size:12px">Loading&hellip;</span></div>
+            <div class="hour-axis"><span>24h ago</span><span>12h ago</span><span>now</span></div>
+        </div>
     </div>
 </div>
 
 <!-- Disk Usage (compact) -->
-{% if system.disks %}
+{% if system and system.disks %}
 <div class="panel panel-default">
-    <div class="panel-heading"><h4><span class="glyphicon glyphicon-hdd"></span> Disk Usage</h4></div>
+    <div class="panel-heading"><h4><i class="ti ti-server"></i> Disk Usage</h4></div>
     <div class="panel-body" style="padding:10px 15px">
         {% for disk in system.disks %}
         <div style="margin-bottom:8px">
@@ -101,221 +192,33 @@
     </div>
 </div>
 {% endif %}
-{% endif %}
-
-<!-- Recent blocks + quick actions -->
-<div class="dash-split">
-    <div class="panel panel-default">
-        <div class="panel-heading"><h4>Recent blocks</h4><a href="/lfd-blocks" class="panel-link">View all</a></div>
-        <div class="panel-body" style="padding:4px 16px 8px">
-            <table class="table recent-blocks"><tbody id="recentBlocks">
-                <tr><td class="text-muted">Loading&hellip;</td></tr>
-            </tbody></table>
-        </div>
-    </div>
-    <div class="panel panel-default">
-        <div class="panel-heading"><h4>Quick actions</h4></div>
-        <div class="panel-body">
-            <div class="chip-row">
-                <form method="POST" action="/action/restartq"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="chip"><i class="ti ti-refresh"></i>Reload</button></form>
-                <a href="#qa-allow" class="chip js-jump"><i class="ti ti-plus"></i>Allow IP</a>
-                <a href="#qa-deny" class="chip js-jump"><i class="ti ti-ban"></i>Block IP</a>
-                <a href="/ip-lookup" class="chip"><i class="ti ti-search"></i>Lookup</a>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Quick Actions -->
-<div class="row">
-    <div class="col-md-6">
-        <div class="panel panel-default">
-            <div class="panel-heading"><h4><span class="glyphicon glyphicon-flash"></span> Quick Actions</h4></div>
-            <div class="panel-body">
-                <form id="qa-allow" method="POST" action="/quick/allow" data-ajax="true" data-success-msg="IP allowed successfully" style="margin-bottom:12px">
-                    <label class="control-label"><span class="glyphicon glyphicon-ok-circle text-success"></span> Quick Allow</label>
-                    <div class="input-group">
-                        <input type="text" class="form-control input-sm" name="ip" placeholder="IP Address" required>
-                        <span class="input-group-btn">
-                            <button class="btn btn-sm btn-success" type="submit">Allow</button>
-                        </span>
-                    </div>
-                    <input type="text" class="form-control input-sm" name="comment" placeholder="Comment (optional)" style="margin-top:4px">
-                </form>
-                <form id="qa-deny" method="POST" action="/quick/deny" data-ajax="true" data-success-msg="IP denied successfully" style="margin-bottom:12px">
-                    <label class="control-label"><span class="glyphicon glyphicon-ban-circle text-danger"></span> Quick Deny</label>
-                    <div class="input-group">
-                        <input type="text" class="form-control input-sm" name="ip" placeholder="IP Address" required>
-                        <span class="input-group-btn">
-                            <button class="btn btn-sm btn-danger" type="submit">Deny</button>
-                        </span>
-                    </div>
-                    <input type="text" class="form-control input-sm" name="comment" placeholder="Comment (optional)" style="margin-top:4px">
-                </form>
-                <form method="POST" action="/quick/ignore" data-ajax="true" data-success-msg="IP added to ignore list" style="margin-bottom:12px">
-                    <label class="control-label"><span class="glyphicon glyphicon-eye-close text-info"></span> Quick Ignore</label>
-                    <div class="input-group">
-                        <input type="text" class="form-control input-sm" name="ip" placeholder="IP Address" required>
-                        <span class="input-group-btn">
-                            <button class="btn btn-sm btn-info" type="submit">Ignore</button>
-                        </span>
-                    </div>
-                </form>
-                <form method="POST" action="/quick/unblock" data-ajax="true" data-success-msg="IP unblocked successfully" style="margin-bottom:12px">
-                    <label class="control-label"><span class="glyphicon glyphicon-remove-circle text-warning"></span> Quick Unblock</label>
-                    <div class="input-group">
-                        <input type="text" class="form-control input-sm" name="ip" placeholder="IP Address" required>
-                        <span class="input-group-btn">
-                            <button class="btn btn-sm btn-warning" type="submit">Unblock</button>
-                        </span>
-                    </div>
-                </form>
-                <form method="POST" action="/quick/search">
-                    <label class="control-label"><span class="glyphicon glyphicon-search"></span> Search for IP</label>
-                    <div class="input-group">
-                        <input type="text" class="form-control input-sm" name="ip" placeholder="IP Address to search" required>
-                        <span class="input-group-btn">
-                            <button class="btn btn-sm btn-primary" type="submit">Search</button>
-                        </span>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6">
-        <!-- Firewall Controls -->
-        <div class="panel panel-default">
-            <div class="panel-heading"><h4><span class="glyphicon glyphicon-cog"></span> Firewall Controls</h4></div>
-            <div class="panel-body">
-                <div class="dash-btn-grid">
-                    <form method="POST" action="/action/restartboth">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                        <button type="submit" class="btn btn-primary btn-block" style="margin-bottom:8px">
-                            <span class="glyphicon glyphicon-refresh"></span> Restart csf+lfd
-                        </button>
-                    </form>
-                    <form method="POST" action="/action/restartq">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                        <button type="submit" class="btn btn-default btn-block" style="margin-bottom:8px">
-                            <span class="glyphicon glyphicon-time"></span> Quick Restart
-                        </button>
-                    </form>
-                    <button type="button" class="btn btn-danger btn-block confirmButton" style="margin-bottom:8px"
-                            data-query="Are you sure you want to stop the firewall?"
-                            data-action="/action/stop">
-                        <span class="glyphicon glyphicon-stop"></span> Stop csf
-                    </button>
-                    <button type="button" class="btn btn-warning btn-block confirmButton" style="margin-bottom:8px"
-                            data-query="Flush ALL permanent and temporary blocks?"
-                            data-action="/action/flushall">
-                        <span class="glyphicon glyphicon-trash"></span> Flush All Blocks
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- LFD Controls -->
-        <div class="panel panel-default">
-            <div class="panel-heading"><h4><span class="glyphicon glyphicon-eye-open"></span> LFD Controls</h4></div>
-            <div class="panel-body">
-                <div class="row">
-                    <div class="col-xs-4">
-                        <form method="POST" action="/action/lfdrestart">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                            <button type="submit" class="btn btn-primary btn-block btn-sm">
-                                <span class="glyphicon glyphicon-refresh"></span> Restart
-                            </button>
-                        </form>
-                    </div>
-                    <div class="col-xs-4">
-                        <form method="POST" action="/action/lfdstop">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                            <button type="submit" class="btn btn-danger btn-block btn-sm">
-                                <span class="glyphicon glyphicon-stop"></span> Stop
-                            </button>
-                        </form>
-                    </div>
-                    <div class="col-xs-4">
-                        <form method="POST" action="/action/lfdstart">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                            <button type="submit" class="btn btn-success btn-block btn-sm">
-                                <span class="glyphicon glyphicon-play"></span> Start
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Temp Allow/Deny -->
-        <div class="panel panel-default">
-            <div class="panel-heading"><h4><span class="glyphicon glyphicon-time"></span> Temporary Allow/Deny</h4></div>
-            <div class="panel-body">
-                <form method="POST" action="/temp/add">
-                    <div class="form-group" style="margin-bottom:8px">
-                        <input type="text" class="form-control input-sm" name="ip" placeholder="IP Address" required>
-                    </div>
-                    <div class="row">
-                        <div class="col-xs-4">
-                            <input type="number" class="form-control input-sm" name="timeout" value="1" min="1" placeholder="Timeout">
-                        </div>
-                        <div class="col-xs-4">
-                            <select class="form-control input-sm" name="dur">
-                                <option value="seconds">Sec</option>
-                                <option value="minutes">Min</option>
-                                <option value="hours" selected>Hours</option>
-                                <option value="days">Days</option>
-                            </select>
-                        </div>
-                        <div class="col-xs-4">
-                            <input type="text" class="form-control input-sm" name="ports" placeholder="Ports (*)">
-                        </div>
-                    </div>
-                    <input type="text" class="form-control input-sm" name="comment" placeholder="Comment" style="margin-top:6px">
-                    <div class="btn-group btn-group-justified" style="margin-top:8px">
-                        <div class="btn-group">
-                            <button type="submit" name="do" value="block" class="btn btn-sm btn-danger">
-                                <span class="glyphicon glyphicon-ban-circle"></span> Temp Block
-                            </button>
-                        </div>
-                        <div class="btn-group">
-                            <button type="submit" name="do" value="allow" class="btn btn-sm btn-success">
-                                <span class="glyphicon glyphicon-ok-circle"></span> Temp Allow
-                            </button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- Server Information -->
 <div class="panel panel-default">
-    <div class="panel-heading"><h4><span class="glyphicon glyphicon-info-sign"></span> Server Information</h4></div>
+    <div class="panel-heading"><h4><i class="ti ti-info-circle"></i> Server Information</h4></div>
     <div class="panel-body">
         <div class="row">
             <div class="col-md-3" style="margin-bottom:8px">
                 <form method="POST" action="/action/csftest">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button type="submit" class="btn btn-default btn-block">
-                        <span class="glyphicon glyphicon-check"></span> Check Server Security
+                        <i class="ti ti-checkup-list"></i> Check Server Security
                     </button>
                 </form>
             </div>
             <div class="col-md-3" style="margin-bottom:8px">
                 <a href="/status" class="btn btn-default btn-block">
-                    <span class="glyphicon glyphicon-list"></span> Firewall Information
+                    <i class="ti ti-list"></i> Firewall Information
                 </a>
             </div>
             <div class="col-md-3" style="margin-bottom:8px">
                 <a href="/ports" class="btn btn-default btn-block">
-                    <span class="glyphicon glyphicon-transfer"></span> View Listening Ports
+                    <i class="ti ti-plug-connected"></i> View Listening Ports
                 </a>
             </div>
             <div class="col-md-3" style="margin-bottom:8px">
                 <a href="/health" class="btn btn-default btn-block">
-                    <span class="glyphicon glyphicon-heart"></span> Security Health Score
+                    <i class="ti ti-heart-rate-monitor"></i> Security Health Score
                 </a>
             </div>
         </div>
@@ -324,27 +227,27 @@
 
 <!-- LFD Configuration Files -->
 <div class="panel panel-default">
-    <div class="panel-heading"><h4><span class="glyphicon glyphicon-file"></span> LFD Configuration Files</h4></div>
+    <div class="panel-heading"><h4><i class="ti ti-files"></i> LFD Configuration Files</h4></div>
     <div class="panel-body">
         <div class="row">
             {% set lfd_files = [
-                ('ignore', 'csf.ignore', 'eye-close'),
-                ('dirwatch', 'csf.dirwatch', 'folder-open'),
-                ('dyndns', 'csf.dyndns', 'globe'),
-                ('blocklists', 'csf.blocklists', 'list'),
+                ('ignore', 'csf.ignore', 'eye-off'),
+                ('dirwatch', 'csf.dirwatch', 'folder-search'),
+                ('dyndns', 'csf.dyndns', 'world'),
+                ('blocklists', 'csf.blocklists', 'shield-x'),
                 ('syslogusers', 'csf.syslogusers', 'user'),
-                ('logfiles', 'csf.logfiles', 'file'),
+                ('logfiles', 'csf.logfiles', 'file-text'),
             ] %}
             {% for key, name, icon in lfd_files %}
             <div class="col-md-3 col-sm-4" style="margin-bottom:8px">
                 <a href="/lfd/{{ key }}" class="btn btn-default btn-block">
-                    <span class="glyphicon glyphicon-{{ icon }}"></span> {{ name }}
+                    <i class="ti ti-{{ icon }}"></i> {{ name }}
                 </a>
             </div>
             {% endfor %}
             <div class="col-md-3 col-sm-4" style="margin-bottom:8px">
                 <a href="/templates" class="btn btn-default btn-block">
-                    <span class="glyphicon glyphicon-envelope"></span> Email Alert Templates
+                    <i class="ti ti-mail"></i> Email Alert Templates
                 </a>
             </div>
         </div>
@@ -353,31 +256,31 @@
 
 <!-- Other Settings -->
 <div class="panel panel-default">
-    <div class="panel-heading"><h4><span class="glyphicon glyphicon-option-horizontal"></span> Other Settings</h4></div>
+    <div class="panel-heading"><h4><i class="ti ti-dots-circle-horizontal"></i> Other Settings</h4></div>
     <div class="panel-body">
         <div class="row">
             {% if conf.get('CF_ENABLE', '0') == '1' %}
             <div class="col-md-3 col-sm-4" style="margin-bottom:8px">
                 <a href="/files/cloudflare" class="btn btn-default btn-block">
-                    <span class="glyphicon glyphicon-cloud"></span> CloudFlare
+                    <i class="ti ti-cloud"></i> CloudFlare
                 </a>
             </div>
             {% endif %}
             {% if conf.get('SMTPAUTH_RESTRICT', '0') != '0' %}
             <div class="col-md-3 col-sm-4" style="margin-bottom:8px">
                 <a href="/files/smtpauth" class="btn btn-default btn-block">
-                    <span class="glyphicon glyphicon-envelope"></span> SMTP AUTH Restrict
+                    <i class="ti ti-mail"></i> SMTP AUTH Restrict
                 </a>
             </div>
             {% endif %}
             <div class="col-md-3 col-sm-4" style="margin-bottom:8px">
                 <a href="/files/redirect" class="btn btn-default btn-block">
-                    <span class="glyphicon glyphicon-random"></span> Port/IP Redirect
+                    <i class="ti ti-arrows-shuffle"></i> Port/IP Redirect
                 </a>
             </div>
             <div class="col-md-3 col-sm-4" style="margin-bottom:8px">
                 <a href="/files/resellers" class="btn btn-default btn-block">
-                    <span class="glyphicon glyphicon-user"></span> Reseller Config
+                    <i class="ti ti-users"></i> Reseller Config
                 </a>
             </div>
         </div>
@@ -387,20 +290,22 @@
 {% if has_cluster %}
 <!-- Cluster Controls -->
 <div class="panel panel-default">
-    <div class="panel-heading"><h4><span class="glyphicon glyphicon-link"></span> LFD Cluster</h4></div>
+    <div class="panel-heading"><h4><i class="ti ti-topology-star"></i> LFD Cluster</h4></div>
     <div class="panel-body">
         <div class="row">
             <div class="col-md-3">
                 <form method="POST" action="/cluster/ping">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button type="submit" class="btn btn-default btn-block" style="margin-bottom:8px">
-                        <span class="glyphicon glyphicon-signal"></span> Cluster Ping
+                        <i class="ti ti-radar-2"></i> Cluster Ping
                     </button>
                 </form>
             </div>
             <div class="col-md-3">
                 <form method="POST" action="/cluster/restart">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button type="submit" class="btn btn-warning btn-block" style="margin-bottom:8px">
-                        <span class="glyphicon glyphicon-refresh"></span> Cluster Restart
+                        <i class="ti ti-refresh"></i> Cluster Restart
                     </button>
                 </form>
             </div>
@@ -432,12 +337,8 @@
 <!-- LFD Event Feed -->
 <div class="panel panel-default">
     <div class="panel-heading">
-        <h4 style="margin:0">
-            <span class="glyphicon glyphicon-bell"></span> Recent Firewall Events
-            <button class="btn btn-xs btn-default pull-right" id="refreshEvents">
-                <span class="glyphicon glyphicon-refresh"></span>
-            </button>
-        </h4>
+        <h4><i class="ti ti-bell"></i> Recent Firewall Events</h4>
+        <button class="btn btn-xs btn-default" id="refreshEvents" title="Refresh" aria-label="Refresh events"><i class="ti ti-refresh"></i></button>
     </div>
     <div class="panel-body" style="padding:0">
         <div id="eventFeed" style="max-height:300px; overflow-y:auto">
@@ -470,7 +371,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-danger" id="statDetailFlushDeny" style="display:none">
-                    <span class="glyphicon glyphicon-trash"></span> Clear permanent deny list
+                    <i class="ti ti-trash"></i> Clear permanent deny list
                 </button>
                 <span id="statDetailLink"></span>
                 <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
@@ -483,7 +384,87 @@
 {% block scripts %}
 <script>
 $(function() {
-    // Clickable stat tiles
+    function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+
+    /* ---------- IP action box ---------- */
+    var ACTS = {
+        allow:     {label: 'Allow IP',    url: '/quick/allow',   ajax: true,  comment: true,  msg: 'IP allowed',   cls: 'btn-success'},
+        deny:      {label: 'Block IP',    url: '/quick/deny',    ajax: true,  comment: true,  msg: 'IP blocked',   cls: 'btn-danger', warn: true},
+        tempblock: {label: 'Temp block',  url: '/temp/add',      ajax: false, comment: true,  temp: true, doVal: 'block', cls: 'btn-danger', warn: true},
+        tempallow: {label: 'Temp allow',  url: '/temp/add',      ajax: false, comment: true,  temp: true, doVal: 'allow', cls: 'btn-success'},
+        ignore:    {label: 'Ignore IP',   url: '/quick/ignore',  ajax: true,  comment: false, msg: 'IP added to ignore list', cls: 'btn-info'},
+        unblock:   {label: 'Unblock IP',  url: '/quick/unblock', ajax: true,  comment: false, msg: 'IP unblocked', cls: 'btn-warning'},
+        lookup:    {label: 'Look up',     url: '/ip-lookup',     ajax: false, comment: false, get: true, cls: 'btn-primary'},
+        search:    {label: 'Search',      url: '/quick/search',  ajax: false, comment: false, cls: 'btn-primary'}
+    };
+    var form = $('#ipact-form'), ipInput = $('#ipact-ip'), go = $('#ipact-go'), note = $('#ipact-note');
+    var current = 'allow';
+    var ownIp = form.data('own-ip') || '';
+    var IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(\/(\d|[12]\d|3[0-2]))?$/;
+    var IPV6 = /^[0-9a-f:]+(\/\d{1,3})?$/i;
+
+    function validIp(v) {
+        var m = IPV4.exec(v);
+        if (m) { for (var i = 1; i <= 4; i++) if (+m[i] > 255) return false; return true; }
+        return v.indexOf(':') > 0 && IPV6.test(v);
+    }
+    function setAct(act) {
+        current = act;
+        var a = ACTS[act];
+        $('#ipact-seg .seg-item').removeClass('active').filter('[data-act="' + act + '"]').addClass('active');
+        go.text(a.label).attr('class', 'btn ipact-go ' + a.cls);
+        $('#ipact-temp').toggle(!!a.temp);
+        $('#ipact-comment-wrap').toggle(!!a.comment);
+        $('#ipact-do').val(a.doVal || '');
+        form.attr('action', a.url);
+        checkInput();
+    }
+    function checkInput() {
+        var v = $.trim(ipInput.val());
+        var a = ACTS[current];
+        ipInput.toggleClass('is-invalid', !!v && !validIp(v) && current !== 'search');
+        if (v && !validIp(v) && current !== 'search') {
+            note.text('Enter a valid IPv4/IPv6 address or CIDR').attr('class', 'ipact-note text-danger');
+        } else if (a.warn && v && ownIp && (v === ownIp || v.split('/')[0] === ownIp)) {
+            note.text('Warning: ' + v + ' is your current address. Blocking it will lock you out.').attr('class', 'ipact-note text-warning');
+        } else {
+            note.text('').attr('class', 'ipact-note');
+        }
+    }
+    $('#ipact-seg').on('click', '.seg-item', function() { setAct($(this).data('act')); ipInput.focus(); });
+    ipInput.on('input', checkInput);
+    form.on('submit', function(e) {
+        var v = $.trim(ipInput.val());
+        var a = ACTS[current];
+        if (current !== 'search' && !validIp(v)) { e.preventDefault(); checkInput(); ipInput.focus(); return; }
+        if (a.get) { e.preventDefault(); location.href = a.url + '?ip=' + encodeURIComponent(v); return; }
+        if (!a.ajax) return;           /* temp + search: normal POST, server flashes */
+        e.preventDefault();
+        go.prop('disabled', true);
+        $.post(a.url, form.serialize(), function(r) {
+            if (r.success) {
+                CSFv2.toast(a.msg + ': ' + esc(v), 'success');
+                ipInput.val(''); $('#ipact-comment').val(''); checkInput();
+                loadRecentBlocks();
+                CSFv2.refreshStats();
+                CSFv2.refreshTempBadge();
+            } else {
+                CSFv2.toast(r.stderr || r.error || 'Action failed', 'danger', 6000);
+            }
+        }).fail(function() { CSFv2.toast('Request failed', 'danger', 6000); })
+          .always(function() { go.prop('disabled', false); });
+    });
+    /* Deep link: /#ip=1.2.3.4&act=deny */
+    (function() {
+        var h = location.hash.replace(/^#/, '');
+        if (!h) return;
+        var p = {}; h.split('&').forEach(function(kv) { var x = kv.split('='); p[x[0]] = decodeURIComponent(x[1] || ''); });
+        if (p.act && ACTS[p.act]) setAct(p.act);
+        if (p.ip) { ipInput.val(p.ip); checkInput(); ipInput.focus(); }
+    })();
+    setAct(current);
+
+    /* ---------- Clickable stat tiles ---------- */
     $('.stat-clickable').css('cursor', 'pointer').on('click', function() {
         var metric = $(this).data('metric');
         $('#statDetailBody').text('Loading...').show();
@@ -499,7 +480,7 @@ $(function() {
                 html += '<div class="input-group" style="margin-bottom:10px">' +
                     '<input type="text" class="form-control" id="blocked-search" placeholder="Search IPs...">' +
                     '<span class="input-group-btn">' +
-                    '<button class="btn btn-default" id="blocked-search-btn"><span class="glyphicon glyphicon-search"></span></button>' +
+                    '<button class="btn btn-default" id="blocked-search-btn"><i class="ti ti-search"></i></button>' +
                     '</span></div>';
 
                 html += '<ul class="nav nav-tabs" style="margin-bottom:10px">' +
@@ -526,8 +507,8 @@ $(function() {
                         '<td>' + typeBadge + '</td>' +
                         '<td style="font-size:11px" title="' + (e.comment || '').replace(/"/g, '&quot;') + '">' + reason + '</td>' +
                         '<td>' +
-                        '<button class="btn btn-xs btn-warning blocked-unblock" data-ip="' + e.ip + '" title="Remove block"><span class="glyphicon glyphicon-remove"></span></button> ' +
-                        '<a href="/ip-lookup?ip=' + e.ip + '" class="btn btn-xs btn-info" title="Lookup"><span class="glyphicon glyphicon-search"></span></a>' +
+                        '<button class="btn btn-xs btn-warning blocked-unblock" data-ip="' + e.ip + '" title="Remove block"><i class="ti ti-lock-open"></i></button> ' +
+                        '<a href="/ip-lookup?ip=' + e.ip + '" class="btn btn-xs btn-info" title="Lookup"><i class="ti ti-search"></i></a>' +
                         '</td></tr>';
                 });
                 html += '</tbody></table></div>';
@@ -542,11 +523,7 @@ $(function() {
                     var filter = $(this).data('filter');
                     $('#statDetailFlushDeny').toggle(filter !== 'temporary');
                     $('#blocked-table tbody tr').each(function() {
-                        if (filter === 'all' || $(this).data('type') === filter) {
-                            $(this).show();
-                        } else {
-                            $(this).hide();
-                        }
+                        $(this).toggle(filter === 'all' || $(this).data('type') === filter);
                     });
                 });
 
@@ -565,15 +542,15 @@ $(function() {
                     btn.prop('disabled', true);
                     $.post('/api/deny/flush', function(r) {
                         if (r.success) {
-                            showToast('Permanent deny list cleared', 'success');
+                            CSFv2.toast('Permanent deny list cleared', 'success');
                             $('#statDetailModal').modal('hide');
                             location.reload();
                         } else {
-                            showToast(r.error || r.stderr || 'Failed to clear deny list', 'danger');
+                            CSFv2.toast(r.error || r.stderr || 'Failed to clear deny list', 'danger');
                             btn.prop('disabled', false);
                         }
                     }).fail(function(xhr) {
-                        showToast((xhr.responseJSON && (xhr.responseJSON.error || xhr.responseJSON.stderr)) || 'Failed to clear deny list', 'danger');
+                        CSFv2.toast((xhr.responseJSON && (xhr.responseJSON.error || xhr.responseJSON.stderr)) || 'Failed to clear deny list', 'danger');
                         btn.prop('disabled', false);
                     });
                 });
@@ -586,9 +563,9 @@ $(function() {
                     $.post('/quick/unblock', {ip: ip}, function(r) {
                         if (r.success) {
                             btn.closest('tr').fadeOut(300, function() { $(this).remove(); });
-                            showToast(ip + ' removed from the deny list', 'success');
+                            CSFv2.toast(ip + ' removed from the deny list', 'success');
                         } else {
-                            showToast(r.error || r.stderr || 'Failed to remove block', 'danger');
+                            CSFv2.toast(r.error || r.stderr || 'Failed to remove block', 'danger');
                             btn.prop('disabled', false);
                         }
                     });
@@ -602,8 +579,8 @@ $(function() {
                 $('#statDetailExtra').show();
             }
             var links = {
-                connections: '<a href="/status" class="btn btn-sm btn-primary"><span class="glyphicon glyphicon-list-alt"></span> Full Status</a>',
-                blocked: '<a href="/temp" class="btn btn-sm btn-primary"><span class="glyphicon glyphicon-time"></span> Temp Blocks</a>'
+                connections: '<a href="/status" class="btn btn-sm btn-primary"><i class="ti ti-list"></i> Full Status</a>',
+                blocked: '<a href="/temp" class="btn btn-sm btn-primary"><i class="ti ti-clock-pause"></i> Temp Blocks</a>'
             };
             if (links[metric]) $('#statDetailLink').html(links[metric]);
         }).fail(function() {
@@ -611,38 +588,79 @@ $(function() {
         });
     });
 
-    // Recent blocks table
-    function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+    /* ---------- Recent blocks with inline actions ---------- */
     function loadRecentBlocks() {
-        $.getJSON('/api/lfd/events?lines=60', function(events) {
-            var blocks = (events || []).filter(function(e) { return e.type === 'block' && e.ip; }).slice(0, 5);
+        $.getJSON('/api/lfd/events?lines=80', function(events) {
+            var blocks = (events || []).filter(function(e) { return e.type === 'block' && e.ip; }).slice(0, 6);
             if (!blocks.length) {
                 $('#recentBlocks').html('<tr><td class="text-muted">No recent blocks</td></tr>');
                 return;
             }
             var html = '';
             blocks.forEach(function(e) {
-                var temp = /temp/i.test(e.raw || '');
-                var reason = (e.raw || '').substring(0, 60);
-                html += '<tr><td class="mono"><a href="/ip-lookup?ip=' + encodeURIComponent(e.ip) + '">' + esc(e.ip) + '</a></td>' +
-                    '<td class="text-muted">' + esc(reason) + '</td>' +
-                    '<td class="text-right"><span class="pill ' + (temp ? 'pill-warning' : 'pill-danger') + '">' + (temp ? 'Temp' : 'Blocked') + '</span></td></tr>';
+                var raw = e.raw || '';
+                var temp = /temp/i.test(raw);
+                var cc = (raw.match(/\(([A-Z]{2})\//) || [])[1];
+                var reason = raw.replace(/^.*?lfd\[\d+\]:\s*/, '').replace(/\*Blocked[^*]*\*/i, '').replace(/\([A-Z]{2}\/[^)]*\)/, '')
+                    .replace(/\[[^\]]*\]/g, '').replace(/\s+-\s*$/, '').replace(/\s+/g, ' ').trim().substring(0, 80);
+                html += '<tr>' +
+                    '<td class="mono"><a href="/ip-lookup?ip=' + encodeURIComponent(e.ip) + '">' + esc(e.ip) + '</a></td>' +
+                    '<td class="text-muted rb-reason" title="' + esc(raw) + '">' + (cc ? esc(cc) + ' &middot; ' : '') + esc(reason) + '</td>' +
+                    '<td class="text-right"><span class="pill ' + (temp ? 'pill-warning' : 'pill-danger') + '">' + (temp ? 'Temp' : 'Blocked') + '</span></td>' +
+                    '<td class="text-right rb-actions">' +
+                        '<a href="/ip-lookup?ip=' + encodeURIComponent(e.ip) + '" class="rb-btn" title="Look up"><i class="ti ti-search"></i></a>' +
+                        '<button type="button" class="rb-btn rb-unblock" data-ip="' + esc(e.ip) + '" title="Unblock"><i class="ti ti-lock-open"></i></button>' +
+                    '</td></tr>';
             });
             $('#recentBlocks').html(html);
         }).fail(function() {
             $('#recentBlocks').html('<tr><td class="text-muted">Could not load blocks</td></tr>');
         });
     }
+    $('#recentBlocks').on('click', '.rb-unblock', function() {
+        var btn = $(this), ip = btn.data('ip');
+        if (!confirm('Unblock ' + ip + '?')) return;
+        btn.prop('disabled', true);
+        $.post('/quick/unblock', {ip: ip}, function(r) {
+            if (r.success) { CSFv2.toast(ip + ' unblocked', 'success'); btn.closest('tr').fadeOut(250, function() { $(this).remove(); }); }
+            else { CSFv2.toast(r.error || r.stderr || 'Failed to unblock', 'danger'); btn.prop('disabled', false); }
+        }).fail(function() { CSFv2.toast('Request failed', 'danger'); btn.prop('disabled', false); });
+    });
     loadRecentBlocks();
     setInterval(loadRecentBlocks, 15000);
-    $('.js-jump').on('click', function(e) {
-        e.preventDefault();
-        var f = $($(this).attr('href'));
-        $('html, body').animate({scrollTop: f.offset().top - 80}, 250);
-        f.find('input[name=ip]').focus();
-    });
 
-    // LFD Event Feed
+    /* ---------- 24h block chart + "blocked" delta ---------- */
+    function loadHourly() {
+        $.getJSON('/api/analytics?hours=24', function(d) {
+            var hours = d.hourly || [];
+            var now = new Date().getHours();
+            /* rotate so the bar on the right is the current hour */
+            var ordered = [];
+            for (var i = 23; i >= 0; i--) ordered.push(hours[((now - i) % 24 + 24) % 24]);
+            var max = Math.max.apply(null, ordered.map(function(h) { return h.count; }).concat([1]));
+            var peak = ordered.reduce(function(a, b) { return b.count > a.count ? b : a; }, ordered[0]);
+            var html = '';
+            ordered.forEach(function(h) {
+                html += '<b style="height:' + Math.max(2, Math.round(h.count / max * 100)) + '%" title="' + h.hour + ': ' + h.count + '"></b>';
+            });
+            $('#hourChart').html(html);
+            $('#chart-peak').text(d.total_attacks ? d.total_attacks + ' blocks · peak ' + peak.hour : 'No blocks logged');
+            $('#stat-blocked-sub').text((d.total_attacks || 0) + ' blocks in 24h');
+            $.getJSON('/api/analytics?hours=48', function(d2) {
+                var prev = (d2.total_attacks || 0) - (d.total_attacks || 0);
+                var el = $('#stat-blocked-delta');
+                if (prev <= 0 && !d.total_attacks) { el.text(''); return; }
+                var pct = prev > 0 ? Math.round(((d.total_attacks || 0) - prev) / prev * 100) : 100;
+                el.text((pct >= 0 ? '+' : '') + pct + '%').attr('class', 'stat-delta ' + (pct > 0 ? 'text-danger' : 'text-success')).attr('title', 'vs previous 24h');
+            });
+        }).fail(function() { $('#hourChart').html('<span class="text-muted" style="font-size:12px">Could not load</span>'); });
+    }
+    loadHourly();
+    setInterval(loadHourly, 60000);
+
+    /* ---------- LFD Event Feed ---------- */
+    var ICONS = {'ban-circle': 'ban', 'ok-circle': 'circle-check', 'warning-sign': 'alert-triangle', 'info-sign': 'info-circle',
+                 'remove-circle': 'circle-x', 'cog': 'settings', 'flash': 'bolt', 'bell': 'bell', 'eye-open': 'eye', 'time': 'clock', 'lock': 'lock'};
     function loadEvents() {
         $.getJSON('/api/lfd/events?lines=30', function(events) {
             if (!events || events.length === 0) {
@@ -652,18 +670,17 @@ $(function() {
             var html = '<table class="table table-condensed table-hover" style="margin:0; font-size:12px">';
             events.forEach(function(e) {
                 var typeClass = {block:'danger', allow:'success', warning:'warning', service:'info'}[e.type] || '';
-                var ipBtn = e.ip ? ' <a href="/ip-lookup?ip=' + e.ip + '" class="btn btn-xs btn-default" title="Lookup"><span class="glyphicon glyphicon-search"></span></a>' : '';
+                var ipBtn = e.ip ? ' <a href="/ip-lookup?ip=' + encodeURIComponent(e.ip) + '" class="btn btn-xs btn-default" title="Lookup"><i class="ti ti-search"></i></a>' : '';
                 html += '<tr class="' + typeClass + '">' +
-                    '<td style="width:140px"><small>' + (e.timestamp || '') + '</small></td>' +
-                    '<td><span class="glyphicon glyphicon-' + e.icon + '"></span> ' +
-                    (e.ip ? '<strong>' + e.ip + '</strong>' + ipBtn + ' ' : '') +
-                    '</td><td>' + e.raw.substring(0, 120) + '</td></tr>';
+                    '<td style="width:140px"><small>' + esc(e.timestamp || '') + '</small></td>' +
+                    '<td><i class="ti ti-' + (ICONS[e.icon] || 'circle-dot') + '"></i> ' +
+                    (e.ip ? '<strong>' + esc(e.ip) + '</strong>' + ipBtn + ' ' : '') +
+                    '</td><td>' + esc((e.raw || '').substring(0, 120)) + '</td></tr>';
             });
             html += '</table>';
             $('#eventFeed').html(html);
         });
     }
-
     loadEvents();
     setInterval(loadEvents, 15000);
     $('#refreshEvents').on('click', loadEvents);
