@@ -5,48 +5,53 @@
 <!-- Status Banner -->
 {% if status.enabled %}
     {% if status.testing %}
-    <div class="bs-callout bs-callout-warning text-center">
-        <h4><span class="glyphicon glyphicon-warning-sign"></span> Firewall Status: Enabled — Test Mode</h4>
-        <p>CSF is running in TESTING mode. <strong>Blocks are suppressed</strong> — no IPs are actually blocked until TESTING = 0.</p>
-        <a href="/config" class="btn btn-warning btn-sm"><span class="glyphicon glyphicon-cog"></span> Set TESTING = 0 in Config</a>
+    <div class="status-hero status-warning">
+        <span class="status-dot"></span>
+        <div class="status-text">
+            <b>Firewall enabled &mdash; test mode</b>
+            <span>Blocks are suppressed. No IPs are blocked until TESTING = 0.</span>
+        </div>
+        <a href="/config" class="status-btn">Set TESTING = 0</a>
     </div>
     {% elif not status.lfd_running %}
-    <div class="bs-callout bs-callout-danger text-center" style="border-left-color:#c0392b">
-        <h4 style="color:#c0392b">
-            <span class="glyphicon glyphicon-exclamation-sign"></span>
-            &nbsp;Firewall Active — LFD is DOWN
-        </h4>
-        <p style="font-size:14px; margin-bottom:12px">
-            CSF firewall rules are loaded, but <strong>LFD (Login Failure Daemon) is not running</strong>.<br>
-            <strong>Automatic blocking is completely disabled</strong> — attacks will not be detected or blocked.
-        </p>
-        <form method="POST" action="/action/lfdstart" style="display:inline; margin-right:8px">
+    <div class="status-hero status-danger">
+        <span class="status-dot"></span>
+        <div class="status-text">
+            <b>Firewall active &mdash; LFD is down</b>
+            <span>CSF rules are loaded, but automatic blocking is disabled until LFD runs.</span>
+        </div>
+        <form method="POST" action="/action/lfdstart" class="status-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button type="submit" class="btn btn-danger btn-sm">
-                <span class="glyphicon glyphicon-play"></span> Start LFD Now
-            </button>
+            <button type="submit" class="status-btn status-btn-primary">Start LFD</button>
         </form>
-        <form method="POST" action="/action/lfdrestart" style="display:inline">
+        <form method="POST" action="/action/lfdrestart" class="status-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button type="submit" class="btn btn-default btn-sm">
-                <span class="glyphicon glyphicon-refresh"></span> Restart LFD
-            </button>
+            <button type="submit" class="status-btn">Restart LFD</button>
         </form>
     </div>
     {% else %}
-    <div class="bs-callout bs-callout-success text-center">
-        <h4><span class="glyphicon glyphicon-ok-circle"></span> Firewall Status: Enabled and Running</h4>
-        <small class="text-muted">CSF rules active &bull; LFD monitoring</small>
+    <div class="status-hero status-ok">
+        <span class="status-dot"></span>
+        <div class="status-text">
+            <b>Firewall enabled and running</b>
+            <span>CSF rules active &middot; LFD monitoring{% if system %} &middot; {{ system.hostname }} &middot; up {{ system.uptime.formatted }}{% endif %}</span>
+        </div>
+        <form method="POST" action="/action/lfdrestart" class="status-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="status-btn">Restart LFD</button>
+        </form>
     </div>
     {% endif %}
 {% else %}
-    <div class="bs-callout bs-callout-danger text-center">
-        <h4><span class="glyphicon glyphicon-remove-circle"></span> Firewall Status: Disabled</h4>
-        <form method="POST" action="/action/enable" style="display:inline">
+    <div class="status-hero status-danger">
+        <span class="status-dot"></span>
+        <div class="status-text">
+            <b>Firewall disabled</b>
+            <span>No firewall rules are active on this server.</span>
+        </div>
+        <form method="POST" action="/action/enable" class="status-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button type="submit" class="btn btn-success btn-lg">
-                <span class="glyphicon glyphicon-play"></span> Enable Firewall
-            </button>
+            <button type="submit" class="status-btn status-btn-primary">Enable firewall</button>
         </form>
     </div>
 {% endif %}
@@ -54,43 +59,25 @@
 <!-- System Stats -->
 {% if system %}
 <div class="stat-row">
-    <div class="stat-card stat-accent stat-clickable" data-metric="cpu" title="Click for top CPU processes">
-        <span class="stat-icon glyphicon glyphicon-tasks"></span>
+    <div class="stat-card stat-clickable" data-metric="cpu" title="Click for details">
+        <div class="stat-head"><span>CPU</span><i class="ti ti-cpu"></i></div>
         <div class="stat-value" id="stat-cpu">{{ system.cpu_usage }}%</div>
-        <div class="stat-label">CPU Usage</div>
-        <div class="stat-sub">{{ system.cpu_cores }} cores &middot; Load: {{ system.load['1min'] }}</div>
-        <div class="stat-progress">
-            <div class="stat-progress-bar {{ 'green' if system.cpu_usage < 60 else 'yellow' if system.cpu_usage < 85 else 'red' }}"
-                 id="prog-cpu" style="width:{{ system.cpu_usage }}%"></div>
-        </div>
+        <div class="stat-progress"><div class="stat-progress-bar {{ 'green' if system.cpu_usage < 60 else 'yellow' if system.cpu_usage < 85 else 'red' }}" id="prog-cpu" style="width:{{ system.cpu_usage }}%"></div></div>
     </div>
-    <div class="stat-card stat-info stat-clickable" data-metric="memory" title="Click for memory details">
-        <span class="stat-icon glyphicon glyphicon-equalizer"></span>
+    <div class="stat-card stat-clickable" data-metric="memory" title="Click for details">
+        <div class="stat-head"><span>Memory</span><i class="ti ti-database"></i></div>
         <div class="stat-value" id="stat-mem">{{ system.memory.percent }}%</div>
-        <div class="stat-label">Memory</div>
-        <div class="stat-sub" id="stat-mem-detail">{{ system.memory.used_mb }} / {{ system.memory.total_mb }} MB</div>
-        <div class="stat-progress">
-            <div class="stat-progress-bar {{ 'green' if system.memory.percent < 60 else 'yellow' if system.memory.percent < 85 else 'red' }}"
-                 id="prog-mem" style="width:{{ system.memory.percent }}%"></div>
-        </div>
+        <div class="stat-progress"><div class="stat-progress-bar {{ 'green' if system.memory.percent < 60 else 'yellow' if system.memory.percent < 85 else 'red' }}" id="prog-mem" style="width:{{ system.memory.percent }}%"></div></div>
     </div>
-    <div class="stat-card stat-success stat-clickable" data-metric="uptime" title="Click for uptime details">
-        <span class="stat-icon glyphicon glyphicon-time"></span>
-        <div class="stat-value">{{ system.uptime.formatted }}</div>
-        <div class="stat-label">Uptime</div>
-        <div class="stat-sub">{{ system.hostname }}</div>
-    </div>
-    <div class="stat-card stat-warning stat-clickable" data-metric="connections" title="Click for active connections">
-        <span class="stat-icon glyphicon glyphicon-transfer"></span>
+    <div class="stat-card stat-clickable" data-metric="connections" title="Click for details">
+        <div class="stat-head"><span>Connections</span><i class="ti ti-arrows-exchange"></i></div>
         <div class="stat-value" id="stat-conn">{{ system.connections.established }}</div>
-        <div class="stat-label">Connections</div>
-        <div class="stat-sub">TCP total: {{ system.connections.tcp_total }}</div>
+        <div class="stat-progress"><div class="stat-progress-bar blue" style="width:{{ [ (system.connections.established / 5)|round|int, 100 ]|min }}%"></div></div>
     </div>
-    <div class="stat-card stat-danger stat-clickable" data-metric="blocked" title="Click for blocked IP list">
-        <span class="stat-icon glyphicon glyphicon-ban-circle"></span>
+    <div class="stat-card stat-clickable" data-metric="blocked" title="Click for details">
+        <div class="stat-head"><span>Blocked IPs</span><i class="ti ti-ban"></i></div>
         <div class="stat-value" id="stat-blocked">{{ system.blocked_ips }}</div>
-        <div class="stat-label">Blocked IPs</div>
-        <div class="stat-sub">Permanent + temporary</div>
+        <div class="stat-progress"><div class="stat-progress-bar red" style="width:{{ [ (system.blocked_ips / 20)|round|int, 100 ]|min }}%"></div></div>
     </div>
 </div>
 
@@ -116,13 +103,36 @@
 {% endif %}
 {% endif %}
 
+<!-- Recent blocks + quick actions -->
+<div class="dash-split">
+    <div class="panel panel-default">
+        <div class="panel-heading"><h4>Recent blocks</h4><a href="/lfd-blocks" class="panel-link">View all</a></div>
+        <div class="panel-body" style="padding:4px 16px 8px">
+            <table class="table recent-blocks"><tbody id="recentBlocks">
+                <tr><td class="text-muted">Loading&hellip;</td></tr>
+            </tbody></table>
+        </div>
+    </div>
+    <div class="panel panel-default">
+        <div class="panel-heading"><h4>Quick actions</h4></div>
+        <div class="panel-body">
+            <div class="chip-row">
+                <form method="POST" action="/action/restartq"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="chip"><i class="ti ti-refresh"></i>Reload</button></form>
+                <a href="#qa-allow" class="chip js-jump"><i class="ti ti-plus"></i>Allow IP</a>
+                <a href="#qa-deny" class="chip js-jump"><i class="ti ti-ban"></i>Block IP</a>
+                <a href="/ip-lookup" class="chip"><i class="ti ti-search"></i>Lookup</a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Quick Actions -->
 <div class="row">
     <div class="col-md-6">
         <div class="panel panel-default">
             <div class="panel-heading"><h4><span class="glyphicon glyphicon-flash"></span> Quick Actions</h4></div>
             <div class="panel-body">
-                <form method="POST" action="/quick/allow" data-ajax="true" data-success-msg="IP allowed successfully" style="margin-bottom:12px">
+                <form id="qa-allow" method="POST" action="/quick/allow" data-ajax="true" data-success-msg="IP allowed successfully" style="margin-bottom:12px">
                     <label class="control-label"><span class="glyphicon glyphicon-ok-circle text-success"></span> Quick Allow</label>
                     <div class="input-group">
                         <input type="text" class="form-control input-sm" name="ip" placeholder="IP Address" required>
@@ -132,7 +142,7 @@
                     </div>
                     <input type="text" class="form-control input-sm" name="comment" placeholder="Comment (optional)" style="margin-top:4px">
                 </form>
-                <form method="POST" action="/quick/deny" data-ajax="true" data-success-msg="IP denied successfully" style="margin-bottom:12px">
+                <form id="qa-deny" method="POST" action="/quick/deny" data-ajax="true" data-success-msg="IP denied successfully" style="margin-bottom:12px">
                     <label class="control-label"><span class="glyphicon glyphicon-ban-circle text-danger"></span> Quick Deny</label>
                     <div class="input-group">
                         <input type="text" class="form-control input-sm" name="ip" placeholder="IP Address" required>
@@ -599,6 +609,37 @@ $(function() {
         }).fail(function() {
             $('#statDetailBody').text('Failed to load details');
         });
+    });
+
+    // Recent blocks table
+    function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+    function loadRecentBlocks() {
+        $.getJSON('/api/lfd/events?lines=60', function(events) {
+            var blocks = (events || []).filter(function(e) { return e.type === 'block' && e.ip; }).slice(0, 5);
+            if (!blocks.length) {
+                $('#recentBlocks').html('<tr><td class="text-muted">No recent blocks</td></tr>');
+                return;
+            }
+            var html = '';
+            blocks.forEach(function(e) {
+                var temp = /temp/i.test(e.raw || '');
+                var reason = (e.raw || '').substring(0, 60);
+                html += '<tr><td class="mono"><a href="/ip-lookup?ip=' + encodeURIComponent(e.ip) + '">' + esc(e.ip) + '</a></td>' +
+                    '<td class="text-muted">' + esc(reason) + '</td>' +
+                    '<td class="text-right"><span class="pill ' + (temp ? 'pill-warning' : 'pill-danger') + '">' + (temp ? 'Temp' : 'Blocked') + '</span></td></tr>';
+            });
+            $('#recentBlocks').html(html);
+        }).fail(function() {
+            $('#recentBlocks').html('<tr><td class="text-muted">Could not load blocks</td></tr>');
+        });
+    }
+    loadRecentBlocks();
+    setInterval(loadRecentBlocks, 15000);
+    $('.js-jump').on('click', function(e) {
+        e.preventDefault();
+        var f = $($(this).attr('href'));
+        $('html, body').animate({scrollTop: f.offset().top - 80}, 250);
+        f.find('input[name=ip]').focus();
     });
 
     // LFD Event Feed
