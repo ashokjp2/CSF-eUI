@@ -604,7 +604,7 @@ $(function() {
                 var reason = raw.replace(/^.*?lfd\[\d+\]:\s*/, '').replace(/\*Blocked[^*]*\*/i, '').replace(/\([A-Z]{2}\/[^)]*\)/, '')
                     .replace(/\[[^\]]*\]/g, '').replace(/\s+-\s*$/, '').replace(/\s+/g, ' ').trim().substring(0, 80);
                 html += '<tr>' +
-                    '<td class="mono"><a href="/ip-lookup?ip=' + encodeURIComponent(e.ip) + '">' + esc(e.ip) + '</a></td>' +
+                    '<td class="mono"><a href="/ip/' + encodeURIComponent(e.ip) + '" title="Why is this IP blocked?">' + esc(e.ip) + '</a></td>' +
                     '<td class="text-muted rb-reason" title="' + esc(raw) + '">' + (cc ? esc(cc) + ' &middot; ' : '') + esc(reason) + '</td>' +
                     '<td class="text-right"><span class="pill ' + (temp ? 'pill-warning' : 'pill-danger') + '">' + (temp ? 'Temp' : 'Blocked') + '</span></td>' +
                     '<td class="text-right rb-actions">' +

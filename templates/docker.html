@@ -13,6 +13,7 @@
 </div>
 
 <ul class="nav nav-tabs" style="margin-bottom:15px">
+    <li><a data-toggle="tab" href="#exposure"><i class="ti ti-world"></i> Exposure <span class="badge" id="exposure-badge" style="display:none"></span></a></li>
     <li class="active"><a data-toggle="tab" href="#containers">Containers</a></li>
     <li><a data-toggle="tab" href="#networks">Networks</a></li>
     <li><a data-toggle="tab" href="#ports">Port Mappings</a></li>
@@ -24,6 +25,23 @@
 </ul>
 
 <div class="tab-content">
+    <!-- Exposure map -->
+    <div class="tab-pane" id="exposure">
+        <div class="alert alert-info" style="font-size:13px">
+            <strong>Why this matters:</strong> Docker publishes ports through its own iptables chains, so a container port bound to <code>0.0.0.0</code> is reachable from the internet even if it is not in <code>TCP_IN</code>.
+            Ports bound to <code>127.0.0.1</code>, or reached only through the Coolify / Traefik proxy, are not. <em>Restrict</em> adds <code>DOCKER-USER</code> rules (saved in <code>csfpost.sh</code>) that drop external traffic to that port while keeping container-to-container and localhost access.
+        </div>
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4><i class="ti ti-world"></i> Published ports</h4><span class="panel-hint" id="exposure-meta"></span></div>
+            <div class="panel-body" style="padding:8px 16px 12px">
+                <table class="table table-condensed table-hover" id="exposure-table">
+                    <thead><tr><th>Host port</th><th>Container</th><th>Bind</th><th>Reachable from</th><th>In TCP_IN</th><th>Proxy</th><th></th></tr></thead>
+                    <tbody><tr><td colspan="7" class="text-muted">Loading…</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <!-- Containers -->
     <div class="tab-pane active" id="containers">
         <div class="panel panel-default">
@@ -231,6 +249,39 @@
 
 {% block scripts %}
 <script>
+(function() {
+    function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+    function loadExposure() {
+        $.getJSON('/api/docker/exposure', function(d) {
+            var rows = d.rows || [], html = '';
+            var reachLabel = {internet: '<span class="expo-open"><i class="ti ti-world"></i> Internet</span>', restricted: '<span class="expo-restricted"><i class="ti ti-shield-check"></i> Restricted (private + localhost only)</span>',
+                              localhost: '<span class="expo-local"><i class="ti ti-home"></i> Localhost only</span>', internal: '<span class="expo-local"><i class="ti ti-topology-star"></i> Docker network only</span>'};
+            rows.forEach(function(r) {
+                var portTxt = r.port ? r.port + '/' + r.proto + (r.cport && r.cport !== r.port ? ' <span class="text-muted">→ ' + r.cport + '</span>' : '') : '<span class="text-muted">none published</span>';
+                var action = '';
+                if (r.port && (r.reach === 'internet' || r.reach === 'restricted') && !r.is_proxy) {
+                    action = '<button class="btn btn-default btn-xs js-restrict" data-port="' + r.port + '" data-proto="' + r.proto + '" data-enable="' + (r.reach === 'internet' ? '1' : '0') + '">' +
+                        (r.reach === 'internet' ? '<i class="ti ti-lock"></i> Restrict' : '<i class="ti ti-lock-open"></i> Unrestrict') + '</button>';
+                }
+                html += '<tr><td>' + portTxt + '</td><td>' + esc(r.container) + (r.is_proxy ? ' <span class="label label-default">proxy</span>' : '') + '</td><td class="text-muted">' + esc(r.bind || '—') + '</td>' +
+                    '<td>' + (reachLabel[r.reach] || esc(r.reach)) + '</td><td>' + (r.port ? (r.in_tcp_in ? 'yes' : '<span class="text-muted">no</span>') : '—') + '</td>' +
+                    '<td>' + (r.behind_proxy ? '<span class="text-muted">via proxy</span>' : '—') + '</td><td class="text-right">' + action + '</td></tr>';
+            });
+            $('#exposure-table tbody').html(html || '<tr><td colspan="7" class="text-muted">No running containers</td></tr>');
+            $('#exposure-meta').text((d.open_count ? d.open_count + ' port' + (d.open_count > 1 ? 's' : '') + ' open to the internet' : 'No container ports open to the internet') + ' · CSF DOCKER=' + (d.docker_mode || '0'));
+            $('#exposure-badge').text(d.open_count).toggle(!!d.open_count);
+        });
+    }
+    $('#exposure-table').on('click', '.js-restrict', function() {
+        var b = $(this), enable = b.data('enable') === 1 || b.data('enable') === '1';
+        if (enable && !confirm('Drop internet traffic to port ' + b.data('port') + '/' + b.data('proto') + '? Access from other containers and localhost stays open.')) return;
+        b.prop('disabled', true);
+        $.ajax({url: '/api/docker/exposure/restrict', method: 'POST', contentType: 'application/json', data: JSON.stringify({port: b.data('port'), proto: b.data('proto'), enable: enable})})
+            .done(function(r) { CSFv2.toast(r.success ? (enable ? 'Port restricted' : 'Restriction removed') : (r.error || 'Failed'), r.success ? 'success' : 'danger'); loadExposure(); })
+            .fail(function() { CSFv2.toast('Request failed', 'danger'); b.prop('disabled', false); });
+    });
+    loadExposure();
+})();
 $('#generateRules').on('click', function() {
     $.post('/docker/rules', function(data) {
         if (data.rules) {

@@ -37,6 +37,18 @@
             </span>
         </div>
 
+        <div class="config-tools">
+            {% if defaults %}
+            <label><input type="checkbox" id="changedOnly"> Show only settings changed from CSF defaults</label>
+            {% endif %}
+            <a href="#" id="showHistory" style="font-size:13px"><i class="ti ti-history"></i> Recent changes</a>
+            <a href="/backup-restore" style="font-size:13px"><i class="ti ti-database-export"></i> Backups</a>
+        </div>
+        <div class="panel panel-default" id="historyPanel" style="display:none">
+            <div class="panel-heading"><h4><i class="ti ti-history"></i> Recent changes to csf.conf</h4><span class="panel-hint">Revert sets the previous value and saves</span></div>
+            <div class="panel-body" id="historyBody"><span class="text-muted">Loading…</span></div>
+        </div>
+
         <form method="POST" action="/config/save" id="configForm">
             <!-- Section navigation -->
             <div id="paginatediv" class="text-center" style="margin-bottom:15px">
@@ -62,7 +74,8 @@
                         </thead>
                         <tbody>
                             {% for setting in section.settings %}
-                            <tr data-key="{{ setting.key }}">
+                            {% set dflt = defaults.get(setting.key) if defaults else none %}
+                            <tr data-key="{{ setting.key }}"{% if dflt is not none %} data-default="{{ dflt }}"{% endif %} class="{{ 'cfg-changed' if dflt is not none and dflt != setting.value }}">
                                 <td>
                                     <strong>{{ setting.key }}</strong>
                                     <div class="setting-help text-muted" style="font-size:11px; margin-top:2px"></div>
@@ -85,6 +98,13 @@
                 </button>
             </div>
         </form>
+        <div class="modal fade" id="diffModal" tabindex="-1">
+            <div class="modal-dialog modal-lg"><div class="modal-content">
+                <div class="modal-header"><button type="button" class="close" data-dismiss="modal">&times;</button><h4 class="modal-title"><i class="ti ti-git-compare"></i> Review changes <small id="diffCount"></small></h4></div>
+                <div class="modal-body" id="diffBody" style="max-height:60vh; overflow:auto"></div>
+                <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button><button type="button" class="btn btn-primary" id="diffConfirm"><i class="ti ti-device-floppy"></i> Save changes</button></div>
+            </div></div>
+        </div>
         <div class="text-center" style="margin-top:10px">
             <form method="POST" action="/action/restartboth" style="display:inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -725,6 +745,48 @@ $(function() {
     $('#clearSearch').on('click', function() {
         $('#configSearch').val('').trigger('input');
     });
+    function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+    $('#diffConfirm').on('click', function() {
+        $('#diffModal').modal('hide');
+        var f = document.getElementById('configForm');
+        f._diffConfirmed = true;
+        $(f).trigger('submit');
+    });
+    /* Changed-from-default filter */
+    $('#changedOnly').on('change', function() {
+        var on = this.checked;
+        $('tr[data-key]').each(function() { if (on) $(this).toggle($(this).hasClass('cfg-changed')); else $(this).show(); });
+        if (on) { $('.virtualpage').show(); } else { $('.section-btn.active, .section-btn').first().trigger('click'); }
+        $('.tbl-filter').trigger('input');
+    });
+    /* Change history with one-click revert */
+    function loadHistory() {
+        $.getJSON('/api/config/history', function(r) {
+            var h = r.history || [];
+            if (!h.length) { $('#historyBody').html('<span class="text-muted">No saved changes recorded yet.</span>'); return; }
+            var html = '';
+            h.forEach(function(e) {
+                html += '<div style="margin-bottom:10px"><div style="font-size:12px; color:var(--text-secondary)"><strong>' + esc(e.when) + '</strong> by ' + esc(e.user || '?') + '</div>';
+                html += '<table class="table table-condensed diff-table no-enhance" style="margin:4px 0 0"><tbody>';
+                e.changes.forEach(function(c) {
+                    html += '<tr><td style="width:200px"><strong>' + esc(c.key) + '</strong></td><td class="diff-old">' + esc(c.old) + '</td><td class="diff-new">' + esc(c.new) + '</td>' +
+                        '<td style="width:90px; text-align:right"><button type="button" class="btn btn-default btn-xs js-revert" data-key="' + esc(c.key) + '" data-val="' + esc(c.old) + '">Revert</button></td></tr>';
+                });
+                html += '</tbody></table></div>';
+            });
+            $('#historyBody').html(html);
+        });
+    }
+    $('#showHistory').on('click', function(e) { e.preventDefault(); var p = $('#historyPanel'); p.toggle(); if (p.is(':visible')) loadHistory(); });
+    $('#historyBody').on('click', '.js-revert', function() {
+        var key = $(this).data('key'), val = String($(this).data('val'));
+        if (!confirm('Set ' + key + ' back to "' + val + '" and save?')) return;
+        var data = {}; data['cfg_' + key] = val;
+        $.ajax({url: '/config/save', method: 'POST', data: data, headers: {'X-Requested-With': 'XMLHttpRequest'}}).done(function(r) {
+            if (r.success) { showToast(key + ' reverted. Restart csf+lfd to apply.', 'success'); $('input[name="cfg_' + key + '"]').val(val); loadHistory(); }
+            else showToast(r.error || 'Revert failed', 'danger');
+        });
+    });
     /* Deep link from the command palette: /config?q=SETTING */
     (function() {
         var m = /[?&]q=([^&]+)/.exec(location.search);
@@ -761,6 +823,22 @@ $(function() {
             }
             return;
         }
+        /* Show what will change before writing csf.conf */
+        var form = this;
+        if (!form._diffConfirmed) {
+            $.post('/api/config/diff', $(form).serialize(), function(r) {
+                var ch = r.changes || [];
+                if (!ch.length) { showToast('No changes to save', 'info'); return; }
+                var rows = ch.map(function(c) {
+                    return '<tr><td><strong>' + esc(c.key) + '</strong></td><td class="diff-old">' + esc(c.old) + '</td><td class="diff-new">' + esc(c.new) + '</td></tr>';
+                }).join('');
+                $('#diffBody').html('<table class="table table-condensed diff-table no-enhance"><thead><tr><th>Setting</th><th>Current</th><th>New</th></tr></thead><tbody>' + rows + '</tbody></table>');
+                $('#diffCount').text(ch.length + ' change' + (ch.length > 1 ? 's' : ''));
+                $('#diffModal').modal('show');
+            }).fail(function() { showToast('Could not compute the diff', 'danger'); });
+            return;
+        }
+        form._diffConfirmed = false;
         var btn = $(this).find('button[type=submit]');
         btn.prop('disabled', true).html('<span class="ti ti-refresh spinning"></span> Saving...');
         $.ajax({

@@ -117,6 +117,86 @@
         </form>
         {% endif %}
 
+        {% if is_admin %}
+        <hr>
+        <h4 id="users">Users</h4>
+        <p class="text-muted" style="font-size:13px">Admins can change anything. Viewers can open every page but every change is refused, and the audit log records who did what.</p>
+        <table class="table table-condensed no-toolbar" style="max-width:640px">
+            <thead><tr><th>User</th><th>Role</th><th>2FA</th><th style="width:220px"></th></tr></thead>
+            <tbody>
+            {% for u in users %}
+            <tr>
+                <td><strong>{{ u.username }}</strong>{% if u.username == session.get('username') %} <span class="text-muted">(you)</span>{% endif %}</td>
+                <td>
+                    <form method="POST" action="/settings" class="form-inline" style="display:inline">
+                        <input type="hidden" name="action" value="set_role"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="username" value="{{ u.username }}">
+                        <select name="role" class="form-control input-sm" onchange="this.form.submit()">
+                            {% for r, desc in roles.items() %}<option value="{{ r }}" {{ 'selected' if u.role == r }}>{{ r }}</option>{% endfor %}
+                        </select>
+                    </form>
+                </td>
+                <td>{{ 'on' if u.totp else 'off' }}</td>
+                <td>
+                    {% if u.username != session.get('username') %}
+                    <form method="POST" action="/settings" style="display:inline" onsubmit="return confirm('Delete user {{ u.username }}?')">
+                        <input type="hidden" name="action" value="delete_user"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="username" value="{{ u.username }}">
+                        <button class="btn btn-danger btn-xs"><i class="ti ti-trash"></i> Delete</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <form method="POST" action="/settings" class="form-inline">
+            <input type="hidden" name="action" value="add_user"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="text" class="form-control input-sm" name="username" placeholder="Username" required minlength="3" pattern="[A-Za-z0-9_\-]+" autocomplete="off">
+            <input type="password" class="form-control input-sm" name="password" placeholder="Password (8+)" required minlength="8" autocomplete="new-password">
+            <select name="role" class="form-control input-sm">{% for r, desc in roles.items() %}<option value="{{ r }}" {{ 'selected' if r == 'viewer' }}>{{ r }} — {{ desc }}</option>{% endfor %}</select>
+            <button class="btn btn-default btn-sm"><i class="ti ti-user-plus"></i> Add user</button>
+        </form>
+
+        <hr>
+        <h4 id="tokens">API tokens</h4>
+        <p class="text-muted" style="font-size:13px">Let scripts or CI allow, block or unblock IPs without a browser session. Send the token as <code>Authorization: Bearer …</code> to <code>{{ host_url }}/api/v1/…</code>.</p>
+        {% if new_api_token %}
+        <div class="alert alert-warning" style="max-width:640px">
+            <strong>Copy this token now — it will not be shown again.</strong>
+            <pre style="margin:8px 0 0; font-size:12px; background:transparent; border:none; padding:0; user-select:all">{{ new_api_token }}</pre>
+        </div>
+        {% endif %}
+        {% if tokens %}
+        <table class="table table-condensed no-toolbar" style="max-width:720px">
+            <thead><tr><th>Name</th><th>Prefix</th><th>Scopes</th><th>Created</th><th>Last used</th><th></th></tr></thead>
+            <tbody>
+            {% for t in tokens %}
+            <tr>
+                <td><strong>{{ t.name }}</strong></td>
+                <td><code>{{ t.prefix }}…</code></td>
+                <td>{{ t.scopes|join(', ') }}</td>
+                <td class="text-muted">{{ t.created|int|string if false else '' }}<span data-ts="{{ t.created }}" class="js-ts"></span></td>
+                <td class="text-muted"><span data-ts="{{ t.last_used or '' }}" class="js-ts">never</span></td>
+                <td><form method="POST" action="/settings" style="display:inline" onsubmit="return confirm('Revoke token {{ t.name }}?')"><input type="hidden" name="action" value="token_revoke"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="token_id" value="{{ t.id }}"><button class="btn btn-danger btn-xs">Revoke</button></form></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        <form method="POST" action="/settings" class="form-inline" style="margin-bottom:10px">
+            <input type="hidden" name="action" value="token_create"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="text" class="form-control input-sm" name="name" placeholder="Token name (e.g. fail2ban-sync)" required maxlength="60">
+            {% for s, desc in token_scopes.items() %}
+            <label class="checkbox-inline" style="font-weight:400; font-size:13px" title="{{ desc }}"><input type="checkbox" name="scopes" value="{{ s }}" {{ 'checked' if s == 'read' }}> {{ s }}</label>
+            {% endfor %}
+            <button class="btn btn-default btn-sm"><i class="ti ti-key"></i> Create token</button>
+        </form>
+        <details><summary class="text-muted" style="font-size:12px; cursor:pointer">Example</summary>
+<pre style="font-size:11px; margin-top:6px">curl -s -H "Authorization: Bearer csf_…" {{ host_url }}/api/v1/status
+curl -s -H "Authorization: Bearer csf_…" -H "Content-Type: application/json" \
+     -d '{"ip":"203.0.113.9","comment":"from CI"}' {{ host_url }}/api/v1/deny
+# also: /api/v1/allow, /api/v1/unblock, /api/v1/temp-deny {"ip","seconds","ports"}, GET /api/v1/ip/&lt;ip&gt;</pre></details>
+        {% endif %}
+
         <hr>
         <h4>About CSFv2</h4>
         <table class="table table-bordered" style="max-width:500px">
@@ -130,6 +210,9 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+$('.js-ts').each(function() { var ts = parseInt($(this).data('ts'), 10); if (ts) $(this).text(new Date(ts * 1000).toLocaleString()); });
+</script>
 {% if totp_setup_uri %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>

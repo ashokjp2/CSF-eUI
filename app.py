@@ -58,6 +58,8 @@ from csf_backend import safe_apply
 from csf_backend import ip_report
 from csf_backend import api_tokens
 from csf_backend import config_history
+from csf_backend import servers as fleet
+import socket
 import time
 from flask import g
 
@@ -2875,10 +2877,90 @@ def api_v1_status():
     err = _require_scope("read")
     if err:
         return err
+    return jsonify(_status_summary())
+
+
+def _status_summary():
     st = get_firewall_status()
     st["temp_blocks"] = len(csf.get_temp_list())
     st["app_version"] = app_updater.get_current_version()
-    return jsonify(st)
+    st["hostname"] = socket.gethostname()
+    try:
+        st["update_available"] = bool(app_updater.get_version_info().get("update_available"))
+    except Exception:
+        st["update_available"] = False
+    return st
+
+
+# --- Multi-server view ---
+
+@app.route("/servers")
+@login_required
+def servers_page():
+    return render_template("servers.html", status=get_firewall_status())
+
+
+@app.route("/api/servers", methods=["GET"])
+@login_required
+def api_servers_list():
+    local = _status_summary()
+    local.update({"id": "local", "name": socket.gethostname(), "url": request.host_url.rstrip("/"), "ok": True, "local": True, "ms": None})
+    return jsonify({"servers": fleet.list_servers(), "status": [local] + fleet.all_status()})
+
+
+@app.route("/api/servers", methods=["POST"])
+@login_required
+def api_servers_add():
+    if not _is_admin():
+        return jsonify({"success": False, "error": "Admins only"}), 403
+    d = request.get_json(silent=True) or {}
+    ok, res = fleet.add_server(d.get("name"), d.get("url"), d.get("token"), d.get("verify_tls", True))
+    if ok:
+        audit_log.log_event("config_change", _actor(), request.remote_addr, f"Added remote server {d.get('name')} ({d.get('url')})")
+    return jsonify({"success": ok, "id" if ok else "error": res})
+
+
+@app.route("/api/servers/<sid>", methods=["DELETE"])
+@login_required
+def api_servers_delete(sid):
+    if not _is_admin():
+        return jsonify({"success": False, "error": "Admins only"}), 403
+    ok = fleet.remove_server(sid)
+    if ok:
+        audit_log.log_event("config_change", _actor(), request.remote_addr, f"Removed remote server {sid}")
+    return jsonify({"success": ok})
+
+
+@app.route("/api/servers/<sid>/test", methods=["POST"])
+@login_required
+def api_servers_test(sid):
+    return jsonify(fleet.test_server(sid))
+
+
+@app.route("/api/servers/action", methods=["POST"])
+@login_required
+def api_servers_action():
+    d = request.get_json(silent=True) or {}
+    action, ip = d.get("action", ""), (d.get("ip") or "").strip()
+    if action not in fleet.ACTIONS or not ip_report.valid_ip(ip):
+        return jsonify({"success": False, "error": "Invalid action or IP"}), 400
+    results = []
+    if d.get("local"):
+        comment = d.get("comment") or "multi-server push"
+        if action == "allow":
+            r = csf.allow_ip(ip, comment)
+        elif action == "deny":
+            r = csf.deny_ip(ip, comment)
+        elif action == "temp-deny":
+            r = csf.temp_deny(ip, int(d.get("seconds") or 3600), "*", comment)
+        else:
+            r = csf.unblock_ip(ip)
+        results.append({"id": "local", "name": socket.gethostname() + " (this server)", "ok": bool(r.get("success")),
+                        "error": "" if r.get("success") else (r.get("stderr") or r.get("stdout") or "failed")[:160]})
+    results += fleet.fan_out(action, ip, d.get("servers") or [], d.get("comment", ""), d.get("seconds") or 3600)
+    audit_log.log_event("action", _actor(), request.remote_addr,
+                        f"Multi-server {action} {ip}: " + ", ".join(f"{x['name']}={'ok' if x['ok'] else 'fail'}" for x in results))
+    return jsonify({"success": True, "results": results})
 
 
 @app.route("/api/v1/ip/<path:ip>")

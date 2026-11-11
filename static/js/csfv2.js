@@ -564,6 +564,7 @@ var CSFv2 = {
             if (v && IPRE.test(v)) {
                 var e = encodeURIComponent(v);
                 html += '<div class="palette-group">IP ' + esc(v) + '</div>' +
+                    item('ti ti-report-search', 'Why is ' + esc(v) + ' blocked?', 'status, history, logs, actions', '', 'href="/ip/' + e + '"') +
                     item('ti ti-search', 'Look up ' + esc(v), 'GeoIP, WHOIS, reputation', '', 'href="/ip-lookup?ip=' + e + '"') +
                     item('ti ti-file-search', 'Search firewall and logs for ' + esc(v), '', '', 'href="#" data-search="' + esc(v) + '"') +
                     item('ti ti-ban', 'Block ' + esc(v), '', '', 'href="/#ip=' + e + '&act=deny"') +

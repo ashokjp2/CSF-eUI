@@ -54,7 +54,7 @@
                             <input type="text" class="form-control input-sm" id="filter-allow" placeholder="Filter allowed IPs...">
                         </div>
                         <div style="max-height:450px; overflow-y:auto">
-                            <table class="table table-condensed table-hover" style="margin:0">
+                            <table class="table table-condensed table-hover" style="margin:0" data-bulk="0">
                                 <tbody id="allow-tbody"></tbody>
                             </table>
                         </div>
@@ -76,7 +76,7 @@
                             <input type="text" class="form-control input-sm" id="filter-deny" placeholder="Filter denied IPs...">
                         </div>
                         <div style="max-height:450px; overflow-y:auto">
-                            <table class="table table-condensed table-hover" style="margin:0">
+                            <table class="table table-condensed table-hover" style="margin:0" data-bulk="0">
                                 <tbody id="deny-tbody"></tbody>
                             </table>
                         </div>
@@ -104,7 +104,7 @@ $(function() {
                 '<td style="font-size:11px; color:#777">' + (e.comment || '') + '</td>' +
                 '<td style="width:80px; text-align:right">' +
                 '<button class="btn btn-xs btn-default ip-remove" data-type="' + type + '" data-ip="' + e.ip + '" title="Remove"><span class="ti ti-x text-danger"></span></button> ' +
-                '<a href="/ip-lookup?ip=' + e.ip.split('/')[0] + '" class="btn btn-xs btn-default" title="Lookup"><span class="ti ti-search"></span></a>' +
+                '<a href="/ip/' + e.ip.split('/')[0] + '" class="btn btn-xs btn-default" title="Why is this IP listed?"><span class="ti ti-search"></span></a>' +
                 '</td></tr>';
         });
         $('#' + type + '-tbody').html(html || '<tr><td colspan="3" class="text-center text-muted" style="padding:20px">Empty</td></tr>');
