@@ -62,6 +62,56 @@ def get_lfd_blocks(limit=200):
     return entries
 
 
+def get_block_timeline(hours=24):
+    """Real LFD blocks ('*Blocked in csf*' lines) bucketed per hour for the last `hours`,
+    plus the total for the preceding window. Only lfd.log counts — not SSH failures."""
+    from datetime import datetime, timedelta
+    now = datetime.now()
+    cutoff = now - timedelta(hours=hours)
+    prev_cutoff = now - timedelta(hours=hours * 2)
+    buckets = [0] * hours
+    total = prev_total = 0
+    last_ip = None
+    ts_re = re.compile(r'^(\w{3}) +(\d+) (\d{2}):(\d{2}):(\d{2})')
+    ip_re = re.compile(r'(\d+\.\d+\.\d+\.\d+)')
+    months = {m: i for i, m in enumerate(("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"), 1)}
+    if os.path.isfile(LFD_LOG):
+        try:
+            with open(LFD_LOG, "rb") as f:
+                f.seek(0, 2)
+                size = f.tell()
+                f.seek(max(0, size - 4_000_000))
+                lines = f.read().decode("utf-8", "replace").splitlines()
+        except OSError:
+            lines = []
+        for line in lines:
+            if "Blocked in csf" not in line and "Blocked temporarily" not in line:
+                continue
+            m = ts_re.match(line)
+            if not m or m.group(1) not in months:
+                continue
+            try:
+                ts = datetime(now.year, months[m.group(1)], int(m.group(2)), int(m.group(3)), int(m.group(4)), int(m.group(5)))
+            except ValueError:
+                continue
+            if ts > now + timedelta(hours=1):
+                ts = ts.replace(year=now.year - 1)
+            if ts >= cutoff:
+                idx = hours - 1 - int((now - ts).total_seconds() // 3600)
+                if 0 <= idx < hours:
+                    buckets[idx] += 1
+                    total += 1
+                    ipm = ip_re.search(line)
+                    last_ip = ipm.group(1) if ipm else last_ip
+            elif ts >= prev_cutoff:
+                prev_total += 1
+    hourly = []
+    for i in range(hours):
+        slot = now - timedelta(hours=hours - 1 - i)
+        hourly.append({"hour": slot.strftime("%H:00"), "count": buckets[i]})
+    return {"hourly": hourly, "total": total, "prev_total": prev_total, "hours": hours, "last_ip": last_ip}
+
+
 def get_lfd_stats():
     """Summary stats from LFD log."""
     blocks = get_lfd_blocks(500)

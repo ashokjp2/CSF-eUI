@@ -2644,6 +2644,13 @@ def page_lfd_blocks():
 def api_lfd_blocks():
     return jsonify(lfd_blocks.get_lfd_blocks())
 
+@app.route("/api/lfd-blocks/timeline")
+@login_required
+def api_lfd_blocks_timeline():
+    hours = min(max(int(request.args.get("hours", 24)), 1), 168)
+    return jsonify(lfd_blocks.get_block_timeline(hours))
+
+
 @app.route("/api/lfd-blocks/stats")
 @login_required
 def api_lfd_blocks_stats():

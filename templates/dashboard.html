@@ -590,23 +590,22 @@ $(function() {
 
     /* ---------- Recent blocks with inline actions ---------- */
     function loadRecentBlocks() {
-        $.getJSON('/api/lfd/events?lines=80', function(events) {
-            var blocks = (events || []).filter(function(e) { return e.type === 'block' && e.ip; }).slice(0, 6);
+        $.getJSON('/api/lfd-blocks', function(entries) {
+            var blocks = (entries || []).filter(function(e) { return e.type === 'block' && e.ip; }).slice(0, 6);
             if (!blocks.length) {
-                $('#recentBlocks').html('<tr><td class="text-muted">No recent blocks</td></tr>');
+                $('#recentBlocks').html('<tr><td class="text-muted">No LFD blocks in the current log</td></tr>');
                 return;
             }
             var html = '';
             blocks.forEach(function(e) {
-                var raw = e.raw || '';
-                var temp = /temp/i.test(raw);
+                var raw = e.detail || '';
+                var temp = /temporar|for \d+ secs/i.test(raw);
                 var cc = (raw.match(/\(([A-Z]{2})\//) || [])[1];
-                var reason = raw.replace(/^.*?lfd\[\d+\]:\s*/, '').replace(/\*Blocked[^*]*\*/i, '').replace(/\([A-Z]{2}\/[^)]*\)/, '')
-                    .replace(/\[[^\]]*\]/g, '').replace(/\s+-\s*$/, '').replace(/\s+/g, ' ').trim().substring(0, 80);
+                var reason = (e.reason ? e.reason + ' · ' : '') + raw.replace(/\([A-Z]{2}\/[^)]*\)/, '').replace(/\s+-\s*$/, '').replace(/\s+/g, ' ').trim();
                 html += '<tr>' +
                     '<td class="mono"><a href="/ip/' + encodeURIComponent(e.ip) + '" title="Why is this IP blocked?">' + esc(e.ip) + '</a></td>' +
-                    '<td class="text-muted rb-reason" title="' + esc(raw) + '">' + (cc ? esc(cc) + ' &middot; ' : '') + esc(reason) + '</td>' +
-                    '<td class="text-right"><span class="pill ' + (temp ? 'pill-warning' : 'pill-danger') + '">' + (temp ? 'Temp' : 'Blocked') + '</span></td>' +
+                    '<td class="text-muted rb-reason" title="' + esc(e.time + ' ' + raw) + '">' + (cc ? esc(cc) + ' &middot; ' : '') + esc(reason.substring(0, 90)) + '</td>' +
+                    '<td class="text-right"><span class="pill ' + (temp ? 'pill-warning' : 'pill-danger') + '" title="' + esc(e.time) + '">' + (temp ? 'Temp' : 'Blocked') + '</span></td>' +
                     '<td class="text-right rb-actions">' +
                         '<a href="/ip-lookup?ip=' + encodeURIComponent(e.ip) + '" class="rb-btn" title="Look up"><i class="ti ti-search"></i></a>' +
                         '<button type="button" class="rb-btn rb-unblock" data-ip="' + esc(e.ip) + '" title="Unblock"><i class="ti ti-lock-open"></i></button>' +
@@ -630,29 +629,24 @@ $(function() {
     setInterval(loadRecentBlocks, 15000);
 
     /* ---------- 24h block chart + "blocked" delta ---------- */
+    /* Real LFD blocks only (lfd.log "*Blocked in csf*"), oldest hour on the left, current hour on the right */
     function loadHourly() {
-        $.getJSON('/api/analytics?hours=24', function(d) {
+        $.getJSON('/api/lfd-blocks/timeline?hours=24', function(d) {
             var hours = d.hourly || [];
-            var now = new Date().getHours();
-            /* rotate so the bar on the right is the current hour */
-            var ordered = [];
-            for (var i = 23; i >= 0; i--) ordered.push(hours[((now - i) % 24 + 24) % 24]);
-            var max = Math.max.apply(null, ordered.map(function(h) { return h.count; }).concat([1]));
-            var peak = ordered.reduce(function(a, b) { return b.count > a.count ? b : a; }, ordered[0]);
+            var max = Math.max.apply(null, hours.map(function(h) { return h.count; }).concat([1]));
+            var peak = hours.reduce(function(a, b) { return b.count > a.count ? b : a; }, hours[0] || {count: 0});
             var html = '';
-            ordered.forEach(function(h) {
+            hours.forEach(function(h) {
                 html += '<b style="height:' + Math.max(2, Math.round(h.count / max * 100)) + '%" title="' + h.hour + ': ' + h.count + '"></b>';
             });
             $('#hourChart').html(html);
-            $('#chart-peak').text(d.total_attacks ? d.total_attacks + ' blocks · peak ' + peak.hour : 'No blocks logged');
-            $('#stat-blocked-sub').text((d.total_attacks || 0) + ' blocks in 24h');
-            $.getJSON('/api/analytics?hours=48', function(d2) {
-                var prev = (d2.total_attacks || 0) - (d.total_attacks || 0);
-                var el = $('#stat-blocked-delta');
-                if (prev <= 0 && !d.total_attacks) { el.text(''); return; }
-                var pct = prev > 0 ? Math.round(((d.total_attacks || 0) - prev) / prev * 100) : 100;
-                el.text((pct >= 0 ? '+' : '') + pct + '%').attr('class', 'stat-delta ' + (pct > 0 ? 'text-danger' : 'text-success')).attr('title', 'vs previous 24h');
-            });
+            $('#chart-peak').text(d.total ? d.total + ' LFD block' + (d.total === 1 ? '' : 's') + ' · peak ' + peak.hour : 'No LFD blocks in the last 24h');
+            $('#stat-blocked-sub').text((d.total || 0) + ' LFD block' + (d.total === 1 ? '' : 's') + ' in 24h');
+            var el = $('#stat-blocked-delta'), prev = d.prev_total || 0;
+            if (!d.total && !prev) { el.text(''); return; }
+            if (!prev) { el.text('new').attr('class', 'stat-delta text-danger').attr('title', 'No blocks in the previous 24h'); return; }
+            var pct = Math.round((d.total - prev) / prev * 100);
+            el.text((pct >= 0 ? '+' : '') + pct + '%').attr('class', 'stat-delta ' + (pct > 0 ? 'text-danger' : 'text-success')).attr('title', 'vs previous 24h (' + prev + ')');
         }).fail(function() { $('#hourChart').html('<span class="text-muted" style="font-size:12px">Could not load</span>'); });
     }
     loadHourly();
