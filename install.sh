@@ -343,6 +343,7 @@ cat > /etc/systemd/system/${SERVICE_NAME}-update-check.timer <<EOF
 Description=CSF-eUI update check every 12 hours
 
 [Timer]
+Unit=${SERVICE_NAME}-update-check.service
 OnBootSec=5min
 OnUnitActiveSec=12h
 Persistent=true

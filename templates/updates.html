@@ -295,9 +295,16 @@ $(function() {
 
     // Timer status (shown inline in auto-update panel)
     $.getJSON('/api/version/timer-status', function(r) {
-        var txt = r.active
-            ? '<span class="text-success"><span class="glyphicon glyphicon-ok"></span> Timer active</span>'
-            : '<span class="text-warning"><span class="glyphicon glyphicon-warning-sign"></span> Timer not running — run install.sh once on this server to enable it</span>';
+        var txt;
+        if (r.active) {
+            txt = '<span class="text-success"><span class="glyphicon glyphicon-ok"></span> Timer active</span>';
+        } else if (r.installed) {
+            txt = '<span class="text-warning"><span class="glyphicon glyphicon-warning-sign"></span> Timer installed but inactive'
+                + (r.state ? ' (' + $('<div>').text(r.state).html() + ')' : '')
+                + ' — run install.sh to repair it</span>';
+        } else {
+            txt = '<span class="text-warning"><span class="glyphicon glyphicon-warning-sign"></span> Timer not installed — run install.sh once on this server to enable it</span>';
+        }
         $('#timer-status-inline').html(txt);
     }).fail(function() {
         $('#timer-status-inline').text('Could not check timer');

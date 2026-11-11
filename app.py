@@ -1880,15 +1880,42 @@ def api_auto_update_config():
 @app.route("/api/version/timer-status")
 @login_required
 def api_version_timer_status():
+    import shutil
     import subprocess
+
+    timer_unit = "csfv2-update-check.timer"
+    systemctl = shutil.which("systemctl") or "/usr/bin/systemctl"
+
     try:
-        r = subprocess.run(
-            ["systemctl", "is-active", "csfv2-update-check.timer"],
-            capture_output=True, text=True, timeout=5
+        state = subprocess.run(
+            [systemctl, "show", timer_unit,
+             "--property=LoadState,ActiveState,SubState,UnitFileState",
+             "--no-pager"],
+            capture_output=True, text=True, timeout=5, check=False,
         )
-        return jsonify({"active": r.stdout.strip() == "active"})
-    except Exception:
-        return jsonify({"active": False})
+        properties = {}
+        for line in state.stdout.splitlines():
+            key, separator, value = line.partition("=")
+            if separator:
+                properties[key] = value
+
+        installed = properties.get("LoadState") == "loaded"
+        active = installed and properties.get("ActiveState") == "active"
+        return jsonify({
+            "active": active,
+            "installed": installed,
+            "enabled": properties.get("UnitFileState") in {"enabled", "static"},
+            "state": properties.get("SubState") or properties.get("ActiveState", "unknown"),
+            "error": state.stderr.strip() if state.returncode != 0 else "",
+        })
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return jsonify({
+            "active": False,
+            "installed": False,
+            "enabled": False,
+            "state": "unknown",
+            "error": str(exc),
+        })
 
 
 @app.route("/api/ssl/http-redirect", methods=["GET", "POST"])
