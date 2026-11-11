@@ -62,6 +62,14 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 app.logger.setLevel(logging.ERROR)
+
+# A normal application update pulls files under /opt/csfv2 but does not
+# rewrite systemd units under /etc. Repair legacy timer units when the newly
+# pulled application starts, so existing servers need no manual migration.
+if os.path.isdir("/run/systemd/system") and getattr(os, "geteuid", lambda: 1)() == 0:
+    for _timer_message in app_updater._repair_update_timer():
+        if _timer_message.startswith("WARNING"):
+            app.logger.error(_timer_message)
 app.secret_key = (os.environ.get("CSFV2_SECRET_KEY")
                   or os.environ.get("SECRET_KEY")
                   or secrets.token_hex(32))

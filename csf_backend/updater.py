@@ -12,6 +12,32 @@ VERSION_FILE = os.path.join(INSTALL_DIR, "VERSION")
 CACHE_FILE = "/tmp/csfv2_version_cache.json"
 _DEFAULT_CACHE_TTL = 12 * 3600
 
+UPDATE_SERVICE_UNIT = "/etc/systemd/system/csfv2-update-check.service"
+UPDATE_TIMER_UNIT = "/etc/systemd/system/csfv2-update-check.timer"
+
+_UPDATE_SERVICE_CONTENT = """[Unit]
+Description=CSF-eUI version check
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/csfv2/venv/bin/python3 /opt/csfv2/csf_backend/_version_check_runner.py
+"""
+
+_UPDATE_TIMER_CONTENT = """[Unit]
+Description=CSF-eUI update check every 12 hours
+
+[Timer]
+Unit=csfv2-update-check.service
+OnBootSec=5min
+OnUnitActiveSec=12h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+"""
+
 
 def _get_cache_ttl():
     try:
@@ -70,6 +96,94 @@ def _invalidate_cache():
         os.unlink(CACHE_FILE)
     except Exception:
         pass
+
+
+def _repair_update_timer():
+    """Repair legacy timer units after an application update."""
+    systemctl = shutil.which("systemctl")
+    if not systemctl:
+        return ["WARNING: systemctl is unavailable; skipped update timer repair."]
+
+    desired = {
+        UPDATE_SERVICE_UNIT: _UPDATE_SERVICE_CONTENT,
+        UPDATE_TIMER_UNIT: _UPDATE_TIMER_CONTENT,
+    }
+    changed = []
+    backup_stamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+
+    try:
+        for path, content in desired.items():
+            try:
+                with open(path) as f:
+                    current = f.read()
+            except FileNotFoundError:
+                current = None
+
+            if current == content:
+                continue
+
+            if os.path.exists(path):
+                shutil.copy2(path, f"{path}.bak-{backup_stamp}")
+
+            fd, temp_path = tempfile.mkstemp(
+                prefix=".csfv2-update-unit-",
+                dir=os.path.dirname(path),
+                text=True,
+            )
+            try:
+                with os.fdopen(fd, "w") as f:
+                    f.write(content)
+                os.chmod(temp_path, 0o644)
+                os.replace(temp_path, path)
+            finally:
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
+            changed.append(path)
+
+        if changed:
+            reload_result = subprocess.run(
+                [systemctl, "daemon-reload"],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            if reload_result.returncode != 0:
+                detail = (reload_result.stderr or reload_result.stdout).strip()
+                return [f"WARNING: update timer reload failed: {detail}"]
+
+        active_result = subprocess.run(
+            [systemctl, "is-active", "--quiet", "csfv2-update-check.timer"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if active_result.returncode == 0 and not changed:
+            return ["Update-check timer verified active."]
+
+        start_result = subprocess.run(
+            [systemctl, "enable", "--now", "csfv2-update-check.timer"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        active_result = subprocess.run(
+            [systemctl, "is-active", "--quiet", "csfv2-update-check.timer"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if active_result.returncode != 0:
+            detail = (start_result.stderr or start_result.stdout).strip()
+            return [
+                "WARNING: update timer is still inactive."
+                + (f" {detail}" if detail else "")
+            ]
+
+        if changed:
+            return ["Update-check systemd units repaired and timer is active."]
+        return ["Update-check timer verified active."]
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return [f"WARNING: update timer repair failed: {exc}"]
 
 
 def _quarantine_conflicting_untracked_files():
@@ -256,6 +370,11 @@ def run_update_stream(force=False):
         yield from _sse(f"ERROR: git pull failed (exit {rc}). Update aborted.")
         yield "data: __DONE_ERROR__\n\n"
         return
+
+    yield from _sse("")
+    yield from _sse("Checking the update-check systemd timer...")
+    for timer_message in _repair_update_timer():
+        yield from _sse(timer_message)
 
     # pip install
     pip_bin = os.path.join(INSTALL_DIR, "venv/bin/pip")
