@@ -19,6 +19,13 @@ def _docker_forwarding_block():
 # Preserve Docker bridge and Swarm overlay traffic when CSF reloads.
 # Coolify and Compose use dynamically named br-* interfaces, so do not assume
 # that the default docker0 bridge is the only Docker network on the host.
+DOCKER_VERSION="$(docker version --format '{{.Server.Version}}' 2>/dev/null || true)"
+DOCKER_MAJOR="${DOCKER_VERSION%%.*}"
+if [ "${DOCKER_MAJOR:-0}" -ge 28 ] && ! iptables -t filter -S DOCKER-FORWARD >/dev/null 2>&1; then
+    # Docker owns DOCKER-FORWARD and its related chains. Let Docker recreate
+    # its complete, version-specific graph instead of building partial rules.
+    systemctl restart docker >/dev/null 2>&1 || true
+fi
 DOCKER_IFACES="docker0 docker_gwbridge ingress"
 for IFACE in $(ip -o link show 2>/dev/null | awk -F': ' '$2 ~ /^br-[[:xdigit:]]+$/ {print $2}'); do
     DOCKER_IFACES="$DOCKER_IFACES $IFACE"
@@ -56,7 +63,17 @@ done
         return existing.replace(legacy_block, block, 1), True
     if DOCKER_RULE_MARKER not in existing:
         return existing.rstrip() + block, True
-    return existing, False
+
+    # Older installers wrote the same managed block without indentation, so
+    # exact-string replacement above misses it. Replace through the block's
+    # terminating `done` while preserving any user rules after it.
+    start = existing.find(DOCKER_RULE_MARKER)
+    tail = existing[start:]
+    end_match = re.search(r"(?m)^done\s*$", tail)
+    if end_match:
+        end = start + end_match.end()
+        return existing[:start] + block.lstrip("\n") + existing[end:], True
+    return existing.rstrip() + block, True
 
 
 def _run(cmd, timeout=10):
@@ -83,13 +100,20 @@ def restore_docker_firewall_chains(previous_state):
 
     Docker owns these chains and must recreate them itself; manually building
     them in csfpost.sh would be incomplete and can diverge between Docker
-    releases. Restart Docker only when the chain existed before CSF ran and is
-    now missing, so ordinary CSF restarts do not bounce Docker unnecessarily.
+    releases. Restart Docker only when Docker is running and the chain is
+    missing, so ordinary CSF restarts do not bounce Docker unnecessarily.
     """
-    if not previous_state.get("running") or not previous_state.get("forward_chain"):
-        return {"success": True, "changed": False, "message": "Docker chains did not need recovery."}
+    if not _run(["docker", "info", "--format", "{{.ID}}"], timeout=15):
+        return {"success": True, "changed": False, "message": "Docker is not running."}
     if _run(["iptables", "-t", "filter", "-S", "DOCKER-FORWARD"]):
         return {"success": True, "changed": False, "message": "Docker firewall chains are intact."}
+
+    version = _run(["docker", "version", "--format", "{{.Server.Version}}"], timeout=15)
+    try:
+        if int(version.split(".", 1)[0]) < 28:
+            return {"success": True, "changed": False, "message": "Docker does not use modern forwarding chains."}
+    except (ValueError, IndexError):
+        return {"success": True, "changed": False, "message": "Docker version could not be checked."}
 
     try:
         result = subprocess.run(
@@ -129,16 +153,17 @@ def detect_docker_networks():
 
 def ensure_docker_forwarding_rules():
     """Keep CSF from blocking Docker bridge forwarding and container egress."""
-    if not _run(["docker", "info", "--format", "{{.ID}}"]):
-        return {"success": True, "changed": False, "message": "Docker is not running."}
-    # Docker can restore Traefik's port bindings without restoring its network
-    # attachment after a daemon restart. Reconnect the existing proxy only
-    # when it has no network, preserving its configuration and volumes.
-    if _run(["docker", "ps", "-q", "-f", "name=^dokploy-traefik$"]):
-        networks = _run(["docker", "inspect", "dokploy-traefik",
-                         "--format", "{{json .NetworkSettings.Networks}}"])
-        if networks in ("{}", "null", ""):
-            _run(["docker", "network", "connect", "dokploy-network", "dokploy-traefik"])
+    docker_running = bool(_run(["docker", "info", "--format", "{{.ID}}"]))
+    if docker_running:
+        # Docker can restore Traefik's port bindings without restoring its
+        # network attachment after a daemon restart. Reconnect the existing
+        # proxy only when it has no network, preserving its configuration and
+        # volumes.
+        if _run(["docker", "ps", "-q", "-f", "name=^dokploy-traefik$"]):
+            networks = _run(["docker", "inspect", "dokploy-traefik",
+                             "--format", "{{json .NetworkSettings.Networks}}"])
+            if networks in ("{}", "null", ""):
+                _run(["docker", "network", "connect", "dokploy-network", "dokploy-traefik"])
     path = Path(CSFPOST)
     try:
         existing = path.read_text() if path.exists() else ""

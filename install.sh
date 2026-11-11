@@ -379,6 +379,18 @@ fi
 
 # ── CSF firewall: open port 8750 ──────────────────────────────────────────────
 
+section "Configuring Docker firewall compatibility"
+
+"$INSTALL_DIR/venv/bin/python3" -c "
+import sys
+sys.path.insert(0, '$INSTALL_DIR')
+from csf_backend.service_integration import ensure_docker_forwarding_rules
+result = ensure_docker_forwarding_rules()
+print(result.get('message', 'Docker firewall compatibility hook configured.'))
+if not result.get('success', False):
+    raise SystemExit(1)
+" || warn "Could not configure the Docker firewall compatibility hook; use Quick Config > Services to retry."
+
 section "Opening firewall port"
 
 if grep -q "^TCP_IN" /etc/csf/csf.conf 2>/dev/null; then
