@@ -1498,3 +1498,94 @@ hr { border-color: var(--border-light); }
 /* Spinner helper used across pages */
 .ti.spin, .ti.spinning { display: inline-block; animation: ti-spin 1s linear infinite; }
 @keyframes ti-spin { to { transform: rotate(360deg); } }
+
+/* ===== Restrained palette: light neutral sidebar, one blue accent, colour only for meaning ===== */
+:root {
+    --sidebar-bg: #ffffff;
+    --sidebar-hover: #f3f4f7;
+    --sidebar-active: #eef3ff;
+    --sidebar-text: #5b6478;
+    --sidebar-text-active: #111827;
+    --sidebar-border: #e6e9f0;
+    --sidebar-muted: #9aa3b5;
+}
+[data-theme="dark"] {
+    --sidebar-bg: #11141c;
+    --sidebar-hover: #181c27;
+    --sidebar-active: #1c2233;
+    --sidebar-text: #98a2b8;
+    --sidebar-text-active: #ffffff;
+    --sidebar-border: #222736;
+    --sidebar-muted: #6b7490;
+}
+.sidebar { border-right: 1px solid var(--sidebar-border); }
+.sidebar-logo, .sidebar-status-bar { border-bottom: 1px solid var(--sidebar-border); }
+.sidebar-footer, .nav-section-pinned { border-top-color: var(--sidebar-border); border-bottom-color: var(--sidebar-border); }
+.sidebar-logo-text { color: var(--sidebar-text-active); font-weight: 600; }
+.sidebar-status-bar { color: var(--sidebar-text); }
+.sidebar-filter input { border-color: var(--sidebar-border); background: var(--sidebar-hover); color: var(--sidebar-text-active); }
+.sidebar-filter input::placeholder { color: var(--sidebar-muted); }
+.sidebar-nav::-webkit-scrollbar-thumb { background: var(--sidebar-border); }
+.nav-section-label { color: var(--sidebar-muted); opacity: 1; font-weight: 500; }
+.nav-section-label:hover { opacity: 1; }
+.nav-item { color: var(--sidebar-text); }
+.nav-item:hover, .nav-item:focus { background: var(--sidebar-hover); color: var(--sidebar-text-active); }
+.nav-item.active { background: var(--sidebar-active); color: var(--accent); box-shadow: none; }
+.nav-item.active .ti { color: var(--accent); }
+.nav-item .ti { opacity: .85; }
+.nav-pin:hover { background: var(--sidebar-border); }
+.sidebar-server-info { background: var(--sidebar-hover); }
+.sidebar-server-ip { color: var(--sidebar-text-active); }
+.topbar { background: var(--bg-primary); }
+
+/* Buttons: neutral outlined by default; blue is the single accent; red only for destructive text */
+.btn { font-weight: 500; }
+.btn-default, .btn-success, .btn-info, .btn-warning, .btn-danger, .status-btn {
+    background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-primary);
+}
+.btn-default:hover, .btn-success:hover, .btn-info:hover, .btn-warning:hover,
+.btn-default:focus, .btn-success:focus, .btn-info:focus, .btn-warning:focus,
+.btn-default:active, .btn-success:active, .btn-info:active, .btn-warning:active {
+    background: var(--bg-tertiary); border-color: var(--input-border); color: var(--text-primary);
+}
+.btn-danger { color: var(--danger); }
+.btn-danger:hover, .btn-danger:focus, .btn-danger:active { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
+.btn-success .ti { color: var(--success); }
+.btn-warning .ti { color: var(--warning); }
+.btn-info .ti { color: var(--accent); }
+.btn-primary, .btn-primary:hover, .btn-primary:focus { color: #fff; }
+.btn-primary .ti { color: #fff; }
+.status-btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.status-btn-primary:hover { background: var(--accent-hover); color: #fff; opacity: 1; }
+.btn-link { color: var(--accent); }
+
+/* Status banner: white card, colour carried by the icon and a thin edge only */
+.status-hero { background: var(--panel-bg); border: 1px solid var(--border-color); border-left: 3px solid; }
+.status-ok      { border-left-color: var(--success); }
+.status-warning { border-left-color: var(--warning); }
+.status-danger  { border-left-color: var(--danger); }
+.status-ok b, .status-warning b, .status-danger b { color: var(--text-primary); }
+
+/* Panel variants: all neutral; the variant colour only tints the heading icon */
+.panel-primary > .panel-heading, .panel-info > .panel-heading, .panel-success > .panel-heading,
+.panel-warning > .panel-heading, .panel-danger > .panel-heading {
+    --pv-bg: transparent; --pv-fg: var(--text-primary); --pv-bd: var(--border-light);
+}
+.panel-success > .panel-heading .ti { color: var(--success); }
+.panel-warning > .panel-heading .ti { color: var(--warning); }
+.panel-danger  > .panel-heading .ti { color: var(--danger); }
+.panel-primary > .panel-heading .ti, .panel-info > .panel-heading .ti { color: var(--accent); }
+
+/* Alerts: informational ones are neutral; only warning/danger keep a light tint */
+.alert-info, .alert-success { background: var(--bg-tertiary); border-color: var(--border-light); }
+.alert-info { border-left-color: var(--accent); }
+.alert-success { border-left-color: var(--success); }
+
+/* Labels: lighter touch */
+.label-success, .label-warning, .label-danger, .label-info, .label-primary { font-weight: 500; }
+.badge, .panel-primary > .panel-heading .badge, .panel-info > .panel-heading .badge, .panel-success > .panel-heading .badge,
+.panel-warning > .panel-heading .badge, .panel-danger > .panel-heading .badge { background: var(--bg-tertiary); color: var(--text-secondary); }
+.stat-card .stat-progress-bar.blue { background: var(--accent); }
+.ipact-go { color: var(--text-primary); }
+.seg-item.active { background: var(--accent-soft); }
+.chip:hover, .status-btn:hover { border-color: var(--accent); color: var(--accent); }
