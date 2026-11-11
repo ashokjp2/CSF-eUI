@@ -21,7 +21,7 @@
     </script>
     {% block head %}{% endblock %}
 </head>
-<body>
+<body data-role="{{ session.get('role', 'admin') }}">
     <!-- Sidebar -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-logo">
@@ -175,6 +175,17 @@
                     <span class="topbar-search-text">Search pages, IPs, settings</span>
                     <kbd>Ctrl K</kbd>
                 </button>
+                {% if session.get('role') == 'viewer' %}<span class="role-badge" title="Your account can view but not change anything">Read-only</span>{% endif %}
+                <div class="bell-wrap">
+                    <a href="#" class="topbar-btn" id="bell-btn" title="Notifications" aria-label="Notifications">
+                        <i class="ti ti-bell"></i>
+                        <span class="bell-badge" id="bell-badge" style="display:none"></span>
+                    </a>
+                    <div class="bell-panel" id="bell-panel" style="display:none">
+                        <div class="bell-head"><span>Recent events</span><a href="/notifications">Push settings</a></div>
+                        <div class="bell-list" id="bell-list"><div class="bell-empty">Loading…</div></div>
+                    </div>
+                </div>
                 <a href="#" class="topbar-btn theme-toggle" title="Toggle dark mode (Ctrl+Shift+D)">
                     <i class="ti ti-moon"></i>
                 </a>

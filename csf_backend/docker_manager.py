@@ -183,6 +183,130 @@ def get_coolify_ports():
     return sorted(ports)
 
 
+# ---------------------------------------------------------------------------
+# Exposure map: which published container ports the internet can reach.
+# Docker publishes ports through its own NAT/FORWARD chains, bypassing CSF's INPUT
+# rules, so a port can be open even when it is not in TCP_IN.  Restrictions are
+# written to csfpost.sh (so they survive csf restarts) and applied immediately.
+# ---------------------------------------------------------------------------
+CSFPOST_PATH = "/etc/csf/csfpost.sh"
+_PRIVATE_NETS = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8")
+_PROXY_HINTS = ("coolify-proxy", "traefik", "caddy", "nginx-proxy", "npm", "haproxy")
+
+
+def _restriction_rules(port, proto):
+    """iptables lines, in insert order, that drop external traffic to a published port while
+    keeping container-to-container (private) and localhost access."""
+    base = f"-p {proto} -m conntrack --ctorigdstport {port} --ctdir ORIGINAL"
+    rules = [f"iptables -I DOCKER-USER {base} -j DROP"]
+    for net in _PRIVATE_NETS:
+        rules.append(f"iptables -I DOCKER-USER {base} -s {net} -j RETURN")
+    return rules
+
+
+def _marker(port, proto):
+    return f"# csfv2-exposure:{port}/{proto}"
+
+
+def get_restricted_ports():
+    try:
+        with open(CSFPOST_PATH) as f:
+            content = f.read()
+    except OSError:
+        return set()
+    return set(re.findall(r"# csfv2-exposure:(\d+/(?:tcp|udp)) begin", content))
+
+
+def set_port_restriction(port, proto, enable=True):
+    key = f"{port}/{proto}"
+    try:
+        with open(CSFPOST_PATH) as f:
+            content = f.read()
+    except OSError:
+        content = "#!/bin/sh\n"
+    begin, end = f"{_marker(port, proto)} begin", f"{_marker(port, proto)} end"
+    block_re = re.compile(re.escape(begin) + r".*?" + re.escape(end) + r"\n?", re.S)
+    rules = _restriction_rules(port, proto)
+    content = block_re.sub("", content)
+    if enable:
+        content = content.rstrip("\n") + "\n" + begin + "\n" + "\n".join(rules) + "\n" + end + "\n"
+    try:
+        with open(CSFPOST_PATH, "w") as f:
+            f.write(content)
+        os.chmod(CSFPOST_PATH, 0o700)
+    except OSError as e:
+        return {"success": False, "error": f"Could not write csfpost.sh: {e}"}
+    # Apply now: remove any existing copies first, then insert in order
+    errors = []
+    for rule in rules:
+        run_cmd(rule.replace("iptables -I DOCKER-USER", "iptables -D DOCKER-USER").split())
+    if enable:
+        for rule in rules:
+            r = run_cmd(rule.split())
+            if not r["success"]:
+                errors.append(r.get("stderr", "")[:120])
+    return {"success": not errors, "error": "; ".join(errors) if errors else "", "port": key, "restricted": enable}
+
+
+def _csf_setting(key):
+    try:
+        with open("/etc/csf/csf.conf") as f:
+            for line in f:
+                m = re.match(r'^%s\s*=\s*"(.*)"' % re.escape(key), line.strip())
+                if m:
+                    return m.group(1)
+    except OSError:
+        pass
+    return ""
+
+
+def get_exposure_map():
+    containers = list_containers()
+    restricted = get_restricted_ports()
+    tcp_in = {p.strip() for p in _csf_setting("TCP_IN").split(",") if p.strip()}
+    docker_mode = _csf_setting("DOCKER")
+    rows = []
+    proxies = []
+    for c in containers:
+        name = c.get("Names", "")
+        labels = c.get("Labels", "") or ""
+        is_proxy = any(h in name.lower() for h in _PROXY_HINTS)
+        if is_proxy:
+            proxies.append(name)
+        behind_proxy = "traefik.enable=true" in labels or "caddy=" in labels or "coolify.managed=true" in labels
+        published = []
+        for mapping in (c.get("Ports") or "").split(", "):
+            m = re.match(r"^(?:(\[?[0-9a-f.:]+\]?):)?(\d+)(?:-\d+)?->(\d+)(?:-\d+)?/(tcp|udp)$", mapping.strip())
+            if not m:
+                continue
+            bind, host_port, cport, proto = m.group(1) or "", m.group(2), m.group(3), m.group(4)
+            if bind in ("::", "[::]"):
+                continue  # IPv6 twin of the 0.0.0.0 mapping
+            published.append((bind, host_port, cport, proto))
+        if not published:
+            rows.append({"container": name, "id": c.get("ID", "")[:12], "port": "", "proto": "", "bind": "",
+                         "reach": "internal", "behind_proxy": behind_proxy, "is_proxy": is_proxy,
+                         "in_tcp_in": False, "restricted": False})
+            continue
+        for bind, host_port, cport, proto in published:
+            key = f"{host_port}/{proto}"
+            local = bind.startswith("127.") or bind == "localhost"
+            if key in restricted:
+                reach = "restricted"
+            elif local:
+                reach = "localhost"
+            else:
+                reach = "internet"
+            rows.append({"container": name, "id": c.get("ID", "")[:12], "port": int(host_port), "cport": int(cport),
+                         "proto": proto, "bind": bind or "0.0.0.0", "reach": reach, "behind_proxy": behind_proxy,
+                         "is_proxy": is_proxy, "in_tcp_in": host_port in tcp_in, "restricted": key in restricted})
+    order = {"internet": 0, "restricted": 1, "localhost": 2, "internal": 3}
+    rows.sort(key=lambda r: (order.get(r["reach"], 9), r["port"] or 0, r["container"]))
+    return {"rows": rows, "docker_mode": docker_mode, "proxies": proxies,
+            "open_count": sum(1 for r in rows if r["reach"] == "internet" and not r["is_proxy"]),
+            "tcp_in": sorted(tcp_in, key=lambda p: int(p) if p.isdigit() else 0)}
+
+
 def generate_docker_csf_rules():
     rules = []
     rules.append("# Docker/Coolify firewall integration rules")

@@ -49,13 +49,56 @@ def save_auth_config(config):
     os.chmod(AUTH_CONF, 0o600)
 
 
-def create_user(username, password):
+ROLES = {"admin": "Full control", "viewer": "Read-only: can see everything, change nothing"}
+
+
+def create_user(username, password, role="admin"):
     config = load_auth_config()
     config.setdefault("users", {})[username] = {
         "password": hash_password(password),
         "created": int(time.time()),
+        "role": role if role in ROLES else "admin",
     }
     save_auth_config(config)
+
+
+def get_role(username):
+    return load_auth_config().get("users", {}).get(username, {}).get("role", "admin")
+
+
+def list_users():
+    users = load_auth_config().get("users", {})
+    return [{"username": u, "role": d.get("role", "admin"), "created": d.get("created"),
+             "totp": bool((d.get("totp") or {}).get("enabled"))} for u, d in sorted(users.items())]
+
+
+def set_role(username, role):
+    config = load_auth_config()
+    users = config.get("users", {})
+    if username not in users or role not in ROLES:
+        return False, "Unknown user or role"
+    if role != "admin" and sum(1 for d in users.values() if d.get("role", "admin") == "admin") <= 1 \
+            and users[username].get("role", "admin") == "admin":
+        return False, "At least one admin must remain"
+    users[username]["role"] = role
+    save_auth_config(config)
+    log_event(f"Role of '{username}' set to {role}")
+    return True, "Role updated"
+
+
+def delete_user(username, acting_user):
+    config = load_auth_config()
+    users = config.get("users", {})
+    if username not in users:
+        return False, "Unknown user"
+    if username == acting_user:
+        return False, "You cannot delete your own account"
+    if users[username].get("role", "admin") == "admin" and sum(1 for d in users.values() if d.get("role", "admin") == "admin") <= 1:
+        return False, "At least one admin must remain"
+    del users[username]
+    save_auth_config(config)
+    log_event(f"User '{username}' deleted by {acting_user}")
+    return True, "User deleted"
 
 
 def authenticate(username, password, remote_ip=None):

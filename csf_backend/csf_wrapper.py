@@ -384,6 +384,23 @@ def save_file(filepath, content):
 
 
 # Profiles
+def load_defaults():
+    """CSF's shipped defaults (profiles/reset_to_defaults.conf), or {} if not available."""
+    for path in (os.path.join(CSF_PROFILES_DIR, "reset_to_defaults.conf"), "/etc/csf/profiles/reset_to_defaults.conf"):
+        if os.path.isfile(path):
+            out = {}
+            try:
+                with open(path) as f:
+                    for line in f:
+                        m = re.match(r'^(\w+)\s*=\s*"(.*)"', line.strip())
+                        if m:
+                            out[m.group(1)] = m.group(2)
+            except OSError:
+                return {}
+            return out
+    return {}
+
+
 def list_profiles():
     profiles = []
     if os.path.isdir(CSF_PROFILES_DIR):

@@ -55,7 +55,11 @@ from csf_backend import backup_restore
 from csf_backend import email_alerts
 from csf_backend import notifications
 from csf_backend import safe_apply
+from csf_backend import ip_report
+from csf_backend import api_tokens
+from csf_backend import config_history
 import time
+from flask import g
 
 app = Flask(__name__)
 logging.basicConfig(
@@ -155,14 +159,34 @@ def ti_icon(name):
     return " ".join([_TI_MAP.get(parts[0], parts[0])] + parts[1:])
 
 
+VIEWER_POST_OK = ("/settings", "/quick/search", "/logs/tail", "/logs/grep", "/login", "/logout", "/api/ip/lookup")
+
+
+@app.before_request
+def check_api_token():
+    """Bearer-token access for /api/v1/*: no session, no CSRF."""
+    if not request.path.startswith("/api/v1/"):
+        return
+    header = request.headers.get("Authorization", "")
+    tok = api_tokens.authenticate(header[7:].strip()) if header.startswith("Bearer ") else None
+    if not tok:
+        return jsonify({"error": "Invalid or missing API token"}), 401
+    g.api_token = tok
+
+
 @app.before_request
 def check_csrf():
     if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
         return
-    if request.path.startswith("/.well-known/"):
+    if request.path.startswith("/.well-known/") or request.path.startswith("/api/v1/"):
         return
     if request.path == "/login":
         return
+    if session.get("role") == "viewer" and not any(request.path.startswith(p) for p in VIEWER_POST_OK):
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.path.startswith("/api/") or request.is_json:
+            return jsonify({"success": False, "error": "Your account is read-only"}), 403
+        flash("Your account is read-only", "warning")
+        return redirect(request.referrer or "/")
     # Accept token from header (AJAX) or form field
     token = (request.headers.get("X-CSRFToken")
              or request.form.get("csrf_token")
@@ -180,10 +204,26 @@ def check_csrf():
 def login_required(f):
     @functools.wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get("logged_in"):
+        if not session.get("logged_in") and not getattr(g, "api_token", None):
             return redirect(url_for("login"))
         return f(*args, **kwargs)
     return decorated
+
+
+def _is_admin():
+    return session.get("role", "admin") == "admin"
+
+
+def _actor():
+    tok = getattr(g, "api_token", None)
+    return f"token:{tok['name']}" if tok else session.get("username", "")
+
+
+def _require_scope(scope):
+    tok = getattr(g, "api_token", None)
+    if tok and scope not in tok.get("scopes", []):
+        return jsonify({"error": f"Token lacks the '{scope}' scope"}), 403
+    return None
 
 
 
@@ -227,6 +267,7 @@ def _complete_login(username, remote_ip):
     session.pop("pending_2fa", None)
     session["logged_in"] = True
     session["username"] = username
+    session["role"] = auth.get_role(username)
     session.permanent = True
     login_history.record_login(username, remote_ip, True)
     notifications.event("ui_login", "UI login", f"'{username}' signed in from {remote_ip}")
@@ -504,6 +545,7 @@ def config_view():
     return render_template(
         "config.html",
         sections=sections,
+        defaults=csf.load_defaults(),
         status=get_firewall_status(),
     )
 
@@ -516,7 +558,12 @@ def config_save():
         if key.startswith("cfg_"):
             real_key = key[4:]
             changes[real_key] = value
+    diff = config_history.diff(changes)
     result = csf.save_csf_conf(changes)
+    if result.get("success") and diff:
+        config_history.record(diff, session.get("username", ""))
+        audit_log.log_event("config_change", session.get("username", ""), request.remote_addr,
+                            "csf.conf: " + ", ".join(f"{d['key']}={d['new']!r}" for d in diff[:8]) + (" …" if len(diff) > 8 else ""))
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return jsonify(result)
     if result["success"]:
@@ -1238,6 +1285,44 @@ def settings_view():
                                         request.form.get("current_password", ""), request.form.get("code", ""))
             flash(msg, "success" if ok else "danger")
             return redirect(url_for("settings_view") + "#twofactor")
+        elif action in ("add_user", "set_role", "delete_user", "token_create", "token_revoke"):
+            if not _is_admin():
+                flash("Only admins can manage users and tokens", "danger")
+                return redirect(url_for("settings_view"))
+            me = session.get("username", "")
+            if action == "add_user":
+                u = request.form.get("username", "").strip()
+                pw = request.form.get("password", "")
+                role = request.form.get("role", "viewer")
+                if not u or len(u) < 3 or not u.replace("_", "").replace("-", "").isalnum():
+                    flash("Username must be 3+ characters: letters, numbers, - or _", "danger")
+                elif len(pw) < 8:
+                    flash("Password must be at least 8 characters", "danger")
+                elif u in auth.load_auth_config().get("users", {}):
+                    flash("That username already exists", "danger")
+                else:
+                    auth.create_user(u, pw, role)
+                    audit_log.log_event("config_change", me, request.remote_addr, f"Added user '{u}' with role {role}")
+                    flash(f"User '{u}' added as {role}", "success")
+            elif action == "set_role":
+                ok, msg = auth.set_role(request.form.get("username", ""), request.form.get("role", ""))
+                if ok:
+                    audit_log.log_event("config_change", me, request.remote_addr, f"Set role of '{request.form.get('username')}' to {request.form.get('role')}")
+                flash(msg, "success" if ok else "danger")
+            elif action == "delete_user":
+                ok, msg = auth.delete_user(request.form.get("username", ""), me)
+                if ok:
+                    audit_log.log_event("config_change", me, request.remote_addr, f"Deleted user '{request.form.get('username')}'")
+                flash(msg, "success" if ok else "danger")
+            elif action == "token_create":
+                raw = api_tokens.create(request.form.get("name", ""), request.form.getlist("scopes"), me)
+                session["new_api_token"] = raw
+                audit_log.log_event("config_change", me, request.remote_addr, f"Created API token '{request.form.get('name', '')}'")
+            elif action == "token_revoke":
+                if api_tokens.revoke(request.form.get("token_id", "")):
+                    audit_log.log_event("config_change", me, request.remote_addr, f"Revoked API token {request.form.get('token_id')}")
+                    flash("Token revoked", "success")
+            return redirect(url_for("settings_view") + ("#tokens" if action.startswith("token") else "#users"))
         return redirect(url_for("settings_view"))
     admin_email = email_alerts.get_admin_email()
     username = session.get("username", "admin")
@@ -1248,6 +1333,10 @@ def settings_view():
         totp_setup_secret=setup_secret,
         totp_setup_uri=auth.totp_uri(setup_secret, username) if setup_secret else None,
         totp_backup_codes=session.pop("totp_backup_codes", None),
+        is_admin=_is_admin(), users=auth.list_users() if _is_admin() else [], roles=auth.ROLES,
+        tokens=api_tokens.list_tokens() if _is_admin() else [], token_scopes=api_tokens.SCOPES,
+        new_api_token=session.pop("new_api_token", None),
+        host_url=request.host_url.rstrip("/"),
     )
 
 
@@ -2757,11 +2846,127 @@ def api_notifications_save():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route("/api/notifications/events")
+@login_required
+def api_notifications_events():
+    return jsonify({"events": notifications.recent_events(50)})
+
+
 @app.route("/api/notifications/test", methods=["POST"])
 @login_required
 def api_notifications_test():
     data = request.get_json(silent=True) or {}
     return jsonify(notifications.test_channel(data.get("channel", ""), data.get("values") or {}))
+
+
+# --- IP report ---
+
+@app.route("/ip/<path:ip>")
+@login_required
+def ip_report_page(ip):
+    return render_template("ip_report.html", r=ip_report.build(ip), status=get_firewall_status())
+
+
+# --- Token API (v1): Authorization: Bearer csf_... ---
+
+@app.route("/api/v1/status")
+@login_required
+def api_v1_status():
+    err = _require_scope("read")
+    if err:
+        return err
+    st = get_firewall_status()
+    st["temp_blocks"] = len(csf.get_temp_list())
+    st["app_version"] = app_updater.get_current_version()
+    return jsonify(st)
+
+
+@app.route("/api/v1/ip/<path:ip>")
+@login_required
+def api_v1_ip(ip):
+    err = _require_scope("read")
+    if err:
+        return err
+    r = ip_report.build(ip)
+    r.pop("geo", None)
+    return jsonify(r)
+
+
+def _v1_ip_action(scope, fn, label):
+    err = _require_scope(scope)
+    if err:
+        return err
+    data = request.get_json(silent=True) or request.form
+    ip = (data.get("ip") or "").strip()
+    if not ip_report.valid_ip(ip):
+        return jsonify({"success": False, "error": "Invalid IP"}), 400
+    result = fn(ip, data)
+    audit_log.log_event("action", _actor(), request.remote_addr, f"API {label} {ip}")
+    return jsonify({"success": bool(result.get("success")), "ip": ip, "output": (result.get("stdout") or result.get("stderr") or "")[:500]})
+
+
+@app.route("/api/v1/allow", methods=["POST"])
+@login_required
+def api_v1_allow():
+    return _v1_ip_action("allow", lambda ip, d: csf.allow_ip(ip, d.get("comment", "API")), "allow")
+
+
+@app.route("/api/v1/deny", methods=["POST"])
+@login_required
+def api_v1_deny():
+    return _v1_ip_action("deny", lambda ip, d: csf.deny_ip(ip, d.get("comment", "API")), "deny")
+
+
+@app.route("/api/v1/temp-deny", methods=["POST"])
+@login_required
+def api_v1_temp_deny():
+    return _v1_ip_action("deny", lambda ip, d: csf.temp_deny(ip, int(d.get("seconds", 3600)), d.get("ports", "*"), d.get("comment", "API")), "temp-deny")
+
+
+@app.route("/api/v1/unblock", methods=["POST"])
+@login_required
+def api_v1_unblock():
+    return _v1_ip_action("unblock", lambda ip, d: csf.unblock_ip(ip), "unblock")
+
+
+# --- Config diff / history ---
+
+@app.route("/api/config/diff", methods=["POST"])
+@login_required
+def api_config_diff():
+    changes = {k[4:]: v for k, v in request.form.items() if k.startswith("cfg_")}
+    return jsonify({"changes": config_history.diff(changes)})
+
+
+@app.route("/api/config/history")
+@login_required
+def api_config_history():
+    return jsonify({"history": config_history.recent(40)})
+
+
+# --- Docker exposure ---
+
+@app.route("/api/docker/exposure")
+@login_required
+def api_docker_exposure():
+    return jsonify(docker.get_exposure_map())
+
+
+@app.route("/api/docker/exposure/restrict", methods=["POST"])
+@login_required
+def api_docker_exposure_restrict():
+    data = request.get_json(silent=True) or {}
+    try:
+        port = int(data.get("port", 0))
+    except (TypeError, ValueError):
+        port = 0
+    proto = "udp" if data.get("proto") == "udp" else "tcp"
+    if not 0 < port < 65536:
+        return jsonify({"success": False, "error": "Invalid port"}), 400
+    res = docker.set_port_restriction(port, proto, bool(data.get("enable", True)))
+    audit_log.log_event("action", _actor(), request.remote_addr,
+                        f"{'Restricted' if data.get('enable', True) else 'Unrestricted'} Docker port {port}/{proto}")
+    return jsonify(res)
 
 
 # --- Safe apply (restart with automatic rollback) ---

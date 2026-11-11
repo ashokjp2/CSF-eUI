@@ -363,6 +363,175 @@ var CSFv2 = {
         setInterval(refresh, 20000);
     },
 
+    // ---- Tables: sort, filter, CSV export, bulk IP selection, empty rows, mobile labels ----
+    _ipKey: function(s) {
+        var m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/.exec(s);
+        return m ? ((+m[1]) * 16777216 + (+m[2]) * 65536 + (+m[3]) * 256 + (+m[4])) : null;
+    },
+    _cellKey: function(td) {
+        var t = $.trim(td.textContent || '');
+        var ip = this._ipKey(t);
+        if (ip !== null) return ip;
+        var n = parseFloat(t.replace(/[,%\s]/g, ''));
+        return (!isNaN(n) && /^[\d.,%\s-]+(\s*[KMG]?B)?$/.test(t)) ? n : t.toLowerCase();
+    },
+    enhanceTables: function(root) {
+        var self = this;
+        $(root || document).find('table.table').each(function() {
+            var table = this, $t = $(table);
+            if ($t.closest('.modal, .no-enhance').length || $t.hasClass('no-enhance')) return;
+            var thead = table.tHead, ths = thead ? $(thead).find('th') : $();
+            self._labelCells($t);
+            self._markEmptyRows($t);
+            if ($t.data('enhanced') || ths.length < 2) return;
+            $t.data('enhanced', true);
+            /* Sorting */
+            ths.each(function(i) {
+                var th = $(this);
+                if (th.find('input,button').length || !$.trim(th.text())) return;
+                th.addClass('sortable').attr('title', 'Sort').on('click', function(e) {
+                    if ($(e.target).is('a,button,input')) return;
+                    var dir = th.hasClass('sort-asc') ? -1 : 1;
+                    ths.removeClass('sort-asc sort-desc');
+                    th.addClass(dir === 1 ? 'sort-asc' : 'sort-desc');
+                    $(table).find('tbody').each(function() {
+                        var rows = $(this).children('tr').not('.empty-row').get();
+                        rows.sort(function(a, b) {
+                            var ka = self._cellKey(a.cells[i] || {}), kb = self._cellKey(b.cells[i] || {});
+                            if (typeof ka === 'number' && typeof kb === 'number') return (ka - kb) * dir;
+                            return String(ka).localeCompare(String(kb)) * dir;
+                        });
+                        $(this).append(rows);
+                    });
+                });
+            });
+            /* Toolbar: filter + CSV (+ bulk) — only for tables likely to hold a list */
+            if ($t.hasClass('no-toolbar') || $t.closest('.panel-body, .table-responsive, .panel').find('.tbl-toolbar').length) return;
+            var bulk = $t.data('bulk');
+            var tb = $('<div class="tbl-toolbar"></div>');
+            var filter = $('<input type="search" class="form-control input-sm tbl-filter" placeholder="Filter rows…" aria-label="Filter rows">');
+            var count = $('<span class="tbl-count"></span>');
+            var csv = $('<button type="button" class="btn btn-default btn-xs" title="Export visible rows as CSV"><i class="ti ti-download"></i> CSV</button>');
+            tb.append(filter, count, csv);
+            function refreshCount() {
+                var rows = $t.find('tbody tr').not('.empty-row'), vis = rows.filter(':visible').length;
+                count.text(rows.length ? (vis === rows.length ? rows.length + ' rows' : vis + ' of ' + rows.length) : '');
+            }
+            filter.on('input', function() {
+                var q = this.value.toLowerCase();
+                $t.find('tbody tr').not('.empty-row').each(function() { $(this).toggle(!q || this.textContent.toLowerCase().indexOf(q) >= 0); });
+                refreshCount();
+            });
+            csv.on('click', function() {
+                var lines = [ths.map(function() { return '"' + $.trim($(this).text()).replace(/"/g, '""') + '"'; }).get().join(',')];
+                $t.find('tbody tr:visible').not('.empty-row').each(function() {
+                    lines.push($(this).children('td').map(function() { return '"' + $.trim($(this).text()).replace(/"/g, '""') + '"'; }).get().join(','));
+                });
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(new Blob([lines.join('\n')], {type: 'text/csv'}));
+                a.download = ($('.topbar-title').text().trim() || 'table').toLowerCase().replace(/\s+/g, '-') + '.csv';
+                document.body.appendChild(a); a.click(); a.remove();
+            });
+            $t.before(tb);
+            refreshCount();
+            new MutationObserver(function() { self._markEmptyRows($t); self._labelCells($t); refreshCount(); if (bulk) self._syncBulk($t); })
+                .observe(table, {childList: true, subtree: true});
+            if (bulk) self._initBulk($t, tb, bulk);
+        });
+    },
+    _markEmptyRows: function($t) {
+        $t.find('tbody > tr').each(function() {
+            var tds = this.cells;
+            $(this).toggleClass('empty-row', tds.length === 1 && tds[0].colSpan > 1 && !$(tds[0]).find('table,form').length);
+        });
+    },
+    _labelCells: function($t) {
+        var labels = $t.find('thead th').map(function() { return $.trim($(this).text()); }).get();
+        if (!labels.length) return;
+        $t.find('tbody > tr').not('.empty-row').each(function() {
+            $(this).children('td').each(function(i) { if (!this.hasAttribute('data-label') && labels[i]) this.setAttribute('data-label', labels[i]); });
+        });
+    },
+    /* Bulk: data-bulk="<cell index with the IP>"; adds checkboxes and an action bar posting to /bulk/action */
+    _initBulk: function($t, toolbar, ipCol) {
+        var self = this;
+        ipCol = parseInt(ipCol, 10) || 0;
+        var bar = $('<div class="bulk-bar" style="display:none"><span class="bulk-count"></span>' +
+            '<button class="btn btn-default btn-xs" data-act="allow"><i class="ti ti-circle-check"></i> Allow</button>' +
+            '<button class="btn btn-default btn-xs" data-act="deny"><i class="ti ti-ban"></i> Block</button>' +
+            '<button class="btn btn-default btn-xs" data-act="unblock"><i class="ti ti-lock-open"></i> Unblock</button>' +
+            '<button class="btn btn-link btn-xs bulk-clear">Clear</button></div>');
+        toolbar.after(bar);
+        $t.find('thead tr').prepend('<th class="bulk-th"><input type="checkbox" class="bulk-all" aria-label="Select all"></th>');
+        $t.data('bulkCol', ipCol);
+        self._syncBulk($t);
+        $t.on('change', '.bulk-all', function() { $t.find('.bulk-cb:visible').prop('checked', this.checked); update(); });
+        $t.on('change', '.bulk-cb', update);
+        function selected() { return $t.find('.bulk-cb:checked').map(function() { return $(this).data('ip'); }).get(); }
+        function update() { var n = selected().length; bar.toggle(n > 0); bar.find('.bulk-count').text(n + ' selected'); }
+        bar.on('click', '.bulk-clear', function() { $t.find('.bulk-cb, .bulk-all').prop('checked', false); update(); });
+        bar.on('click', '[data-act]', function() {
+            var act = $(this).data('act'), ips = selected();
+            if (!ips.length || !confirm(act.charAt(0).toUpperCase() + act.slice(1) + ' ' + ips.length + ' IP' + (ips.length > 1 ? 's' : '') + '?')) return;
+            var b = $(this).prop('disabled', true);
+            $.post('/bulk/action', {action: act, ips: ips.join('\n')}, function(r) {
+                if (r.success) { self.toast(act + ': ' + r.succeeded + ' ok, ' + r.failed + ' failed', r.failed ? 'warning' : 'success'); setTimeout(function() { location.reload(); }, 1200); }
+                else self.toast(r.error || 'Bulk action failed', 'danger');
+            }).fail(function() { self.toast('Bulk action failed', 'danger'); }).always(function() { b.prop('disabled', false); });
+        });
+    },
+    _syncBulk: function($t) {
+        var col = $t.data('bulkCol') || 0;
+        $t.find('tbody > tr').not('.empty-row').each(function() {
+            if ($(this).children('.bulk-td').length) return;
+            var ipText = $.trim($(this.cells[col] || {}).text()), m = /(\d{1,3}(?:\.\d{1,3}){3}(?:\/\d{1,2})?|[0-9a-f:]{3,}(?:\/\d{1,3})?)/i.exec(ipText);
+            $(this).prepend(m ? '<td class="bulk-td"><input type="checkbox" class="bulk-cb" data-ip="' + m[1] + '" aria-label="Select ' + m[1] + '"></td>' : '<td class="bulk-td"></td>');
+        });
+        $t.find('tbody > tr.empty-row').each(function() { if (this.cells[0] && this.cells[0].colSpan) this.cells[0].colSpan = $t.find('thead th').length; });
+    },
+
+    // ---- Loading state for buttons that run csf commands ----
+    initLoadingStates: function() {
+        $(document).on('submit', 'form', function() {
+            var form = $(this), btn = form.find('button[type=submit], input[type=submit]').filter(':focus').first();
+            if (!btn.length) btn = form.find('button[type=submit]').first();
+            if (!btn.length || btn.hasClass('no-loading')) return;
+            btn.addClass('is-loading');
+            setTimeout(function() { btn.prop('disabled', true); }, 0);
+            if (form.data('ajax')) setTimeout(function() { btn.removeClass('is-loading').prop('disabled', false); }, 2500);
+            else setTimeout(function() { btn.removeClass('is-loading').prop('disabled', false); }, 15000);
+        });
+    },
+
+    // ---- Notification centre (bell) ----
+    initBell: function() {
+        var bell = $('#bell-btn');
+        if (!bell.length) return;
+        var self = this, panel = $('#bell-panel'), list = $('#bell-list'), badge = $('#bell-badge');
+        var seen = parseInt(localStorage.getItem('csfv2-bell-seen') || '0', 10);
+        function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+        function ago(ts) { var s = Math.max(0, Math.floor(Date.now() / 1000 - ts)); if (s < 60) return s + 's ago'; if (s < 3600) return Math.floor(s / 60) + 'm ago'; if (s < 86400) return Math.floor(s / 3600) + 'h ago'; return Math.floor(s / 86400) + 'd ago'; }
+        function render(events) {
+            var unread = events.filter(function(e) { return e.ts > seen; }).length;
+            badge.text(unread > 9 ? '9+' : unread).toggle(unread > 0);
+            if (!events.length) { list.html('<div class="bell-empty">No events yet. Blocks, service changes and updates will show here.</div>'); return; }
+            var icons = {lfd_block: 'ban', lfd_down: 'alert-triangle', firewall_down: 'shield-off', update_available: 'cloud-download', cert_expiry: 'certificate', ui_login: 'login', ui_login_failed: 'lock-x', safe_apply: 'arrow-back-up', test: 'send'};
+            list.html(events.map(function(e) {
+                return '<div class="bell-item' + (e.ts > seen ? ' unread' : '') + ' lvl-' + esc(e.level) + '"><i class="ti ti-' + (icons[e.kind] || 'bell') + '"></i>' +
+                    '<div><b>' + esc(e.title) + '</b><span>' + esc((e.body || '').split('\n')[0]).substring(0, 120) + '</span><small>' + ago(e.ts) + '</small></div></div>';
+            }).join(''));
+        }
+        function load() { $.getJSON('/api/notifications/events', function(r) { render(r.events || []); }); }
+        bell.on('click', function(e) {
+            e.preventDefault(); e.stopPropagation();
+            panel.toggle();
+            if (panel.is(':visible')) { seen = Math.floor(Date.now() / 1000); localStorage.setItem('csfv2-bell-seen', seen); badge.hide(); }
+        });
+        $(document).on('click', function(e) { if (!$(e.target).closest('#bell-panel, #bell-btn').length) panel.hide(); });
+        load();
+        setInterval(load, 60000);
+    },
+
     // ---- Command palette (Ctrl+K) ----
     _settingHelp: null,
     initPalette: function() {
@@ -462,6 +631,20 @@ $(document).ready(function() {
     CSFv2.initSidebar();
     CSFv2.initPalette();
     CSFv2.initSafeApply();
+    CSFv2.initLoadingStates();
+    CSFv2.initBell();
+    CSFv2.enhanceTables(document);
+    /* Tables rendered later by page scripts get the same treatment */
+    var _tblTimer = null, _mc = document.querySelector('.main-content');
+    if (_mc) new MutationObserver(function() { clearTimeout(_tblTimer); _tblTimer = setTimeout(function() { CSFv2.enhanceTables(_mc); }, 150); })
+        .observe(_mc, {childList: true, subtree: true});
+    /* Read-only users: block state-changing forms client-side (the server enforces it too) */
+    if (document.body.getAttribute('data-role') === 'viewer') {
+        $(document).on('submit', 'form', function(e) {
+            var m = (this.method || 'get').toLowerCase(), a = this.action || '';
+            if (m === 'post' && a.indexOf('/settings') < 0 && a.indexOf('/quick/search') < 0 && a.indexOf('/logs/') < 0 && a.indexOf('/logout') < 0) { e.preventDefault(); CSFv2.toast('Your account is read-only', 'warning'); }
+        });
+    }
 
     // Theme toggle
     function syncThemeIcon() {
