@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="title">
+  <title id="title">CSF-eUI</title>
+  <path d="M50 5L92 22v33Q92 82 50 95Q8 82 8 55V22Z" fill="#2980b9"/>
+  <text x="50" y="70" font-size="46" text-anchor="middle" fill="#fff" font-family="Arial, sans-serif" font-weight="700">e</text>
+</svg>

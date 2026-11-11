@@ -1224,3 +1224,26 @@ code {
     cursor: pointer; text-decoration: none;
 }
 .chip:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+
+/* ===== Buttons: softer palette to match refreshed UI ===== */
+.btn { border-radius: 8px; font-weight: 500; box-shadow: none; text-shadow: none; background-image: none; }
+.btn-default { background: var(--bg-secondary); border-color: var(--border-color); }
+.btn-default:hover, .btn-default:focus { background: var(--bg-tertiary); border-color: var(--accent); color: var(--accent); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover, .btn-primary:focus { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
+.btn-success, .btn-danger, .btn-warning, .btn-info {
+    background: var(--soft-bg); border-color: var(--soft-bd); color: var(--soft-fg);
+}
+.btn-success { --soft-bg: var(--success-soft); --soft-bd: var(--success); --soft-fg: var(--success); }
+.btn-danger  { --soft-bg: var(--danger-soft);  --soft-bd: var(--danger);  --soft-fg: var(--danger); }
+.btn-warning { --soft-bg: var(--warning-soft); --soft-bd: var(--warning); --soft-fg: var(--warning); }
+.btn-info    { --soft-bg: var(--info-soft);    --soft-bd: var(--info);    --soft-fg: #0e7490; }
+.btn-success:hover, .btn-success:focus, .btn-success:active,
+.btn-danger:hover,  .btn-danger:focus,  .btn-danger:active,
+.btn-warning:hover, .btn-warning:focus, .btn-warning:active,
+.btn-info:hover,    .btn-info:focus,    .btn-info:active {
+    background: var(--soft-bd); border-color: var(--soft-bd); color: #fff;
+}
+[data-theme="dark"] .btn-info { --soft-fg: #22d3ee; }
+.input-group-btn > .btn { border-radius: 0 8px 8px 0; }
+.input-group .form-control:first-child { border-radius: 8px 0 0 8px; }
