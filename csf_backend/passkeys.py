@@ -199,6 +199,26 @@ def _clean_name(name):
 
 # --- registration --------------------------------------------------------
 
+# ES256 first: what phones, Windows Hello and security keys actually use; RS256 for older TPMs.
+# EdDSA last so a provider that lacks it still finds a match.
+def _algs():
+    from webauthn.helpers.cose import COSEAlgorithmIdentifier as A
+    return [A.ECDSA_SHA_256, A.RSASSA_PKCS1_v1_5_SHA_256, A.EDDSA]
+
+
+def _descriptor(p):
+    """A PublicKeyCredentialDescriptor for a stored passkey, with the transports the browser
+    reported at registration, so the browser offers the right flow (this device, phone, key)."""
+    from webauthn.helpers.structs import AuthenticatorTransport
+    transports = []
+    for t in p.get("transports") or []:
+        try:
+            transports.append(AuthenticatorTransport(t))
+        except ValueError:
+            pass
+    return PublicKeyCredentialDescriptor(id=base64url_to_bytes(p["id"]), transports=transports or None)
+
+
 def registration_options(username, host):
     """Build the browser's create() options. Returns (options_json_str, challenge_b64url)."""
     ok, reason = availability()
@@ -217,12 +237,12 @@ def registration_options(username, host):
         handle = bytes_to_base64url(generate_user_handle())
         user["passkey_handle"] = handle
         auth.save_auth_config(config)
-    exclude = [PublicKeyCredentialDescriptor(id=base64url_to_bytes(p["id"]))
-               for p in user.get("passkeys", [])]
+    exclude = [_descriptor(p) for p in user.get("passkeys", [])]
     opts = _wa.generate_registration_options(
         rp_id=rp_id, rp_name=RP_NAME,
         user_id=base64url_to_bytes(handle), user_name=username, user_display_name=username,
         exclude_credentials=exclude or None,
+        supported_pub_key_algs=_algs(),
         authenticator_selection=AuthenticatorSelectionCriteria(
             resident_key=ResidentKeyRequirement.PREFERRED,
             user_verification=UserVerificationRequirement.PREFERRED),
@@ -302,7 +322,7 @@ def authentication_options(username, host, passwordless=False):
         keys = auth.load_auth_config().get("users", {}).get(username, {}).get("passkeys", [])
         if not keys:
             raise RuntimeError("No passkey registered for this account")
-        allow = [PublicKeyCredentialDescriptor(id=base64url_to_bytes(p["id"])) for p in keys]
+        allow = [_descriptor(p) for p in keys]
     elif not passwordless:
         raise RuntimeError("Username required")
     opts = _wa.generate_authentication_options(
