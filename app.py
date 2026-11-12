@@ -285,7 +285,7 @@ def login():
         login_history.record_login(username, remote_ip, False)
         notifications.event("ui_login_failed", "Failed UI login", f"Failed login for '{username}' from {remote_ip}")
         flash(msg, "danger")
-    return render_template("login.html")
+    return render_template("login.html", passkey_login=passkeys.any_registered() and not _passkey_problem())
 
 
 def _complete_login(username, remote_ip):
@@ -340,12 +340,19 @@ def _passkey_origin():
     return f"{scheme}://{request.host}"
 
 
-def _passkey_challenge(key):
-    """Pop a stored WebAuthn challenge from the session; None when missing or expired."""
+def _passkey_challenge(key, mode=None):
+    """Pop a stored WebAuthn challenge from the session; None when missing, expired or for another mode."""
     state = session.pop(key, None) or {}
-    if not state.get("challenge") or time.time() > state.get("expires", 0):
+    if not state.get("challenge") or time.time() > state.get("expires", 0) or state.get("mode") != mode:
         return None
     return state["challenge"]
+
+
+def _pending_2fa():
+    pending = session.get("pending_2fa") or {}
+    if pending.get("username") and time.time() <= pending.get("expires", 0):
+        return pending
+    return None
 
 
 @app.route("/api/passkeys/register/options", methods=["POST"])
@@ -379,34 +386,63 @@ def api_passkey_register_verify():
 
 @app.route("/api/passkeys/login/options", methods=["POST"])
 def api_passkey_login_options():
-    pending = session.get("pending_2fa") or {}
-    if not pending.get("username") or time.time() > pending.get("expires", 0):
-        return jsonify({"success": False, "error": "Sign in again to continue"}), 401
+    """Two modes: the second step after a password (pending_2fa in the session), or passwordless
+    from the login page, where the passkey plus the device's PIN/biometric is the whole sign-in."""
+    body = request.get_json(silent=True) or {}
+    pending = _pending_2fa()
+    if session.get("logged_in"):
+        return jsonify({"success": False, "error": "Already signed in"}), 400
     try:
-        opts, challenge = passkeys.authentication_options(pending["username"], request.host)
+        if pending:
+            opts, challenge = passkeys.authentication_options(pending["username"], request.host)
+            mode = "2fa"
+        else:
+            ok, msg = auth.pre_login_check(auth.load_auth_config(), request.remote_addr)
+            if not ok:
+                return jsonify({"success": False, "error": msg}), 403
+            username = (body.get("username") or "").strip() or None
+            opts, challenge = passkeys.authentication_options(username, request.host, passwordless=True)
+            mode = "passwordless"
     except RuntimeError as e:
         return jsonify({"success": False, "error": str(e)}), 400
-    session["passkey_auth"] = {"challenge": challenge, "expires": int(time.time()) + passkeys.CHALLENGE_TTL}
+    session["passkey_auth"] = {"challenge": challenge, "mode": mode,
+                               "expires": int(time.time()) + passkeys.CHALLENGE_TTL}
     return jsonify({"success": True, "options": json.loads(opts)})
 
 
 @app.route("/api/passkeys/login/verify", methods=["POST"])
 def api_passkey_login_verify():
-    pending = session.get("pending_2fa") or {}
-    if not pending.get("username") or time.time() > pending.get("expires", 0):
-        return jsonify({"success": False, "error": "Sign in again to continue"}), 401
-    challenge = _passkey_challenge("passkey_auth")
+    body = request.get_json(silent=True) or {}
+    cred = body.get("credential") or {}
+    remote_ip = request.remote_addr
+    pending = _pending_2fa()
+    if pending:
+        challenge = _passkey_challenge("passkey_auth", "2fa")
+        username = pending["username"]
+        require_uv = False
+    else:
+        ok, msg = auth.pre_login_check(auth.load_auth_config(), remote_ip)
+        if not ok:
+            return jsonify({"success": False, "error": msg}), 403
+        challenge = _passkey_challenge("passkey_auth", "passwordless")
+        username = passkeys.find_user_by_credential(cred.get("id", "")) if isinstance(cred, dict) else None
+        require_uv = True
     if not challenge:
         return jsonify({"success": False, "error": "The passkey prompt took too long. Try again."}), 400
-    body = request.get_json(silent=True) or {}
-    remote_ip = request.remote_addr
-    ok, result = passkeys.authentication_verify(pending["username"], request.host, _passkey_origin(), challenge,
-                                                body.get("credential") or {})
+    if not username:
+        auth.record_failed(auth.load_auth_config(), remote_ip)
+        return jsonify({"success": False, "error": "Unknown passkey"}), 400
+    ok, result = passkeys.authentication_verify(username, request.host, _passkey_origin(), challenge, cred,
+                                                require_uv=require_uv)
     if not ok:
         auth.record_failed(auth.load_auth_config(), remote_ip)
-        login_history.record_login(pending["username"], remote_ip, False)
+        login_history.record_login(username, remote_ip, False)
         return jsonify({"success": False, "error": result}), 400
-    _complete_login(pending["username"], remote_ip)
+    if not pending:
+        auth.clear_failed(remote_ip)
+        session.clear()
+        auth.log_event(f"Passkey sign-in for {username} ('{result}') from {remote_ip}")
+    _complete_login(username, remote_ip)
     return jsonify({"success": True, "redirect": url_for("dashboard")})
 
 

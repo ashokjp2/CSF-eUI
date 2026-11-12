@@ -88,10 +88,12 @@
                 .then(function (cred) { return post('/api/passkeys/register/verify', csrf, { credential: encodeCred(cred), name: name }); })
                 .catch(function (e) { throw new Error(friendly(e)); });
         },
-        /* Finish a pending two-factor sign-in with a passkey. Resolves with {redirect}. */
-        login: function (csrf) {
+        /* Sign in with a passkey: as the second step after a password, or passwordless from the
+           login page (username optional; without it the browser offers its own account picker).
+           Resolves with {redirect}. */
+        login: function (csrf, username) {
             if (!supported()) return Promise.reject(new Error('This browser does not support passkeys.'));
-            return post('/api/passkeys/login/options', csrf)
+            return post('/api/passkeys/login/options', csrf, username ? { username: username } : {})
                 .then(function (j) { return navigator.credentials.get({ publicKey: decodeGet(j.options) }); })
                 .then(function (cred) { return post('/api/passkeys/login/verify', csrf, { credential: encodeCred(cred) }); })
                 .catch(function (e) { throw new Error(friendly(e)); });

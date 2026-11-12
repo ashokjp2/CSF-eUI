@@ -61,11 +61,11 @@ class SoftKey:
                 "response": {"clientDataJSON": bytes_to_base64url(client_data),
                              "attestationObject": bytes_to_base64url(att), "transports": ["internal"]}}
 
-    def get(self, options, origin=ORIGIN):
+    def get(self, options, origin=ORIGIN, flags=0x05):
         self.counter += 1
         client_data = json.dumps({"type": "webauthn.get", "challenge": options["challenge"],
                                   "origin": origin, "crossOrigin": False}).encode()
-        auth_data = self._auth_data(0x05, False)
+        auth_data = self._auth_data(flags, False)
         sig = self.priv.sign(auth_data + hashlib.sha256(client_data).digest(), ec.ECDSA(hashes.SHA256()))
         return {"id": bytes_to_base64url(self.cred_id), "rawId": bytes_to_base64url(self.cred_id), "type": "public-key",
                 "response": {"clientDataJSON": bytes_to_base64url(client_data),
@@ -139,6 +139,26 @@ try:
     check("auth options refuse IP host", False)
 except RuntimeError as e:
     check("auth options refuse IP host", "IP address" in str(e))
+
+# --- passwordless sign-in from the login page ---
+check("any_registered", passkeys.any_registered())
+check("find user by credential", passkeys.find_user_by_credential(bytes_to_base64url(key.cred_id)) == "admin")
+check("unknown credential maps to nobody", passkeys.find_user_by_credential("zzz") is None)
+p_json, p_ch = passkeys.authentication_options(None, HOST, passwordless=True)
+p_opts = json.loads(p_json)
+check("passwordless options are discoverable (no allow list)", not p_opts.get("allowCredentials"))
+check("passwordless options require user verification", p_opts["userVerification"] == "required")
+ok, name = passkeys.authentication_verify("admin", HOST, ORIGIN, p_ch, key.get(p_opts), require_uv=True)
+check("passwordless assertion with UV verifies", ok, str(name))
+p_json, p_ch = passkeys.authentication_options("admin", HOST, passwordless=True)
+check("passwordless options with username list the key", json.loads(p_json)["allowCredentials"][0]["id"] == bytes_to_base64url(key.cred_id))
+ok, msg = passkeys.authentication_verify("admin", HOST, ORIGIN, p_ch, key.get(json.loads(p_json), flags=0x01), require_uv=True)
+check("passwordless assertion without UV refused", not ok)
+try:
+    passkeys.authentication_options(None, HOST)
+    check("second-step options need a username", False)
+except RuntimeError:
+    check("second-step options need a username", True)
 
 # --- recovery codes work at the code prompt; TOTP untouched ---
 code = res["recovery_codes"][0]

@@ -46,6 +46,13 @@
                                 <span class="ti ti-login"></span> Login
                             </button>
                         </form>
+                        {% if passkey_login %}
+                        <div class="text-center text-muted" style="margin:12px 0; font-size:12px; text-transform:uppercase; letter-spacing:1px">or</div>
+                        <button type="button" class="btn btn-default btn-block btn-lg" id="passkey-login-btn">
+                            <span class="ti ti-fingerprint"></span> Sign in with passkey
+                        </button>
+                        <p id="passkey-login-msg" class="text-center text-muted" style="margin:8px 0 0; font-size:13px; min-height:18px"></p>
+                        {% endif %}
                     </div>
                     <div class="panel-footer text-center text-muted">
                         <small>Successful UI login grants high privilege.<br>Treat as a sensitive admin surface.</small>
@@ -56,5 +63,34 @@
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.4.1/js/bootstrap.min.js"></script>
+    {% if passkey_login %}
+    <script src="{{ url_for('static', filename='js/passkeys.js') }}"></script>
+    <script>
+    (function () {
+        var csrf = {{ csrf_token|tojson }};
+        var btn = document.getElementById('passkey-login-btn'), msg = document.getElementById('passkey-login-msg');
+        var FLAG = 'csfv2-passkey-login';
+        function go() {
+            btn.disabled = true; msg.className = 'text-center text-muted'; msg.textContent = 'Follow the prompt from your browser…';
+            var username = document.getElementById('username').value.trim();
+            csfPasskeys.login(csrf, username).then(function (j) {
+                try { localStorage.setItem(FLAG, '1'); } catch (e) {}
+                msg.textContent = 'Signed in';
+                location.href = j.redirect || '/';
+            }).catch(function (e) {
+                btn.disabled = false; msg.className = 'text-center text-danger'; msg.textContent = e.message;
+            });
+        }
+        if (!csfPasskeys.supported()) {
+            btn.disabled = true; msg.textContent = 'This browser does not support passkeys.';
+            return;
+        }
+        btn.addEventListener('click', go);
+        var usedBefore = false;
+        try { usedBefore = !!localStorage.getItem(FLAG); } catch (e) {}
+        if (usedBefore) go();  /* this browser signed in with a passkey before: prompt straight away */
+    })();
+    </script>
+    {% endif %}
 </body>
 </html>

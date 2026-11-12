@@ -143,6 +143,19 @@ def has_passkey(username):
     return bool(auth.load_auth_config().get("users", {}).get(username, {}).get("passkeys"))
 
 
+def any_registered():
+    """True when at least one account has a passkey (decides whether the login page offers one)."""
+    return any(d.get("passkeys") for d in auth.load_auth_config().get("users", {}).values())
+
+
+def find_user_by_credential(cred_id):
+    """Username owning a credential id, or None. Credential ids are unique per authenticator."""
+    for u, d in auth.load_auth_config().get("users", {}).items():
+        if any(p.get("id") == cred_id for p in d.get("passkeys", [])):
+            return u
+    return None
+
+
 def remove_passkey(username, cred_id, password):
     """Delete one passkey. Requires the account password. Returns (ok, message)."""
     config = auth.load_auth_config()
@@ -270,27 +283,40 @@ def registration_verify(username, host, origin, challenge_b64url, credential_jso
 
 # --- sign-in -------------------------------------------------------------
 
-def authentication_options(username, host):
-    """Build the browser's get() options for the user's passkeys. Returns (options_json_str, challenge_b64url)."""
+def authentication_options(username, host, passwordless=False):
+    """Build the browser's get() options. Returns (options_json_str, challenge_b64url).
+
+    As the second step after a password, the user is known and only their keys are offered.
+    Passwordless (from the login page) the passkey is the whole sign-in, so the device must
+    verify the person (PIN, fingerprint, face); with no username the browser shows its own
+    account picker from the discoverable credentials it holds for this site.
+    """
     ok, reason = availability()
     if not ok:
         raise RuntimeError(reason)
     rp_id = rp_id_from_host(host)
     if rp_id is None:
         raise RuntimeError(host_problem(host, True))
-    user = auth.load_auth_config().get("users", {}).get(username, {})
-    keys = user.get("passkeys", [])
-    if not keys:
-        raise RuntimeError("No passkey registered for this account")
-    allow = [PublicKeyCredentialDescriptor(id=base64url_to_bytes(p["id"])) for p in keys]
+    allow = None
+    if username:
+        keys = auth.load_auth_config().get("users", {}).get(username, {}).get("passkeys", [])
+        if not keys:
+            raise RuntimeError("No passkey registered for this account")
+        allow = [PublicKeyCredentialDescriptor(id=base64url_to_bytes(p["id"])) for p in keys]
+    elif not passwordless:
+        raise RuntimeError("Username required")
     opts = _wa.generate_authentication_options(
         rp_id=rp_id, allow_credentials=allow,
-        user_verification=UserVerificationRequirement.PREFERRED, timeout=120000)
+        user_verification=(UserVerificationRequirement.REQUIRED if passwordless
+                           else UserVerificationRequirement.PREFERRED),
+        timeout=120000)
     return options_to_json(opts), bytes_to_base64url(opts.challenge)
 
 
-def authentication_verify(username, host, origin, challenge_b64url, credential_json):
-    """Check the browser's get() result against the stored passkey. Returns (ok, message)."""
+def authentication_verify(username, host, origin, challenge_b64url, credential_json, require_uv=False):
+    """Check the browser's get() result against the stored passkey. Returns (ok, message).
+
+    require_uv: insist the authenticator verified the person (passwordless sign-in)."""
     ok, reason = availability()
     if not ok:
         return False, reason
@@ -317,6 +343,7 @@ def authentication_verify(username, host, origin, challenge_b64url, credential_j
             expected_origin=origin,
             credential_public_key=base64url_to_bytes(stored["public_key"]),
             credential_current_sign_count=int(stored.get("sign_count") or 0),
+            require_user_verification=require_uv,
         )
     except Exception as e:
         return False, f"Passkey check failed: {e}"

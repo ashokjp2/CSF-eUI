@@ -103,9 +103,8 @@ def delete_user(username, acting_user):
     return True, "User deleted"
 
 
-def authenticate(username, password, remote_ip=None):
-    config = load_auth_config()
-
+def pre_login_check(config, remote_ip):
+    """IP allow/ban list and failed-attempt lockout, shared by password and passkey sign-in."""
     if remote_ip and not is_ip_allowed(remote_ip):
         log_event(f"Access denied for IP {remote_ip} - not in allow list")
         return False, "IP not allowed"
@@ -124,6 +123,23 @@ def authenticate(username, password, remote_ip=None):
                 return False, f"Too many failed attempts. Try again in {remaining}s"
             else:
                 del failed[remote_ip]
+    return True, ""
+
+
+def clear_failed(remote_ip):
+    config = load_auth_config()
+    if remote_ip and remote_ip in config.get("failed_attempts", {}):
+        del config["failed_attempts"][remote_ip]
+        save_auth_config(config)
+
+
+def authenticate(username, password, remote_ip=None):
+    config = load_auth_config()
+
+    ok, msg = pre_login_check(config, remote_ip)
+    if not ok:
+        return False, msg
+    failed = config.get("failed_attempts", {})
 
     users = config.get("users", {})
     if username not in users:
