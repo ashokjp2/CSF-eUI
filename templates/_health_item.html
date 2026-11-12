@@ -22,8 +22,9 @@
                 {% if compact and category %}<small class="text-muted">({{ category }})</small>{% endif %}
             </div>
             {% if item.detail %}<div class="hc-detail">{{ item.detail }}</div>{% endif %}
+            {% if item.how and item.status in ('fail', 'warn', 'info') %}<div class="hc-detail hc-how"><i class="ti ti-bulb"></i> <b>How to fix:</b> {{ item.how }}</div>{% endif %}
             {% if item.status == 'accepted' %}
-            <div class="hc-detail hc-accepted-note"><i class="ti ti-eye-off"></i> Accepted{% if item.accepted.user %} by {{ item.accepted.user }}{% endif %}: “{{ item.accepted.reason }}”
+            <div class="hc-detail hc-accepted-note"><i class="ti ti-eye-off"></i> Accepted{% if item.accepted.user %} by {{ item.accepted.user }}{% endif %}{% if item.accepted.reason %}: “{{ item.accepted.reason }}”{% endif %}
                 <a href="#" class="js-unaccept" data-id="{{ item.id }}">Check again</a></div>
             {% endif %}
             {% if item.status in ('fail', 'warn', 'info') %}
@@ -37,7 +38,13 @@
                 </button>
                 {% elif item.fix %}
                 <button class="btn btn-xs btn-warning js-quick-fix" data-fix='{{ item.fix|tojson }}'>
-                    <i class="ti ti-tool"></i> {% if item.fix.action == 'restrict_port' %}Restrict port {{ item.fix.port }}/{{ item.fix.proto }}{% elif item.fix.action == 'sysctl' %}Set {{ item.fix.key }} = {{ item.fix.value }}{% else %}Fix{% endif %}
+                    <i class="ti ti-tool"></i> {% if item.fix.action == 'restrict_port' %}Restrict port {{ item.fix.port }}/{{ item.fix.proto }}
+                    {%- elif item.fix.action == 'sysctl' %}Set {{ item.fix.key }} = {{ item.fix.value }}
+                    {%- elif item.fix.action == 'remove_ports' %}Remove {{ item.fix.ports|join(', ') }} from TCP_IN
+                    {%- elif item.fix.action == 'chmod' %}Set mode {{ item.fix.mode }}
+                    {%- elif item.fix.action == 'ntp' %}Turn NTP on
+                    {%- elif item.fix.action == 'disable_feed' %}Disable feed {{ item.fix.name }}
+                    {%- else %}Fix{% endif %}
                 </button>
                 {% elif item.setting %}
                 <a href="/config?q={{ item.setting }}" class="btn btn-xs btn-default"><i class="ti ti-settings"></i> Edit {{ item.setting }}</a>
@@ -46,16 +53,45 @@
                 <a href="{{ item.link }}" class="btn btn-xs btn-default"><i class="ti ti-arrow-right"></i> Open</a>
                 {% endif %}
                 {% if item.id %}
-                <a href="#" class="hc-accept js-accept" data-id="{{ item.id }}" title="This is intentional: keep it visible but stop counting it against the score"><i class="ti ti-eye-off"></i> Accept</a>
+                <a href="#" class="hc-accept js-accept" data-id="{{ item.id }}" title="Accept: keep it visible but stop counting it. Ignore: hide this check until you restore it."><i class="ti ti-eye-off"></i> Accept / Ignore</a>
                 {% endif %}
             </div>
             <div class="hc-accept-form" style="display:none">
-                <input type="text" class="form-control input-sm" maxlength="200" placeholder="Why is this acceptable? e.g. FTP is needed for the legacy uploader">
-                <button class="btn btn-sm btn-primary js-accept-save"><i class="ti ti-check"></i> Accept</button>
+                <input type="text" class="form-control input-sm" maxlength="200" placeholder="Reason (optional), e.g. FTP is needed for the legacy uploader">
+                <button class="btn btn-sm btn-primary js-accept-save" title="Keep it in the list, marked as accepted, and stop counting it against the score"><i class="ti ti-check"></i> Accept</button>
+                <button class="btn btn-sm btn-default js-accept-save" data-ignore="1" title="Remove this check from the list; it stays in the Ignored checks list below so you can restore it"><i class="ti ti-eye-off"></i> Ignore</button>
                 <button class="btn btn-sm btn-link js-accept-cancel">Cancel</button>
             </div>
             {% endif %}
         </div>
     </div>
 </div>
+{%- endmacro %}
+
+{% macro ignored_list(items) -%}
+{% if items %}
+<div class="panel panel-default hc-cat hc-ignored">
+    <div class="panel-heading">
+        <h4 class="panel-title" style="margin:0">
+            <a data-toggle="collapse" href="#hc-ignored-body" class="text-muted" style="text-decoration:none"><i class="ti ti-eye-off"></i> Ignored checks <span class="badge">{{ items|length }}</span></a>
+        </h4>
+    </div>
+    <div id="hc-ignored-body" class="panel-collapse collapse">
+        <div class="panel-body" style="padding:0">
+            {% for item in items %}
+            <div class="hc-item hc-ignored" data-id="{{ item.id }}">
+                <div class="hc-row">
+                    <i class="hc-icon ti ti-eye-off"></i>
+                    <div class="hc-main">
+                        <div class="hc-title"><strong>{{ item.title }}</strong> <small class="text-muted">({{ item.category }})</small></div>
+                        <div class="hc-detail hc-accepted-note">Ignored{% if item.accepted.user %} by {{ item.accepted.user }}{% endif %}{% if item.accepted.reason %}: “{{ item.accepted.reason }}”{% endif %}
+                            <a href="#" class="js-unaccept" data-id="{{ item.id }}">Restore</a></div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
 {%- endmacro %}

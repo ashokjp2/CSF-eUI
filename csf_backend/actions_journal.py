@@ -71,6 +71,9 @@ def undo(entry_id):
         r = csf.save_csf_conf({u["key"]: u["value"]})
     elif a == "remove_ignore":
         r = _remove_line("/etc/csf/csf.ignore", u["ip"])
+    elif a == "feed_enable":
+        from csf_backend import blocklist_feeds
+        r = blocklist_feeds.set_enabled(u["name"], True)
     else:
         return {"success": False, "error": "This action cannot be undone automatically"}
     ok = bool(r.get("success", False))

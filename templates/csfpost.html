@@ -49,9 +49,15 @@
             </div>
         </div>
         <div class="col-md-7 text-right">
-            <label class="checkbox-inline" style="font-size:12px"><input type="checkbox" id="show-comments" checked> Comments</label>
-            <label class="checkbox-inline" style="font-size:12px"><input type="checkbox" id="show-spacers"> Blank lines</label>
-            <label class="checkbox-inline" style="font-size:12px"><input type="checkbox" id="only-active"> Active rules only</label>
+            <div class="btn-group btn-group-sm" data-toggle="buttons" style="margin-right:6px">
+                <label class="btn btn-default active" id="view-simple-lbl" title="Just the rules, in plain English">
+                    <input type="radio" name="cp-view" value="simple" checked> <span class="ti ti-eye"></span> Simple
+                </label>
+                <label class="btn btn-default" id="view-advanced-lbl" title="Every line of the script, with the commands">
+                    <input type="radio" name="cp-view" value="advanced"> <span class="ti ti-code"></span> Advanced
+                </label>
+            </div>
+            <label class="checkbox-inline" style="font-size:12px"><input type="checkbox" id="only-active"> Active only</label>
             <button class="btn btn-default btn-xs" id="btn-dry-run" style="margin-left:8px">
                 <span class="ti ti-player-play"></span> What would run
             </button>
@@ -62,6 +68,7 @@
     </div>
 
     <div id="tree-root"></div>
+    <div id="tree-hidden-note"></div>
 
     <div style="margin-top:12px;padding-top:10px;border-top:1px solid #eee">
         <button class="btn btn-success btn-sm" id="btn-add-end"><span class="ti ti-plus"></span> Add rule at the end</button>
@@ -80,7 +87,7 @@
                 {% for t in templates %}
                 <a href="#" class="list-group-item tmpl-btn" data-id="{{ t.id }}">
                     <strong style="font-size:13px">{{ t.label }}</strong>
-                    <br><small class="text-muted">{{ t.description }}</small>
+                    <small class="text-muted">{{ t.description }}</small>
                 </a>
                 {% endfor %}
             </div>
@@ -256,6 +263,33 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
         <button type="button" class="btn btn-primary" id="text-modal-save">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =============== Structured editor (loop, condition, variable, comment, shell) =============== -->
+<div class="modal fade" id="form-modal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h4 class="modal-title" id="form-modal-title"></h4>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted" id="form-modal-help" style="font-size:12.5px"></p>
+        <div id="form-modal-fields"></div>
+        <div id="form-modal-raw-wrap" style="display:none">
+          <hr style="margin:12px 0">
+          <p style="font-size:12px;margin-bottom:4px"><strong>The exact line as it will be written</strong></p>
+          <textarea class="form-control" id="form-modal-raw" rows="4" spellcheck="false"
+                    style="font-family:monospace;font-size:12px"></textarea>
+        </div>
+        <p style="font-size:12px;margin-top:10px"><a href="#" id="form-modal-raw-toggle"></a></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="form-modal-save"><span class="ti ti-device-floppy"></span> Save</button>
       </div>
     </div>
   </div>

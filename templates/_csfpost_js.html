@@ -25,6 +25,10 @@
 .cp-empty{text-align:center;color:#999;padding:40px 0}
 #tree-root .form-control-static{padding:0}
 .cp-neg{font-size:11px;font-weight:normal;color:#a94442;margin-left:6px}
+.cp-block > .cp-block-head.cp-plain{font-family:inherit;font-size:13px;color:#333;background:#f7f9fb;border-bottom:1px dashed #cfd8e0}
+.cp-block-why{font-size:12px;color:#777;margin-top:3px;font-family:inherit}
+.cp-sec-note{font-weight:normal;font-size:12px;color:#8a6d3b;display:block;margin-top:2px}
+.cp-hidden-note{font-size:12px;color:#999;padding:8px 2px 0;border-top:1px solid #f0f0f0;margin-top:8px}
 </style>
 <script>
 (function(){
@@ -99,7 +103,28 @@ function allChains(){
     $.each(D.choices.chains, function(_, names){ builtin = builtin.concat(names); });
     return builtin.concat(summary.chains || []).filter(function(v,i,a){ return v && a.indexOf(v)===i; });
 }
-function allInterfaces(){ return (summary.interfaces || []); }
+/* Variables only make sense inside the loop that sets them, so the form offers
+   $IFACE when you are editing a rule inside "for IFACE in ...", and never in
+   the Add tab, where picking one would build a rule that expands to nothing. */
+var FORM_VARS = [];
+
+function scopeVars(id){
+    var found = null;
+    (function walk(list, stack){
+        for (var i = 0; i < list.length && !found; i++) {
+            var n = list[i];
+            if (n.id === id) { found = stack.slice(); return; }
+            if (n.children && n.children.length) {
+                var inner = stack;
+                if (n.kind === 'block' && n.parts && n.parts['var']) inner = stack.concat(['$' + n.parts['var']]);
+                walk(n.children, inner);
+            }
+        }
+    })(nodes, []);
+    return found || [];
+}
+
+function allInterfaces(){ return (summary.interfaces || []).concat(FORM_VARS); }
 function allTargets(){
     var t = D.choices.target.map(function(x){ return x[0]; });
     return t.concat(summary.custom_chains || []).filter(function(v,i,a){ return a.indexOf(v)===i; });
@@ -108,16 +133,29 @@ function allTargets(){
 /* ------------------------------------------------------------------ *
  * Tree rendering
  * ------------------------------------------------------------------ */
+/* Simple view shows only the rules, in plain English. Advanced shows every
+   line of the script with the commands, as an experienced admin expects. */
+var VIEW = 'simple';
+try { VIEW = localStorage.getItem('csfpost-view') === 'advanced' ? 'advanced' : 'simple'; }
+catch (e) {}
+function simple(){ return VIEW === 'simple'; }
+
+/* Script plumbing: real shell, but nothing a new admin edits to open a port. */
+var PLUMBING = {shebang: 1, 'var': 1, shell: 1, blank: 1};
+var hiddenCount = 0;
+
 function ruleTags(n){
     var t = [];
     if (n.family === 'ipv6') t.push('IPv6');
     if (n.table && n.table !== 'filter') t.push(n.table);
-    if (n.guard === 'check-then-add') t.push('added once');
-    if (n.guard === 'create-or-flush') t.push('create or flush');
-    if (n.guard === 'custom') t.push('shell idiom');
-    if (n.dynamic) t.push('uses $variables');
-    if (n.multiline) t.push('multi-line');
-    if (n.unknown && n.unknown.length) t.push('kept as-is: ' + n.unknown.join(' '));
+    if (!simple()) {
+        if (n.guard === 'check-then-add') t.push('added once');
+        if (n.guard === 'create-or-flush') t.push('create or flush');
+        if (n.guard === 'custom') t.push('shell idiom');
+        if (n.dynamic) t.push('uses $variables');
+        if (n.multiline) t.push('multi-line');
+        if (n.unknown && n.unknown.length) t.push('kept as-is: ' + n.unknown.join(' '));
+    }
     return t.map(function(x){ return '<span class="cp-tag">'+esc(x)+'</span>'; }).join('');
 }
 
@@ -131,35 +169,42 @@ function renderRule(n, readonly, readonlyNote){
     var cls = 'cp-row cp-rule' + (n.disabled ? ' cp-off' : '');
     var acts = '';
     if (!readonly) {
-        acts += btn('edit', n.id, 'pencil', 'Edit this rule', 'primary');
-        acts += btn('toggle', n.id, n.disabled ? 'eye' : 'eye-off', n.disabled ? 'Enable this rule' : 'Comment this rule out');
+        acts += btn('edit', n.id, 'pencil', 'Change this rule', 'primary');
+        acts += btn('toggle', n.id, n.disabled ? 'eye' : 'eye-off', n.disabled ? 'Turn this rule back on' : 'Turn this rule off');
         acts += btn('add-after', n.id, 'plus', 'Add a rule after this one');
-        acts += btn('duplicate', n.id, 'copy', 'Duplicate');
-        acts += btn('up', n.id, 'arrow-up', 'Move up');
-        acts += btn('down', n.id, 'arrow-down', 'Move down');
+        if (!simple()) {
+            acts += btn('duplicate', n.id, 'copy', 'Duplicate');
+            acts += btn('up', n.id, 'arrow-up', 'Move up');
+            acts += btn('down', n.id, 'arrow-down', 'Move down');
+        }
         acts += btn('delete', n.id, 'trash', 'Delete', 'danger');
-    } else {
-        acts = '<span class="text-muted" style="font-size:11px">' + esc(readonlyNote || 'managed') + '</span>';
+    } else if (readonlyNote) {
+        acts = '<span class="text-muted" style="font-size:11px">' + esc(readonlyNote) + '</span>';
     }
+    var cmd = simple() ? '' : '<code class="cp-cmd">'+esc(n.raw)+'</code>';
     return '<div class="'+cls+'" data-id="'+n.id+'" data-kind="rule" data-active="'+(n.disabled?'0':'1')+'" data-search="'+esc((n.description+' '+n.raw).toLowerCase())+'">' +
         '<div class="cp-badge"><span class="label label-'+(n.badge||'default')+'">'+esc(label)+'</span></div>' +
-        '<div class="cp-main"><div class="cp-desc">'+esc(n.description)+ruleTags(n)+'</div>' +
-        '<code class="cp-cmd">'+esc(n.raw)+'</code></div>' +
+        '<div class="cp-main"><div class="cp-desc">'+esc(n.description)+ruleTags(n)+'</div>' + cmd + '</div>' +
         '<div class="cp-actions">'+acts+'</div></div>';
 }
 
 function renderNode(n, readonly, readonlyNote){
+    if (simple() && PLUMBING[n.kind]) { hiddenCount += 1; return ''; }
+
     switch (n.kind) {
     case 'rule':
         return renderRule(n, readonly, readonlyNote);
 
     case 'section': {
         var ro = readonly || n.managed;
+        var collapsed = n.managed && simple();
         var head = '<div class="cp-sec-head"><span class="ti ti-'+(n.managed?'lock':'folder')+'"></span> ' +
             esc(n.label) + ' <span class="text-muted" style="font-weight:normal;font-size:12px">(' + n.rule_count + ' rule' + (n.rule_count===1?'':'s') + ')</span>';
         head += '<span class="pull-right">';
         if (n.managed) {
-            head += '<span class="text-muted" style="font-weight:normal;font-size:11px">maintained by CSF-eUI &mdash; rebuilt automatically</span>';
+            head += '<button class="btn btn-default cp-sec-toggle" data-id="'+n.id+'">' +
+                    '<span class="ti ti-chevron-'+(collapsed?'down':'up')+'"></span> ' +
+                    (collapsed ? 'Show rules' : 'Hide') + '</button>';
         } else {
             head += btn('add-in', n.id, 'plus', 'Add a rule inside this section', 'success');
             head += btn('rename', n.id, 'pencil', 'Rename section');
@@ -167,37 +212,62 @@ function renderNode(n, readonly, readonlyNote){
             head += btn('down', n.id, 'arrow-down', 'Move section down');
             head += btn('delete', n.id, 'trash', 'Delete the whole section', 'danger');
         }
-        head += '</span></div>';
+        head += '</span>';
+        if (n.managed) {
+            head += '<span class="cp-sec-note"><span class="ti ti-info-circle"></span> ' +
+                    'CSF-eUI writes this section itself and rebuilds it whenever the feature is used, ' +
+                    'so anything changed here would be overwritten. Turn the feature off instead of editing it.</span>';
+        }
+        head += '</div>';
         return '<div class="cp-sec'+(n.managed?' cp-managed':'')+'" data-id="'+n.id+'" data-kind="section" data-search="'+esc(n.label.toLowerCase())+'">' +
-            head + '<div class="cp-sec-body">' + n.children.map(function(c){ return renderNode(c, ro, 'managed'); }).join('') + '</div></div>';
+            head + '<div class="cp-sec-body"'+(collapsed?' style="display:none"':'')+'>' +
+            n.children.map(function(c){ return renderNode(c, ro, simple() ? '' : 'managed'); }).join('') +
+            '</div></div>';
     }
 
     case 'heredoc': {
         var note = n.comment_block
-            ? '<strong>Parked block</strong> &mdash; the lines below sit inside a <code>&lt;&lt;' + esc(n.marker) +
-              '</code> heredoc, so none of them run. Activate the block to turn them back into live rules.'
-            : 'Heredoc fed to <code>' + esc(n.head) + '</code>.';
-        var acts = '';
-        if (n.comment_block) acts += btn('unwrap', n.id, 'player-play', 'Activate: drop the heredoc wrapper so these lines run', 'success');
-        acts += btn('raw', n.id, 'pencil', 'Edit this block as text') + btn('delete', n.id, 'trash', 'Delete the block', 'danger');
+            ? '<strong>Parked rules</strong> &mdash; these lines are stored in the script but never run. ' +
+              'Activate them to put them back in service.'
+            : 'Text fed to <code>' + esc(n.head) + '</code>.';
+        var hacts = '';
+        if (!readonly) {
+            if (n.comment_block) hacts += btn('unwrap', n.id, 'player-play', 'Put these rules back in service', 'success');
+            hacts += btn('raw', n.id, 'pencil', 'Edit this block as text');
+            hacts += btn('delete', n.id, 'trash', 'Delete the block', 'danger');
+        }
         return '<div class="cp-block" data-id="'+n.id+'" data-kind="heredoc" data-search="'+esc(n.raw.toLowerCase())+'">' +
-            '<div class="cp-block-head"><span class="ti ti-file-text"></span> ' + note +
-            '<span class="pull-right">' + acts + '</span></div>' +
+            '<div class="cp-block-head cp-plain"><span class="ti ti-file-text"></span> ' + note +
+            '<span class="pull-right">' + hacts + '</span></div>' +
             '<div class="cp-block-body">' + n.children.map(function(c){
                 return renderNode(c, n.comment_block, 'parked'); }).join('') + '</div></div>';
     }
 
-    case 'block':
-        return '<div class="cp-block" data-id="'+n.id+'" data-kind="block" data-search="'+esc(n.raw.toLowerCase())+'">' +
-            '<div class="cp-block-head"><span class="ti ti-code"></span> ' + esc(n.head) +
-            '<span class="pull-right">' + btn('raw', n.id, 'pencil', 'Edit this block as text') + btn('delete', n.id, 'trash', 'Delete the block', 'danger') + '</span></div>' +
+    case 'block': {
+        var icon = n.block_type === 'if' ? 'git-branch' : 'repeat';
+        var bacts = '';
+        if (!readonly) {
+            bacts += btn(n.editable ? 'edit-block' : 'raw', n.id, 'pencil',
+                         n.editable ? (n.block_type === 'if' ? 'Change when these rules run'
+                                                             : 'Change what this repeats over')
+                                    : 'Edit this block as text',
+                         'primary');
+            bacts += btn('delete', n.id, 'trash', 'Delete this block and everything inside it', 'danger');
+        }
+        var bhead = simple()
+            ? esc(n.description)
+            : esc(n.head) + '<div class="cp-block-why">' + esc(n.description) + '</div>';
+        return '<div class="cp-block" data-id="'+n.id+'" data-kind="block" data-search="'+esc((n.raw+' '+n.description).toLowerCase())+'">' +
+            '<div class="cp-block-head'+(simple()?' cp-plain':'')+'"><span class="ti ti-'+icon+'"></span> ' + bhead +
+            '<span class="pull-right">' + bacts + '</span></div>' +
             '<div class="cp-block-body">' + n.children.map(function(c){ return renderNode(c, readonly, readonlyNote); }).join('') + '</div></div>';
+    }
 
     case 'comment':
         return '<div class="cp-row cp-note" data-id="'+n.id+'" data-kind="comment" data-search="'+esc(n.text.toLowerCase())+'">' +
             '<div class="cp-badge"><span class="ti ti-message" style="color:#bbb"></span></div>' +
             '<div class="cp-main">'+esc(n.text)+'</div>' +
-            '<div class="cp-actions">'+(readonly?'':btn('raw', n.id, 'pencil', 'Edit comment')+btn('delete', n.id, 'trash', 'Delete comment', 'danger'))+'</div></div>';
+            '<div class="cp-actions">'+(readonly?'':btn('edit-text', n.id, 'pencil', 'Reword this note')+btn('delete', n.id, 'trash', 'Delete note', 'danger'))+'</div></div>';
 
     case 'blank':
         return '<div class="cp-row cp-spacer" data-id="'+n.id+'" data-kind="blank" data-search="">' +
@@ -205,21 +275,21 @@ function renderNode(n, readonly, readonlyNote){
 
     case 'var':
         return '<div class="cp-row" data-id="'+n.id+'" data-kind="var" data-search="'+esc(n.raw.toLowerCase())+'">' +
-            '<div class="cp-badge"><span class="label label-default">variable</span></div>' +
+            '<div class="cp-badge"><span class="label label-default">value</span></div>' +
             '<div class="cp-main"><div class="cp-desc"><strong>'+esc(n.name)+'</strong> = '+esc(n.value)+
-            '<span class="cp-tag">reusable in rules as $'+esc(n.name)+'</span></div></div>' +
-            '<div class="cp-actions">'+(readonly?'':btn('raw', n.id, 'pencil', 'Edit')+btn('delete', n.id, 'trash', 'Delete', 'danger'))+'</div></div>';
+            '<span class="cp-tag">rules below can write $'+esc(n.name)+'</span></div></div>' +
+            '<div class="cp-actions">'+(readonly?'':btn('edit-var', n.id, 'pencil', 'Change this value')+btn('delete', n.id, 'trash', 'Delete', 'danger'))+'</div></div>';
 
     case 'shebang':
         return '<div class="cp-row cp-note" data-id="'+n.id+'" data-kind="shebang" data-search="">' +
             '<div class="cp-badge"><span class="ti ti-terminal-2" style="color:#bbb"></span></div>' +
-            '<div class="cp-main">'+esc(n.raw)+' &mdash; interpreter line</div><div class="cp-actions"></div></div>';
+            '<div class="cp-main">'+esc(n.raw)+' &mdash; tells the system which shell runs this script</div><div class="cp-actions"></div></div>';
 
     default:
         return '<div class="cp-row" data-id="'+n.id+'" data-kind="shell" data-search="'+esc((n.raw||'').toLowerCase())+'">' +
-            '<div class="cp-badge"><span class="label label-default">shell</span></div>' +
+            '<div class="cp-badge"><span class="label label-default">command</span></div>' +
             '<div class="cp-main"><code class="cp-cmd">'+esc(n.raw)+'</code></div>' +
-            '<div class="cp-actions">'+(readonly?'':btn('raw', n.id, 'pencil', 'Edit')+btn('up', n.id, 'arrow-up', 'Move up')+btn('down', n.id, 'arrow-down', 'Move down')+btn('delete', n.id, 'trash', 'Delete', 'danger'))+'</div></div>';
+            '<div class="cp-actions">'+(readonly?'':btn('edit-text', n.id, 'pencil', 'Change this command')+btn('up', n.id, 'arrow-up', 'Move up')+btn('down', n.id, 'arrow-down', 'Move down')+btn('delete', n.id, 'trash', 'Delete', 'danger'))+'</div></div>';
     }
 }
 
@@ -227,26 +297,159 @@ function renderTree(){
     if (!nodes.length) {
         $('#tree-root').html('<div class="cp-empty"><span class="ti ti-file-off" style="font-size:32px;opacity:.4"></span>' +
             '<p style="margin-top:10px">This script is empty. Use <strong>Add</strong> to create your first rule.</p></div>');
+        $('#tree-hidden-note').empty();
         return;
     }
+    hiddenCount = 0;
     $('#tree-root').html(nodes.map(function(n){ return renderNode(n, false); }).join(''));
+    if (hiddenCount) {
+        $('#tree-hidden-note').html('<div class="cp-hidden-note"><span class="ti ti-eye-off"></span> ' +
+            hiddenCount + ' setup line' + (hiddenCount === 1 ? ' is' : 's are') + ' hidden ' +
+            '(stored values, plain shell commands and spacing). ' +
+            '<a href="#" id="go-advanced">Show everything</a>.</div>');
+    } else {
+        $('#tree-hidden-note').empty();
+    }
     applyFilter();
 }
 
 function applyFilter(){
     var q = ($('#tree-filter').val() || '').toLowerCase().trim();
-    var showComments = $('#show-comments').is(':checked');
-    var showSpacers = $('#show-spacers').is(':checked');
     var activeOnly = $('#only-active').is(':checked');
     $('#tree-root [data-kind]').each(function(){
         var el = $(this), kind = el.data('kind'), show = true;
-        if (kind === 'comment' || kind === 'shebang') show = showComments;
-        if (kind === 'blank') show = showSpacers;
+        if (kind === 'blank') show = !simple();
         if (activeOnly && kind !== 'rule' && kind !== 'section' && kind !== 'block') show = false;
         if (show && activeOnly && kind === 'rule' && el.data('active') === 0) show = false;
         if (show && q) show = String(el.data('search') || '').indexOf(q) !== -1 ||
                                el.find('[data-search]').filter(function(){ return String($(this).data('search')||'').indexOf(q) !== -1; }).length > 0;
         el.toggle(show);
+    });
+}
+
+function setView(v){
+    VIEW = v === 'advanced' ? 'advanced' : 'simple';
+    try { localStorage.setItem('csfpost-view', VIEW); } catch (e) {}
+    $('#view-simple-lbl').toggleClass('active', VIEW === 'simple')
+        .find('input').prop('checked', VIEW === 'simple');
+    $('#view-advanced-lbl').toggleClass('active', VIEW === 'advanced')
+        .find('input').prop('checked', VIEW === 'advanced');
+    renderTree();
+}
+
+/* ------------------------------------------------------------------ *
+ * Small structured editor, used anywhere a raw text box used to be
+ * ------------------------------------------------------------------ */
+var formModal = {};
+
+function openFormModal(opts){
+    $('#form-modal-title').text(opts.title);
+    $('#form-modal-help').html(opts.help || '');
+    var h = '';
+    (opts.fields || []).forEach(function(f){
+        h += '<div class="form-group"><label style="font-size:12px">'+esc(f.label)+'</label>';
+        if (f.type === 'area') {
+            h += '<textarea class="form-control fm-f" data-key="'+esc(f.key)+'" rows="'+(f.rows||4)+'" ' +
+                 'spellcheck="false" style="font-family:monospace;font-size:12px">'+esc(f.value||'')+'</textarea>';
+        } else {
+            h += '<input type="text" class="form-control fm-f" data-key="'+esc(f.key)+'" ' +
+                 'value="'+esc(f.value||'')+'" placeholder="'+esc(f.placeholder||'')+'"' +
+                 (f.mono ? ' style="font-family:monospace"' : '') + '>';
+        }
+        if (f.help) h += '<p class="help-block" style="font-size:11px;margin:2px 0 0">'+f.help+'</p>';
+        h += '</div>';
+    });
+    $('#form-modal-fields').html(h);
+    var hasRaw = typeof opts.raw === 'string';
+    $('#form-modal-raw').val(hasRaw ? opts.raw : '');
+    $('#form-modal-raw-wrap').hide();
+    $('#form-modal-raw-toggle').toggle(hasRaw).text(opts.rawLabel || 'Edit the exact text instead');
+    formModal = {save: opts.save, rawSave: opts.rawSave};
+    $('#form-modal').modal('show');
+    setTimeout(function(){ $('#form-modal-fields .fm-f').first().focus(); }, 300);
+}
+
+function closeForm(){ $('#form-modal').modal('hide'); }
+
+function openBlockEdit(id){
+    var n = findNode(id);
+    if (!n) return;
+    if (!n.editable) { openRawEdit(id); return; }
+    var p = n.parts || {}, fields, help, title;
+    if (n.form === 'for') {
+        title = 'Repeat these rules for each...';
+        help = 'The rules inside run once for every value in a list. Each rule refers to the ' +
+               'current value as <code>$' + esc(p['var'] || 'ITEM') + '</code>.';
+        fields = [
+            {key: 'var', label: 'Call the current value', value: p['var'], placeholder: 'IFACE',
+             help: 'One word. Rules inside write it with a dollar sign, like <code>$IFACE</code>. ' +
+                   'Renaming it here does <strong>not</strong> rename it in the rules below.'},
+            {key: 'items', label: 'Go through', value: p.items, mono: true,
+             placeholder: '$DOCKER_IFACES   or   eth0 wg0 tun0',
+             help: 'A stored value such as <code>$DOCKER_IFACES</code>, a list of names separated by ' +
+                   'spaces, or a command in <code>$( )</code> that produces the list.'}
+        ];
+    } else {
+        title = 'Only run these rules when...';
+        help = 'The rules inside are skipped unless this test passes when the script runs.';
+        fields = [
+            {key: 'cond', label: 'Condition', value: p.cond, mono: true,
+             placeholder: '[ -d /sys/class/net/wg0 ]',
+             help: 'A shell test. <code>[ -d /sys/class/net/wg0 ]</code> means "only if the wg0 ' +
+                   'interface exists"; <code>[ -x /usr/bin/docker ]</code> means "only if Docker is installed".'}
+        ];
+    }
+    openFormModal({
+        title: title, help: help, fields: fields,
+        raw: n.raw, rawLabel: 'Edit the whole block as text instead',
+        save: function(v){ applyOp('update_block', {id: id, parts: v}, closeForm); },
+        rawSave: function(t){ applyOp('replace_raw', {id: id, text: t}, closeForm); }
+    });
+}
+
+function openVarEdit(id){
+    var n = findNode(id);
+    if (!n) return;
+    openFormModal({
+        title: 'Stored value',
+        help: 'A value written down once so the rules below can reuse it instead of repeating it.',
+        fields: [
+            {key: 'name', label: 'Name', value: n.name, placeholder: 'OFFICE_IP',
+             help: 'Letters, digits and underscores. Rules use it as <code>$NAME</code>. ' +
+                   'Renaming it here does <strong>not</strong> update rules that already use the old name.'},
+            {key: 'value', label: 'Value', value: n.value, mono: true,
+             placeholder: '203.0.113.9',
+             help: 'Quotes are added for you if the value contains spaces.'}
+        ],
+        raw: n.raw,
+        save: function(v){ applyOp('update_var', {id: id, name: v.name, value: v.value}, closeForm); },
+        rawSave: function(t){ applyOp('replace_raw', {id: id, text: t}, closeForm); }
+    });
+}
+
+function openTextEdit(id){
+    var n = findNode(id);
+    if (!n) return;
+    var isComment = n.kind === 'comment';
+    openFormModal({
+        title: isComment ? 'Note' : 'Shell command',
+        help: isComment
+            ? 'A note for whoever reads this script next. It changes nothing about the firewall.'
+            : 'Run exactly as written when the script runs, before or after the rules around it.',
+        fields: [{key: 'text', label: isComment ? 'Text' : 'Command',
+                  value: n.text, type: isComment ? 'area' : 'area', rows: isComment ? 3 : 2,
+                  help: isComment ? 'The <code>#</code> in front of each line is added for you.' : ''}],
+        save: function(v){ applyOp('update_text', {id: id, text: v.text}, closeForm); }
+    });
+}
+
+function openRawEdit(id){
+    var n = findNode(id);
+    openFormModal({
+        title: 'Edit lines',
+        help: 'These exact lines replace what is in the file. Nothing else in the script is touched.',
+        fields: [{key: 'text', label: 'Lines', value: n ? n.raw : '', type: 'area', rows: 8}],
+        save: function(v){ applyOp('replace_raw', {id: id, text: v.text}, closeForm); }
     });
 }
 
@@ -267,6 +470,7 @@ function sel(id, options, value){
 
 function txt(id, value, placeholder, list){
     var dl = 'dl-' + PFX + '-' + id;
+    if (list && !list.length) list = null;   /* an empty datalist shows an empty dropdown */
     return '<input type="text" class="form-control input-sm rf" data-key="'+id+'" ' +
            'value="'+esc(value||'')+'" placeholder="'+esc(placeholder||'')+'"' +
            (list ? ' list="'+dl+'" autocomplete="off"' : '') + '>' +
@@ -288,8 +492,9 @@ function field(label, inner, width, help, negKey, negOn){
            (help ? '<p class="help-block" style="font-size:11px;margin:2px 0 0">'+help+'</p>' : '')+'</div></div>';
 }
 
-function buildRuleForm(spec, mode, prefix){
+function buildRuleForm(spec, mode, prefix, vars){
     PFX = prefix || 'a';
+    FORM_VARS = vars || [];
     var f = spec.fields || {}, neg = spec.negated || {};
     var v6 = spec.family === 'ipv6';
     var h = '<div class="rf-form"><div class="row">';
@@ -308,8 +513,8 @@ function buildRuleForm(spec, mode, prefix){
     h += field('Protocol (-p)', sel('proto', D.choices.proto, f.proto), 3, '', 'proto', neg.proto);
     h += field('Rule comment', txt('comment', f.comment, 'why this rule exists'), 3, 'Stored in the rule itself (-m comment).');
     h += '</div><div class="row">';
-    h += field('Source (-s)', txt('src', f.src, '203.0.113.0/24 or $VAR'), 3, '', 'src', neg.src);
-    h += field('Destination (-d)', txt('dst', f.dst, '10.0.0.5 or $VAR'), 3, '', 'dst', neg.dst);
+    h += field('Source (-s)', txt('src', f.src, '203.0.113.0/24', FORM_VARS), 3, '', 'src', neg.src);
+    h += field('Destination (-d)', txt('dst', f.dst, '10.0.0.5', FORM_VARS), 3, '', 'dst', neg.dst);
     h += field('Source port', txt('sport', f.sport, '1194'), 3, 'One port or a range like 5060:5062.');
     h += field('Destination port', txt('dport', f.dport, '8096'), 3, 'One port or a range like 10000:20000.');
     h += '</div><div class="row">';
@@ -428,9 +633,17 @@ function openEdit(id){
         warn = '<div class="alert alert-info" style="font-size:12px;padding:8px 10px">' +
                'Options this editor does not know (<code>'+esc(n.unknown.join(' '))+'</code>) stay on the line untouched.</div>';
     }
+    var vars = scopeVars(id);
+    if (vars.length) {
+        warn += '<div class="alert alert-info" style="font-size:12px;padding:8px 10px">' +
+                '<span class="ti ti-repeat"></span> This rule sits inside a loop, so ' +
+                vars.map(function(v){ return '<code>'+esc(v)+'</code>'; }).join(' and ') +
+                ' stand' + (vars.length === 1 ? 's' : '') + ' for a different value each time it runs. ' +
+                'You can use ' + (vars.length === 1 ? 'it' : 'them') + ' in the fields below.</div>';
+    }
     var body = warn;
     if (n.editable) {
-        body += buildRuleForm(n, 'edit', 'e');
+        body += buildRuleForm(n, 'edit', 'e', vars);
         body += '<hr style="margin:12px 0"><p style="font-size:12px"><a href="#" id="toggle-raw">Edit the exact text instead</a></p>';
         body += '<div id="raw-edit" style="display:none"><textarea class="form-control" id="rule-raw" rows="5" spellcheck="false" style="font-family:monospace;font-size:12px">'+esc(n.raw)+'</textarea></div>';
     } else {
@@ -491,7 +704,38 @@ $(function(){
     renderTree(); renderSummary(); renderBackups(); renderAddForm();
 
     $('#tree-filter').on('input', applyFilter);
-    $('#show-comments, #show-spacers, #only-active').on('change', applyFilter);
+    $('#only-active').on('change', applyFilter);
+    setView(VIEW);
+
+    $(document).on('change', 'input[name="cp-view"]', function(){ setView(this.value); });
+    $(document).on('click', '#go-advanced', function(e){ e.preventDefault(); setView('advanced'); });
+
+    /* Managed sections start collapsed in Simple view - they are not yours to edit. */
+    $(document).on('click', '.cp-sec-toggle', function(e){
+        e.preventDefault();
+        var $body = $(this).closest('.cp-sec').find('> .cp-sec-body');
+        var hidden = $body.is(':hidden');
+        $body.toggle(hidden);
+        $(this).html('<span class="ti ti-chevron-'+(hidden?'up':'down')+'"></span> ' + (hidden ? 'Hide' : 'Show rules'));
+    });
+
+    /* Structured editor modal */
+    $('#form-modal-raw-toggle').on('click', function(e){
+        e.preventDefault();
+        var showing = $('#form-modal-raw-wrap').is(':visible');
+        $('#form-modal-raw-wrap').toggle(!showing);
+        $('#form-modal-fields').toggle(showing);
+    });
+    $('#form-modal-save').on('click', function(){
+        if ($('#form-modal-raw-wrap').is(':visible')) {
+            if (formModal.rawSave) formModal.rawSave($('#form-modal-raw').val());
+            return;
+        }
+        var vals = {};
+        $('#form-modal-fields .fm-f').each(function(){ vals[$(this).data('key')] = $(this).val(); });
+        if (formModal.save) formModal.save(vals);
+    });
+    $('#form-modal').on('hidden.bs.modal', function(){ $('#form-modal-fields').show(); });
 
     /* Row actions */
     $(document).on('click', '.cp-act', function(e){
@@ -527,11 +771,10 @@ $(function(){
                 applyOp('rename_section', {id: id, label: v});
             });
             break;
-        case 'raw':
-            openTextModal('Edit lines', 'These exact lines replace what is in the file.', n ? n.raw : '', false, function(v){
-                applyOp('replace_raw', {id: id, text: v});
-            });
-            break;
+        case 'edit-block': openBlockEdit(id); break;
+        case 'edit-var': openVarEdit(id); break;
+        case 'edit-text': openTextEdit(id); break;
+        case 'raw': openRawEdit(id); break;
         }
     });
 

@@ -608,6 +608,15 @@ def run_full_check():
     except Exception as e:
         checks.append({"category": "System Hardening", "items": [{"status": "info", "title": f"Hardening checks unavailable: {e}"}]})
 
+    # Ignored findings leave the category lists and are shown in a separate restore list
+    ignored = []
+    for c in checks:
+        for i in c["items"]:
+            if i["status"] == "ignored":
+                i["category"] = c["category"]
+                ignored.append(i)
+        c["items"] = [i for i in c["items"] if i["status"] != "ignored"]
+
     # Summary counts
     total = sum(len(c["items"]) for c in checks)
     passes = sum(1 for c in checks for i in c["items"] if i["status"] == "pass")
@@ -619,6 +628,7 @@ def run_full_check():
 
     return {
         "checks": checks,
+        "ignored": ignored,
         "summary": {"total": total, "pass": passes, "warn": warns, "fail": fails, "info": infos,
-                    "accepted": accepted, "changed": changed},
+                    "accepted": accepted, "ignored": len(ignored), "changed": changed},
     }

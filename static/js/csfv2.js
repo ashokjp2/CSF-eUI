@@ -694,6 +694,8 @@ var CSFv2 = {
             var warn = btn.data('confirm');
             if (warn && !confirm(warn)) return;
             if (fix && fix.action === 'restrict_port' && !confirm('Restrict port ' + fix.port + '/' + fix.proto + ' so only other containers and localhost can reach it?\n\nIf your reverse proxy reaches it by host IP rather than the Docker network, it may stop working — undo is in the bell menu.')) return;
+            if (fix && fix.action === 'remove_ports' && !confirm('Remove port(s) ' + (fix.ports || []).join(', ') + ' from TCP_IN?\n\nNothing is listening there now. The change takes effect when you use “Apply safely”; undo is in the bell menu.')) return;
+            if (fix && fix.action === 'disable_feed' && !confirm('Disable blocklist feed ' + fix.name + '?\n\nIt is not blocking anything today. You can enable it again on the Blocklist Feeds page.')) return;
             btn.prop('disabled', true).html('<i class="ti ti-refresh"></i> Applying…');
             $.ajax({url: '/api/health/quick-fix', method: 'POST', contentType: 'application/json', data: JSON.stringify(body)})
             .done(function(r) {
@@ -714,15 +716,23 @@ var CSFv2 = {
         $(document).on('keydown', '.hc-accept-form input', function(e) { if (e.key === 'Enter') { e.preventDefault(); $(this).siblings('.js-accept-save').click(); } });
         $(document).on('click', '.js-accept-save', function(e) {
             e.preventDefault();
-            var form = $(this).closest('.hc-accept-form'), row = form.closest('.hc-item'), reason = form.find('input').val().trim();
-            if (!reason) { form.find('input').addClass('is-invalid').focus(); return; }
-            $.ajax({url: '/api/health/accept', method: 'POST', contentType: 'application/json', data: JSON.stringify({id: row.data('id'), reason: reason})})
+            var form = $(this).closest('.hc-accept-form'), one = form.closest('.hc-item'), reason = form.find('input').val().trim();
+            var ignore = !!$(this).data('ignore');
+            // the same finding can appear twice (Top recommendations + All checks): update every copy
+            var row = $('.hc-item').filter(function() { return $(this).data('id') === one.data('id'); });
+            $.ajax({url: '/api/health/accept', method: 'POST', contentType: 'application/json', data: JSON.stringify({id: one.data('id'), reason: reason, ignore: ignore})})
             .done(function(r) {
                 if (!r.success) { CSFv2.toast(r.error || 'Could not save', 'danger'); return; }
                 form.slideUp(120);
+                if (ignore) {
+                    row.slideUp(160, function() { $(this).remove(); });
+                    CSFv2.toast('Ignored. It is listed under “Ignored checks” at the bottom; reload to see the new score.', 'info', 6000);
+                    return;
+                }
                 row.removeClass('hc-fail hc-warn hc-info').addClass('hc-accepted');
                 row.find('.hc-icon').attr('class', 'hc-icon ti ti-eye-off');
-                row.find('.hc-actions').replaceWith('<div class="hc-detail hc-accepted-note"><i class="ti ti-eye-off"></i> Accepted: “' + esc(reason) + '” <a href="#" class="js-unaccept" data-id="' + esc(row.data('id')) + '">Check again</a></div>');
+                row.find('.hc-how, .hc-accept-form').remove();
+                row.find('.hc-actions').replaceWith('<div class="hc-detail hc-accepted-note"><i class="ti ti-eye-off"></i> Accepted' + (reason ? ': “' + esc(reason) + '”' : '') + ' <a href="#" class="js-unaccept" data-id="' + esc(one.data('id')) + '">Check again</a></div>');
                 CSFv2.toast('Accepted. Reload to see the new score.', 'info');
             })
             .fail(function() { CSFv2.toast('Request failed', 'danger'); });

@@ -1273,6 +1273,122 @@ def _drop_orphan_modules(tokens):
 
 
 # ---------------------------------------------------------------------------
+# Plain English for the lines that are not firewall rules
+#
+# A new admin should never have to read ``for IFACE in $(ip -o link show ...)``
+# to understand what a script does, and should never be handed a raw text box
+# to change it.  Each of these heads is broken into named parts the UI can show
+# as an ordinary form, and rebuilt from those parts on save.
+# ---------------------------------------------------------------------------
+
+_FOR_HEAD_RE = re.compile(r"^[ \t]*for[ \t]+(?P<var>[A-Za-z_][A-Za-z0-9_]*)[ \t]+in[ \t]+"
+                          r"(?P<items>.*?)[ \t]*;?[ \t]*do[ \t]*$")
+_IF_HEAD_RE = re.compile(r"^[ \t]*if[ \t]+(?P<cond>.*?)[ \t]*;?[ \t]*then[ \t]*$")
+_LOOP_HEAD_RE = re.compile(r"^[ \t]*(?P<kw>while|until)[ \t]+(?P<cond>.*?)[ \t]*;?[ \t]*do[ \t]*$")
+_SIMPLE_VAR_RE = re.compile(r"^\$\{?(?P<name>[A-Za-z_][A-Za-z0-9_]*)\}?$")
+
+
+def _items_phrase(items):
+    """Describe the right-hand side of a ``for`` loop without shell jargon."""
+    items = (items or "").strip()
+    if not items:
+        return "nothing"
+    if items.startswith("$(") or items.startswith("`"):
+        return "every name the command finds on this server"
+    m = _SIMPLE_VAR_RE.match(items)
+    if m:
+        return "every entry in $" + m.group("name")
+    words = items.split()
+    if len(words) <= 8:
+        return "each of: " + ", ".join(words)
+    return "each of %d values" % len(words)
+
+
+def describe_block(block_type, head, name=""):
+    """Return (description, parts, form) for a compound block's opening line.
+
+    ``form`` names the shape of the editor the UI should offer: ``for`` for a
+    loop over a list, ``cond`` for a condition, or ``''`` when the head is
+    something this editor will not rewrite for you.
+    """
+    head = head or ""
+    if block_type == "for":
+        m = _FOR_HEAD_RE.match(head)
+        if m:
+            var, items = m.group("var"), m.group("items")
+            return ("Repeat the lines below once for %s, each one available to them as $%s."
+                    % (_items_phrase(items), var),
+                    {"var": var, "items": items}, "for")
+        return ("Repeats the lines below for a list of values.", {}, "")
+
+    if block_type == "if":
+        m = _IF_HEAD_RE.match(head)
+        if m:
+            return ("Only run the lines below when this is true: %s" % m.group("cond"),
+                    {"cond": m.group("cond")}, "cond")
+        return ("Runs the lines below only in certain conditions.", {}, "")
+
+    if block_type in ("while", "until"):
+        m = _LOOP_HEAD_RE.match(head)
+        word = "as long as" if block_type == "while" else "until"
+        if m:
+            return ("Repeat the lines below %s this is true: %s" % (word, m.group("cond")),
+                    {"cond": m.group("cond")}, "cond")
+        return ("Repeats the lines below %s a condition is met." % word, {}, "")
+
+    if block_type == "case":
+        return ("Picks one of the branches below depending on a value.", {}, "")
+
+    if block_type == "function":
+        return ("Defines %s, a helper the rest of the script can call."
+                % (name or "a helper"), {}, "")
+
+    return ("A block of shell the rest of the script depends on.", {}, "")
+
+
+def render_block_head(block_type, parts, original):
+    """Rebuild a block's opening line from edited parts, keeping indentation."""
+    indent = re.match(r"^[ \t]*", original or "").group(0)
+    parts = parts or {}
+    if block_type == "for":
+        var = (parts.get("var") or "").strip()
+        items = (parts.get("items") or "").strip()
+        if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", var):
+            raise EditError("The name for each item must be a word like IFACE or SUBNET.")
+        if not items:
+            raise EditError("Say what the loop should go through, for example $DOCKER_IFACES.")
+        return "%sfor %s in %s; do" % (indent, var, items)
+    if block_type in ("if", "while", "until"):
+        cond = (parts.get("cond") or "").strip()
+        if not cond:
+            raise EditError("A condition is required.")
+        tail = "then" if block_type == "if" else "do"
+        return "%s%s %s; %s" % (indent, block_type, cond, tail)
+    raise EditError("This block has to be edited as text.")
+
+
+def _var_literal(value):
+    """Render a variable's value, quoting only when the shell would need it.
+
+    Double quotes are used rather than single ones so that ``$VAR``, ``${VAR%%.*}``
+    and ``$(cmd)`` inside the value keep working.
+    """
+    value = "" if value is None else str(value)
+    if value == "":
+        return '""'
+    if value[0] in ("'", '"'):
+        return value                      # the author quoted it; leave it alone
+    if re.search(r"[\s;&|<>()*?\[\]{}#~!\\\"']", value):
+        return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    return value
+
+
+def describe_var(name, value):
+    return ("Remembers %s. Rules below can write $%s instead of repeating it."
+            % (value.strip() or "an empty value", name))
+
+
+# ---------------------------------------------------------------------------
 # Projection for the UI / API (JSON-safe, no internal token bookkeeping)
 # ---------------------------------------------------------------------------
 
@@ -1313,9 +1429,15 @@ def node_to_ui(node):
             "children": [node_to_ui(c) for c in node.get("children", [])],
         })
     elif kind == "block":
+        desc, parts, form = describe_block(node["block_type"], node["head"],
+                                           node.get("name", ""))
         out.update({
             "block_type": node["block_type"], "name": node.get("name", ""),
             "head": node["head"],
+            "description": desc, "parts": parts, "form": form,
+            "editable": bool(form),
+            "rule_count": sum(1 for n in _walk(node.get("children") or [])
+                              if n.get("kind") == "rule"),
             "children": [node_to_ui(c) for c in node.get("children", [])],
         })
     elif kind == "comment":
@@ -1323,7 +1445,8 @@ def node_to_ui(node):
     elif kind == "blank":
         out.update({"count": node["count"]})
     elif kind == "var":
-        out.update({"name": node["name"], "value": node["value"], "text": node["text"]})
+        out.update({"name": node["name"], "value": node["value"], "text": node["text"],
+                    "description": describe_var(node["name"], node["value"])})
     else:
         out.update({"text": node.get("text", "")})
     return out
@@ -1343,6 +1466,11 @@ def rule_signature(node):
     for flag in sorted(spec.get("bools") or []):
         parts.append(flag)
     return "|".join(parts)
+
+
+def _is_literal(value):
+    """True for a plain name, False for anything the shell expands at run time."""
+    return bool(value) and "$" not in value and "`" not in value
 
 
 def summarize(doc):
@@ -1366,17 +1494,21 @@ def summarize(doc):
         else:
             active += 1
         spec = node["spec"]
-        if spec.get("chain"):
+        # These inventories drive the suggestion lists in the rule form. A value
+        # that is really a shell substitution ($IFACE, $(...)) only makes sense
+        # inside the loop that sets it, so offering it elsewhere would build a
+        # broken rule. Keep them out.
+        if _is_literal(spec.get("chain")):
             chains.add(spec["chain"])
             if spec["op"] == "new-chain":
                 custom_chains.add(spec["chain"])
         if spec.get("table"):
             tables.add(spec["table"])
-        if spec.get("target"):
+        if _is_literal(spec.get("target")):
             targets.add(spec["target"])
         for key in ("in_iface", "out_iface"):
             value = spec["fields"].get(key)
-            if value:
+            if _is_literal(value):
                 ifaces.add(value)
         unknown_flags.update(node["unknown"])
     builtin = set()
@@ -1452,11 +1584,38 @@ def _new_nodes(text):
     return [{"kind": "raw", "raw": _lines_of(text), "lineno": 0}]
 
 
+def _managed_ids(doc):
+    """Ids of every node that lives inside a section CSF-eUI maintains."""
+    found = set()
+
+    def walk(nodes, inside):
+        for node in nodes:
+            here = inside or (node.get("kind") == "section" and node.get("managed"))
+            if inside and node.get("id"):
+                found.add(node["id"])
+            walk(node.get("children") or [], here)
+
+    walk(doc["nodes"], False)
+    return found
+
+
+# Changing a node has no lasting effect inside a managed section - CSF-eUI
+# rebuilds those lines - so refuse it here as well as in the page, which can
+# be bypassed by calling the endpoint directly.
+_MANAGED_GUARDED = {"update_rule", "update_block", "update_var", "update_text",
+                    "replace_raw", "toggle", "delete", "move", "unwrap", "set_blank"}
+
+
 def apply_op(content, op, payload):
     """Apply one structural edit to *content* and return the new text."""
     doc = parse(content)
     payload = payload or {}
     node_id = payload.get("id") or ""
+
+    if node_id and op in _MANAGED_GUARDED and node_id in _managed_ids(doc):
+        raise EditError("This line belongs to a section CSF-eUI maintains. It is rebuilt "
+                        "automatically, so a change here would be overwritten. Turn the "
+                        "feature off instead.")
 
     if op == "update_rule":
         node, _, _ = find_node(doc, node_id)
@@ -1471,12 +1630,69 @@ def apply_op(content, op, payload):
         node["raw"] = _disable_lines(lines) if node["disabled"] else lines
 
     elif op == "replace_raw":
-        node, _, _ = find_node(doc, node_id)
+        node, parent, idx = find_node(doc, node_id)
         if not node:
             raise EditError("Block not found - reload the page.")
         if node.get("kind") == "section":
             raise EditError("Edit the lines inside the section, not the section itself.")
-        node["raw"] = _lines_of(payload.get("text", ""))
+        lines = _lines_of(payload.get("text", ""))
+        if node.get("kind") in ("heredoc", "block"):
+            # A container is written out from head_raw + children + foot_raw, so
+            # setting raw alone would be silently dropped. Swap the whole node
+            # for the replacement text instead; it is re-parsed on the next read.
+            parent[idx] = {"kind": "raw", "raw": lines, "lineno": 0}
+        else:
+            node["raw"] = lines
+
+    elif op == "update_block":
+        node, _, _ = find_node(doc, node_id)
+        if not node or node.get("kind") != "block":
+            raise EditError("Block not found - reload the page.")
+        if not node.get("head_raw"):
+            raise EditError("This block has no opening line to edit.")
+        head = render_block_head(node["block_type"], payload.get("parts"),
+                                 node["head_raw"][0])
+        node["head_raw"] = [head]
+        node["head"] = head.strip()
+
+    elif op == "update_var":
+        node, _, _ = find_node(doc, node_id)
+        if not node or node.get("kind") != "var":
+            raise EditError("Variable not found - reload the page.")
+        name = (payload.get("name") or "").strip()
+        if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", name):
+            raise EditError("A variable name must be a word like UCM6 or DOCKER_IFACES.")
+        value = payload.get("value", "")
+        original = node["raw"][0]
+        indent = re.match(r"^[ \t]*", original).group(0)
+        km = re.match(r"^[ \t]*(export|local|declare)[ \t]+", original)
+        keyword = km.group(1) + " " if km else ""
+        if value == node["value"]:
+            # Only the name changed: keep the author's quoting exactly as it was.
+            rhs = _VAR_RE.match(original).group("value")
+        else:
+            rhs = _var_literal(value)
+        node["raw"] = ["%s%s%s=%s" % (indent, keyword, name, rhs)]
+        node["name"], node["value"] = name, value
+
+    elif op == "update_text":
+        node, _, _ = find_node(doc, node_id)
+        if not node or node.get("kind") not in ("comment", "shell"):
+            raise EditError("Line not found - reload the page.")
+        text = payload.get("text", "")
+        if not text.strip():
+            raise EditError("Nothing entered.")
+        indent = re.match(r"^[ \t]*", node["raw"][0]).group(0)
+        if node.get("kind") == "comment":
+            hashes = (_COMMENT_RE.match(node["raw"][0]).group("hashes")
+                      if _COMMENT_RE.match(node["raw"][0]) else "#")
+            node["raw"] = ["%s%s %s" % (indent, hashes, line)
+                           for line in text.split("\n")]
+            node["text"] = text
+        else:
+            node["raw"] = [indent + line if i == 0 else line
+                           for i, line in enumerate(text.split("\n"))]
+            node["text"] = text.strip()
 
     elif op == "toggle":
         node, _, _ = find_node(doc, node_id)

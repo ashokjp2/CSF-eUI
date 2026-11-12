@@ -66,6 +66,7 @@ def calculate_score():
                     "setting": item.get("setting"),
                     "fix_value": item.get("fix_value"),
                     "fix": item.get("fix"),
+                    "how": item.get("how"),
                     "link": item.get("link"),
                     "weight": item.get("weight", 2),
                     "changed": item.get("changed"),

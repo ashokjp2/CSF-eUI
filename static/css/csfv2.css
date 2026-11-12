@@ -1473,6 +1473,17 @@ button.topbar-search:hover { border-color: var(--accent); }
 .list-group-item { background: var(--panel-bg); border-color: var(--border-light); color: var(--text-primary); }
 .list-group-item:first-child { border-radius: 10px 10px 0 0; }
 .list-group-item:last-child { border-radius: 0 0 10px 10px; }
+/* Selectable list (csfpost rule templates): no solid blue block, keep text readable */
+a.list-group-item { border-left: 3px solid transparent; transition: background .12s; }
+a.list-group-item:hover, a.list-group-item:focus { background: var(--bg-tertiary); color: var(--text-primary); border-left-color: var(--border-color); }
+a.list-group-item strong { font-weight: 500; }
+a.list-group-item small { display: block; margin-top: 2px; line-height: 1.45; }
+a.list-group-item.active, a.list-group-item.active:hover, a.list-group-item.active:focus {
+    background: var(--accent-soft, rgba(37,99,235,.08)); color: var(--text-primary);
+    border-color: var(--border-light); border-left-color: var(--accent); z-index: 0;
+}
+a.list-group-item.active strong { color: var(--accent); }
+a.list-group-item.active .text-muted { color: var(--text-secondary) !important; }
 .progress { background: var(--bg-tertiary); box-shadow: none; border-radius: 4px; height: 8px; }
 .progress-bar { box-shadow: none; background-image: none; }
 .modal-content { border-radius: 12px; border: 1px solid var(--border-color); box-shadow: var(--shadow-lg); }
@@ -1825,6 +1836,12 @@ tr[data-key] td:first-child strong { font-size: 12px; }
 .hc-flag { margin-left: 6px; font-size: 9px; vertical-align: 2px; }
 .hc-detail { font-size: 12px; color: var(--text-secondary); margin-top: 3px; line-height: 1.5; }
 .hc-accepted-note { font-style: italic; }
+.hc-how { color: var(--text-secondary); }
+.hc-how b { font-weight: 500; color: var(--text-primary); }
+.hc-how .ti { color: var(--warning); }
+.hc-item.hc-ignored { border-left-color: var(--border-color); color: var(--text-muted); }
+.hc-item.hc-ignored strong { font-weight: 500; color: var(--text-secondary); }
+.hc-ignored .hc-icon { color: var(--text-muted); }
 .hc-accepted-note a { margin-left: 6px; font-style: normal; }
 .hc-actions { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; }
 .hc-actions .label { font-weight: 400; font-size: 11px; }

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_health_item.html" import health_item, cat_icon %}
+{% from "_health_item.html" import health_item, cat_icon, ignored_list %}
 {% block page_title %}Health Check{% endblock %}
 
 {% block content %}
@@ -64,4 +64,5 @@
             </div>
         </div>
         {% endfor %}
+        {{ ignored_list(score.report.ignored) }}
 {% endblock %}

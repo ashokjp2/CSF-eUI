@@ -49,9 +49,13 @@ check("continuation layout kept", "iptables -t nat -A PREROUTING \\\n  -i enp3s0
       repr(out[out.find("PREROUTING"):out.find("PREROUTING")+140]))
 
 print("\n== edit a guarded check-then-add rule (both halves) ==")
-doc = M.parse(live)
+# The live script keeps these rules in a section CSF-eUI maintains, and those
+# are refused on purpose (see the managed-section test below). Rename the
+# markers so this exercises the editing path rather than the guard.
+live_mine = live.replace("CSFV2-DOCKER-FORWARDING", "MY-DOCKER-RULES")
+doc = M.parse(live_mine)
 n = [x for x in M._walk(doc["nodes"]) if x.get("kind")=="rule" and x["guard"]=="check-then-add" and x["spec"]["fields"].get("in_iface")][0]
-out = M.apply_op(live, "update_rule", {"id": n["id"], "updates": {"target": "RETURN"}})
+out = M.apply_op(live_mine, "update_rule", {"id": n["id"], "updates": {"target": "RETURN"}})
 seg = [l for l in out.split("\n") if "-C FORWARD -i" in l][0]
 check("guard half updated", "-j RETURN" in seg, repr(seg))
 check("insert half updated", out.count("-i \"$IFACE\" -j RETURN") == 2, str(out.count('-j RETURN')))
@@ -195,9 +199,9 @@ o3 = M.apply_op(src, "update_rule", {"id": n3["id"], "updates": {"ctstate": ""}}
 check("-m conntrack dropped with --ctstate", "-m conntrack" not in o3)
 
 print("\n== negation on both halves of a guarded rule ==")
-d2 = M.parse(live)
+d2 = M.parse(live_mine)
 n4 = [x for x in M._walk(d2["nodes"]) if x.get("kind")=="rule" and x["spec"]["target"]=="MASQUERADE"][0]
-o4 = M.apply_op(live, "update_rule", {"id": n4["id"], "updates": {"neg_out_iface": False}})
+o4 = M.apply_op(live_mine, "update_rule", {"id": n4["id"], "updates": {"neg_out_iface": False}})
 check("negation removed from check and insert halves", "! -o" not in o4 and o4.count('-o "$IFACE" -j MASQUERADE') == 2)
 
 print("\n== table flag added and removed cleanly ==")
@@ -219,6 +223,75 @@ check("activating the block promotes its rules", s2["active"] == 24 and s2["park
       str((s2["active"], s2["parked"])))
 check("activating the block drops only the wrapper", "<<COMMENT" not in un and "\nCOMMENT\n" not in un and "--to-destination 10.12.10.12:8096" in un)
 check("commented rule inside the block stays commented", "#iptables -t nat -A POSTROUTING \\" in un)
+
+print("\n== loops and conditions read as plain English and edit as a form ==")
+ui_live = M.doc_to_ui(M.parse(live))
+flat = []
+def _flatten(ns):
+    for x in ns:
+        flat.append(x); _flatten(x.get("children") or [])
+_flatten(ui_live)
+blocks = [b for b in flat if b["kind"] == "block"]
+check("every block carries a description", all(b["description"] for b in blocks), str(len(blocks)))
+loop = [b for b in blocks if b.get("parts", {}).get("var") == "SUBNET"][0]
+check("for-loop offers a form", loop["form"] == "for" and loop["editable"])
+check("for-loop names its variable", "$SUBNET" in loop["description"], loop["description"])
+cond = [b for b in blocks if b["block_type"] == "if"][0]
+check("if-block offers a condition form", cond["form"] == "cond" and cond["parts"]["cond"])
+
+print("\n== structured edits touch exactly one line ==")
+def _flat_of(text):
+    out = []
+    def walk(ns):
+        for x in ns:
+            out.append(x); walk(x.get("children") or [])
+    walk(M.doc_to_ui(M.parse(text)))
+    return out
+fm = _flat_of(live_mine)
+
+blk = [b for b in fm if b["kind"] == "block" and b.get("parts", {}).get("var") == "SUBNET"][0]
+out = M.apply_op(live_mine, "update_block", {"id": blk["id"], "parts": {"var": "NET", "items": "$MY_NETS"}})
+check("loop head rewritten", "for NET in $MY_NETS; do" in out)
+check("only the head changed", sum(1 for a, b in zip(live_mine.split("\n"), out.split("\n")) if a != b) == 1)
+
+v = [x for x in fm if x["kind"] == "var" and x["name"] == "DOCKER_VERSION"][0]
+out = M.apply_op(live_mine, "update_var", {"id": v["id"], "name": "DVER", "value": v["value"]})
+check("rename keeps the author's quoting",
+      'DVER="$(docker version --format \'{{.Server.Version}}\' 2>/dev/null || true)"' in out)
+
+v2 = [x for x in fm if x["kind"] == "var" and x["name"] == "DOCKER_IFACES"][0]
+out = M.apply_op(live_mine, "update_var", {"id": v2["id"], "name": "DOCKER_IFACES", "value": "docker0 br0"})
+check("a value with spaces is quoted", 'DOCKER_IFACES="docker0 br0"' in out)
+
+fs = _flat_of(src)
+c = [x for x in fs if x["kind"] == "comment" and "\n" not in x["raw"]][0]
+out = M.apply_op(src, "update_text", {"id": c["id"], "text": "Keep container traffic working."})
+check("comment reworded with its hash kept", "# Keep container traffic working." in out)
+check("comment edit changed one line",
+      sum(1 for a, b in zip(src.split("\n"), out.split("\n")) if a != b) == 1 and
+      len(out.split("\n")) == len(src.split("\n")))
+
+out = M.apply_op(live_mine, "replace_raw", {"id": blk["id"], "text": "# removed"})
+check("replace_raw on a block really replaces it",
+      "# removed" in out and "for SUBNET in" not in out)
+
+print("\n== sections CSF-eUI maintains are refused, not just hidden ==")
+fl = _flat_of(live)
+inner = [x for x in fl if x["kind"] == "rule" and x["target"] == "MASQUERADE"][0]
+for op, payload in (("update_rule", {"updates": {"target": "RETURN"}}),
+                    ("toggle", {}), ("delete", {}), ("replace_raw", {"text": "x"})):
+    payload["id"] = inner["id"]
+    try:
+        M.apply_op(live, op, payload)
+        check("managed %s refused" % op, False, "it was allowed")
+    except M.EditError:
+        check("managed %s refused" % op, True)
+
+print("\n== shell substitutions stay out of the suggestion lists ==")
+s_live = M.summarize(M.parse(live))
+check("no $VAR interfaces", not [i for i in s_live["interfaces"] if "$" in i], str(s_live["interfaces"]))
+check("no $VAR chains", not [c for c in s_live["chains"] if "$" in c], str(s_live["chains"]))
+check("no $VAR targets", not [t for t in s_live["targets"] if "$" in t], str(s_live["targets"]))
 
 print("\n== ui projection is json-serialisable ==")
 ui = M.doc_to_ui(M.parse(src))

@@ -2003,7 +2003,7 @@ _CSF_FIX_SETTINGS = {
     "TESTING", "RESTRICT_SYSLOG", "LF_SSHD", "LF_FTPD", "LF_PERMBLOCK",
     "PS_LIMIT", "CT_LIMIT", "DOCKER", "IPV6",
     "SYNFLOOD", "PORTFLOOD", "CONNLIMIT", "ICMP_IN_RATE", "LF_DISTATTACK", "LF_NETBLOCK",
-    "DENY_IP_LIMIT", "SMTP_BLOCK", "LF_DIRWATCH", "LF_INTEGRITY", "LF_SSH_EMAIL_ALERT", "LF_SU_EMAIL_ALERT",
+    "DENY_IP_LIMIT", "SMTP_BLOCK", "LF_DIRWATCH", "LF_INTEGRITY", "LF_SSH_EMAIL_ALERT", "LF_SU_EMAIL_ALERT", "CC_SRC",
 }
 
 
@@ -2022,10 +2022,10 @@ def api_health_accept():
         audit_log.log_event("config", session.get("username", ""), request.remote_addr, f"Health finding re-enabled: {item_id}")
         return jsonify({"success": True})
     reason = str(data.get("reason", "")).strip()
-    if not reason:
-        return jsonify({"success": False, "error": "Give a short reason so the next admin knows why"})
-    rec = hardening_checks.accept(item_id, reason, session.get("username", ""))
-    audit_log.log_event("config", session.get("username", ""), request.remote_addr, f"Health finding accepted: {item_id} — {reason}")
+    hide = bool(data.get("ignore"))
+    rec = hardening_checks.accept(item_id, reason, session.get("username", ""), hide=hide)
+    audit_log.log_event("config", session.get("username", ""), request.remote_addr,
+                        f"Health finding {'ignored' if hide else 'accepted'}: {item_id}" + (f" — {reason}" if reason else ""))
     return jsonify({"success": True, "accepted": rec})
 
 
@@ -2056,6 +2056,16 @@ def api_health_quick_fix():
             audit_log.log_event("config", session.get("username", ""), request.remote_addr,
                                 f"Health quick-fix: restricted docker port {port}/{proto}")
             result["message"] = f"Port {port}/{proto} is now reachable only from other containers and localhost."
+        return jsonify(result)
+    if action in ("remove_ports", "chmod", "ntp", "disable_feed"):
+        if not _is_admin():
+            return jsonify({"success": False, "error": "Viewer accounts cannot change this"}), 403
+        result = hardening_checks.apply_action(action, data, _actor())
+        if result.get("success"):
+            audit_log.log_event("config", session.get("username", ""), request.remote_addr,
+                                f"Health quick-fix: {result.get('message') or action}")
+            if result.get("undo"):
+                actions_journal.record("health_fix", "Health fix: " + (result.get("message") or action), result["undo"], _actor())
         return jsonify(result)
 
     if not setting or not value:
