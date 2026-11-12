@@ -236,6 +236,16 @@ def registration_options(username, host):
         raise RuntimeError("User not found")
     # A stable per-user handle so the authenticator can tell accounts apart; never the username.
     handle = user.get("passkey_handle")
+    if handle and not user.get("passkeys"):
+        # Older releases generated the WebAuthn maximum (64-byte) handle.  That is
+        # valid by spec, but some phone providers fail after a cross-device ceremony
+        # with handles at the limit.  Rotate a stale handle before re-registration;
+        # keep it unchanged while credentials still use it.
+        try:
+            if len(base64url_to_bytes(handle)) != 32:
+                handle = None
+        except Exception:
+            handle = None
     if not handle:
         # 32 random bytes: the spec allows up to 64, but a few phone providers misbehave at the limit
         handle = bytes_to_base64url(os.urandom(32))

@@ -83,11 +83,17 @@ check("no host problem for domain", passkeys.host_problem("fw.example.com:8750",
 # --- registration ---
 auth.create_user("admin", "secret-pw")
 key = SoftKey()
+# Simulate an account created by v1.2.63 whose last passkey was removed but whose
+# maximum-size user handle was left behind in auth.json.
+legacy = auth.load_auth_config()
+legacy["users"]["admin"]["passkey_handle"] = bytes_to_base64url(os.urandom(64))
+auth.save_auth_config(legacy)
 opts_json, challenge = passkeys.registration_options("admin", HOST)
 opts = json.loads(opts_json)
 check("registration options carry rp id", opts["rp"]["id"] == RP_ID)
 check("challenge matches options", opts["challenge"] == challenge)
 check("user handle is not the username", opts["user"]["id"] != bytes_to_base64url(b"admin"))
+check("user handle is 32 bytes", len(base64url_to_bytes(opts["user"]["id"])) == 32)
 
 ok, res = passkeys.registration_verify("admin", HOST, ORIGIN, challenge, key.create(opts), "  Work   laptop ")
 check("registration verifies", ok, str(res))
