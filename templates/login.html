@@ -74,7 +74,7 @@
             var username = document.getElementById('username').value.trim();
             csfPasskeys.login(csrf, username).then(function (j) {
                 msg.textContent = 'Signed in';
-                location.href = j.redirect || '/';
+                setTimeout(function () { location.href = j.redirect || '/'; }, 1500);
             }).catch(function (e) {
                 btn.disabled = false; msg.className = 'text-center text-danger'; msg.textContent = e.message;
             });

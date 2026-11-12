@@ -72,7 +72,7 @@
             btn.disabled = true; msg.className = 'text-center text-muted'; msg.textContent = 'Follow the prompt from your browser…';
             csfPasskeys.login(csrf).then(function (j) {
                 msg.textContent = 'Signed in';
-                location.href = j.redirect || '/';
+                setTimeout(function () { location.href = j.redirect || '/'; }, 1500);
             }).catch(function (e) {
                 btn.disabled = false; msg.className = 'text-center text-danger'; msg.textContent = e.message;
             });

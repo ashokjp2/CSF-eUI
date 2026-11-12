@@ -129,8 +129,8 @@ $(function() {
             pkBtn.disabled = true; pkMsg.className = 'text-muted'; pkMsg.textContent = 'Follow the prompt from your browser…';
             var csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             csfPasskeys.register(name, csrf).then(function(r) {
-                if (r.recovery_codes) { location.href = '/settings#twofactor'; return; }
-                location.reload();
+                if (r.recovery_codes) { setTimeout(function () { location.href = '/settings#twofactor'; }, 1500); return; }
+                setTimeout(function () { location.reload(); }, 1500);
             }).catch(function(e) {
                 pkBtn.disabled = false; pkMsg.className = 'text-danger'; pkMsg.textContent = e.message;
             });

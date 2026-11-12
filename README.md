@@ -36,7 +36,12 @@ CSF-eUI is a self-hosted Flask application that gives you:
   - Pre-save validation that blocks the form if any field is invalid
   - Inline warnings for dangerous combos (e.g. CC_ALLOW_PORTS set without CC_ALLOW_PORTS_TCP)
 - **Quick Config** — guided forms for the most common settings (ports, country blocking, connection limits, DynDNS)
-- **Configuration backup & restore**
+- **Port recommendations** — review recommended service ports and add them to CSF with one click
+- **Configuration profiles** — save, restore, and apply known-good CSF configurations
+- **Configuration backup & restore** — create, download, restore, and delete backups
+- **Safe apply** — validate configuration changes before applying them to reduce lockout risk
+- **CSF pre/post rule editor** — edit, preview, validate, back up, import, and export `csfpre.sh` and `csfpost.sh`
+- **LFD and template editors** — manage LFD configuration files and reusable rule templates
 
 ### Firewall Management
 - Quick Allow / Deny / Ignore / Unblock from the dashboard
@@ -56,22 +61,34 @@ CSF-eUI is a self-hosted Flask application that gives you:
 - Active connections viewer
 - Bandwidth monitor
 - Audit log of all actions taken in the UI
+- Log search across supported system and LFD logs
+- Security health score with actionable checks and guided quick fixes
+- Notifications, alert history, and configurable email alerts
 
 ### System
 - **SSL certificate management** — Let's Encrypt, ZeroSSL, self-signed, or upload your own
 - **HTTP → HTTPS redirect** — port 8080 redirects to 8750 HTTPS (enabled by default)
-- Security health score
-- Email alert configuration
 - Docker and WireGuard integration
-- Cluster support
+- Docker container actions and firewall-rule generation
+- WireGuard interface, key, and peer management
+- Cluster support for coordinated CSF actions across servers
 - Scheduled tasks
 - Setup wizard for first-time configuration
+- Server security checks and system resource details
+- External blocklist feeds
+
+### Authentication & Access
+- PBKDF2-SHA256 password hashing with login lockout protection
+- Two-factor authentication with authenticator apps and passkeys (Windows Hello, Touch ID, phones, and security keys)
+- Scoped API tokens for automation
+- Session security, CSRF protection, and security headers throughout the UI
 
 ### Updates
 - Version badge in the sidebar footer
 - Automatic version check every 12 hours (checks only, never auto-installs)
 - In-app notification when a new release is available
 - One-click update from the UI with a live streaming log
+- Release-safe update flow with backup and validation safeguards
 
 ---
 

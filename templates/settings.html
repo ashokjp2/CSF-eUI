@@ -280,7 +280,7 @@ $('.js-ts').each(function() { var ts = parseInt($(this).data('ts'), 10); if (ts)
             btn.disabled = true; msg.className = 'text-muted'; msg.textContent = 'Follow the prompt from your browser…';
             csfPasskeys.register(name, csrf).then(function () {
                 location.hash = 'twofactor';
-                location.reload();
+                setTimeout(function () { location.reload(); }, 1500);
             }).catch(function (e) {
                 btn.disabled = false; msg.className = 'text-danger'; msg.textContent = e.message;
             });
