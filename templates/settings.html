@@ -64,14 +64,69 @@
         <h4 id="twofactor">Two-factor authentication</h4>
         {% if totp_backup_codes %}
         <div class="alert alert-warning" style="max-width:560px">
-            <strong>Save these backup codes now.</strong> Each works once if you lose access to your authenticator app. They will not be shown again.
+            <strong>Save these backup codes now.</strong> Each works once if you lose your passkey device or authenticator app. They will not be shown again.
             <pre style="margin:10px 0 0; font-size:13px; background:transparent; border:none; padding:0">{% for c in totp_backup_codes %}{{ c }}{{ '   ' if loop.index % 2 else '\n' }}{% endfor %}</pre>
         </div>
         {% endif %}
-        {% if totp.enabled %}
+        {% if twofa.enabled %}
         <p class="text-muted" style="font-size:13px">
             <span class="ti ti-shield-check text-success"></span> <strong>On.</strong>
-            Sign-in asks for a code from your authenticator app. {{ totp.backup_codes_left }} backup codes left.
+            After your password, sign-in asks for
+            {%- if twofa.passkeys and twofa.totp %} a passkey or a code from your authenticator app.
+            {%- elif twofa.passkeys %} a passkey. {{ twofa.recovery_codes_left }} recovery codes left for when the device is not to hand.
+            {%- else %} a code from your authenticator app. {{ twofa.backup_codes_left }} backup codes left.{% endif %}
+        </p>
+        {% else %}
+        <p class="text-muted" style="font-size:13px">
+            <span class="ti ti-shield-off"></span> <strong>Off.</strong>
+            Add a second step at sign-in: a passkey (Windows Hello, Touch ID, your phone or a security key) or a time-based code from an authenticator app. Recommended: this UI controls the firewall.
+        </p>
+        {% endif %}
+
+        <h5 style="margin-top:18px"><span class="ti ti-fingerprint"></span> Passkeys</h5>
+        <p class="text-muted" style="font-size:12px; max-width:640px">
+            A passkey is tied to the address it was registered on ({{ request.host }}) and never leaves your device.
+            You can register several: one per computer, phone or security key.
+        </p>
+        {% if passkeys %}
+        <table class="table table-condensed no-toolbar" style="max-width:720px">
+            <thead><tr><th>Name</th><th>Added</th><th>Last used</th><th style="width:330px"></th></tr></thead>
+            <tbody>
+            {% for p in passkeys %}
+            <tr>
+                <td><strong>{{ p.name }}</strong>{% if p.backed_up %} <span class="text-muted" title="Synced by the device's passkey provider, so it survives a device change">(synced)</span>{% endif %}</td>
+                <td class="js-ts" data-ts="{{ p.created or 0 }}"></td>
+                <td>{% if p.last_used %}<span class="js-ts" data-ts="{{ p.last_used }}"></span>{% else %}<span class="text-muted">never</span>{% endif %}</td>
+                <td>
+                    <form method="POST" action="/settings" class="form-inline" style="display:inline" onsubmit="return confirm('Remove passkey {{ p.name|e }}?')">
+                        <input type="hidden" name="action" value="passkey_remove"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="id" value="{{ p.id }}">
+                        <input type="password" class="form-control input-sm" name="current_password" placeholder="Current password" required autocomplete="current-password" style="width:160px">
+                        <button class="btn btn-danger btn-xs"><i class="ti ti-trash"></i> Remove</button>
+                    </form>
+                    <form method="POST" action="/settings" style="display:inline" class="js-passkey-rename" data-name="{{ p.name }}">
+                        <input type="hidden" name="action" value="passkey_rename"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="id" value="{{ p.id }}"><input type="hidden" name="name" value="">
+                        <button type="button" class="btn btn-default btn-xs js-passkey-rename-btn"><i class="ti ti-pencil"></i> Rename</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        {% if passkey_problem %}
+        <div class="alert alert-warning" style="max-width:640px; font-size:13px"><span class="ti ti-alert-triangle"></span> {{ passkey_problem }}</div>
+        {% else %}
+        <form id="passkey-add" class="form-inline" onsubmit="return false">
+            <input type="text" class="form-control" id="passkey-name" placeholder="Name, e.g. Work laptop" maxlength="60" style="width:220px">
+            <button type="submit" class="btn btn-primary" id="passkey-add-btn"><span class="ti ti-fingerprint"></span> Add passkey</button>
+            <span id="passkey-add-msg" class="text-danger" style="margin-left:8px; font-size:13px"></span>
+        </form>
+        {% endif %}
+
+        <h5 style="margin-top:22px"><span class="ti ti-device-mobile"></span> Authenticator app</h5>
+        {% if twofa.totp %}
+        <p class="text-muted" style="font-size:12px">
+            <span class="ti ti-shield-check text-success"></span> On. {{ twofa.backup_codes_left }} backup codes left.
         </p>
         <form method="POST" action="/settings" class="form-inline">
             <input type="hidden" name="action" value="totp_disable">
@@ -106,14 +161,11 @@
             </div>
         </div>
         {% else %}
-        <p class="text-muted" style="font-size:13px">
-            <span class="ti ti-shield-off"></span> <strong>Off.</strong>
-            Add a second step at sign-in using a time-based code from an authenticator app. Recommended: this UI controls the firewall.
-        </p>
+        <p class="text-muted" style="font-size:12px">Off. A time-based code from an app on your phone; works at any address, including by IP.</p>
         <form method="POST" action="/settings">
             <input type="hidden" name="action" value="totp_setup">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button type="submit" class="btn btn-primary"><span class="ti ti-shield-lock"></span> Set up two-factor</button>
+            <button type="submit" class="btn btn-default"><span class="ti ti-shield-lock"></span> Set up authenticator app</button>
         </form>
         {% endif %}
 
@@ -135,7 +187,7 @@
                         </select>
                     </form>
                 </td>
-                <td>{{ 'on' if u.totp else 'off' }}</td>
+                <td>{% if u.twofa %}on <span class="text-muted">({{ 'passkey' if u.passkeys else '' }}{{ ' + ' if u.passkeys and u.totp else '' }}{{ 'app' if u.totp else '' }})</span>{% else %}off{% endif %}</td>
                 <td>
                     {% if u.username != session.get('username') %}
                     <form method="POST" action="/settings" style="display:inline" onsubmit="return confirm('Delete user {{ u.username }}?')">
@@ -212,6 +264,36 @@ curl -s -H "Authorization: Bearer csf_…" -H "Content-Type: application/json" \
 {% block scripts %}
 <script>
 $('.js-ts').each(function() { var ts = parseInt($(this).data('ts'), 10); if (ts) $(this).text(new Date(ts * 1000).toLocaleString()); });
+</script>
+<script>
+(function () {
+    var csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    var form = document.getElementById('passkey-add');
+    if (form) {
+        var btn = document.getElementById('passkey-add-btn'), msg = document.getElementById('passkey-add-msg');
+        if (!csfPasskeys.supported()) {
+            btn.disabled = true;
+            msg.textContent = 'This browser does not support passkeys.';
+        }
+        form.addEventListener('submit', function () {
+            var name = document.getElementById('passkey-name').value.trim() || 'Passkey';
+            btn.disabled = true; msg.className = 'text-muted'; msg.textContent = 'Follow the prompt from your browser…';
+            csfPasskeys.register(name, csrf).then(function () {
+                location.hash = 'twofactor';
+                location.reload();
+            }).catch(function (e) {
+                btn.disabled = false; msg.className = 'text-danger'; msg.textContent = e.message;
+            });
+        });
+    }
+    $('.js-passkey-rename-btn').on('click', function () {
+        var f = this.form, current = f.getAttribute('data-name') || '';
+        var name = prompt('New name for this passkey', current);
+        if (name === null) return;
+        f.querySelector('input[name=name]').value = name.trim() || current;
+        f.submit();
+    });
+})();
 </script>
 {% if totp_setup_uri %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>

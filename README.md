@@ -8,7 +8,7 @@ CSF-eUI replaces the old, dated CSF web interface with a clean, responsive dashb
 
 ## What is CSF-eUI?
 
-[ConfigServer Security & Firewall (CSF)](https://configserver.com/cp/csf.html) is one of the most widely used firewall solutions for Linux servers. It's powerful, but its built-in control panel is clunky and hard to navigate.
+[ConfigServer Security & Firewall (CSF)](https://github.com/Aetherinox/csf-firewall) is one of the most widely used firewall solutions for Linux servers. The original developer discontinued it in August 2025; the [Aetherinox fork](https://github.com/Aetherinox/csf-firewall) continues development with new features and bug fixes, and is the version CSF-eUI targets. It's powerful, but its built-in control panel is clunky and hard to navigate.
 
 CSF-eUI is a self-hosted Flask application that gives you:
 - A polished, mobile-friendly dashboard
@@ -78,7 +78,7 @@ CSF-eUI is a self-hosted Flask application that gives you:
 ## Requirements
 
 - **OS:** Debian 11+ or Ubuntu 20.04+ (amd64)
-- **CSF/LFD:** must be [installed](https://configserver.com/cp/csf.html) before running the installer
+- **CSF/LFD:** the [Aetherinox csf-firewall fork](https://github.com/Aetherinox/csf-firewall) must be installed before running the installer (the original configserver.com download was discontinued in August 2025)
 - **Python:** 3.9+ (usually pre-installed on modern Ubuntu/Debian)
 - **Root access** (CSF requires root to manage iptables)
 
@@ -90,11 +90,23 @@ The installer handles everything else: Python venv, required system utilities (i
 
 ### Step 1 — Install CSF (skip if already installed)
 
+Install the [Aetherinox csf-firewall fork](https://github.com/Aetherinox/csf-firewall). The original `download.configserver.com` package is no longer maintained.
+
 ```bash
+apt-get update && apt-get install -y perl wget ipset libcrypt-ssleay-perl libio-socket-inet6-perl libio-socket-ssl-perl libnet-libidn-perl libsocket6-perl
 cd /tmp
-wget https://download.configserver.com/csf.tgz
+wget https://download.configserver.dev/csf.tgz
 tar -xzf csf.tgz && cd csf && sh install.sh
 ```
+
+Then take CSF out of testing mode and start it:
+
+```bash
+sed -i 's/^TESTING = "1"/TESTING = "0"/' /etc/csf/csf.conf
+csf --enable && systemctl start csf lfd && csf -ra
+```
+
+Full details, release tarballs and checksums are at [docs.configserver.dev](https://docs.configserver.dev) and the [GitHub releases page](https://github.com/Aetherinox/csf-firewall/releases).
 
 ### Step 2 — Clone and install CSF-eUI
 
@@ -191,7 +203,7 @@ journalctl -u csfv2 -f         # follow live logs
 
 - CSF-eUI runs as root (required to manage iptables and restart CSF). Keep the port (8750) restricted — use `CC_ALLOW_PORTS` to allow only your country, or restrict access via csf.allow.
 - Use a Let's Encrypt certificate (available in the SSL page) to avoid browser warnings.
-- Enable two-factor authentication in Settings.
+- Enable two-factor authentication in Settings: a passkey (Windows Hello, Touch ID, phone or security key) or an authenticator app. Passkeys need the UI opened by its domain name over a trusted certificate; they cannot be used by IP address.
 
 ---
 

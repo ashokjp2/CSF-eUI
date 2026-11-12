@@ -542,11 +542,11 @@ def _csf_eui(csf, listening, tcp_in):
                 items.append({"status": "fail", "weight": 3, "link": "/settings",
                               "title": "The admin account still uses the default password",
                               "detail": "Change it on the Settings page now."})
-        no2fa = [u for u in admins if not (users[u].get("totp") or {}).get("enabled")]
+        no2fa = [u for u in admins if not auth.user_has_second_factor(users[u])]
         if no2fa:
             items.append({"status": "warn", "weight": 2, "link": "/settings",
                           "title": "Admin accounts without two-factor authentication: " + ", ".join(no2fa),
-                          "detail": "With 2FA a leaked password alone is not enough to control the firewall."})
+                          "detail": "With a passkey or authenticator app a leaked password alone is not enough to control the firewall."})
         else:
             items.append({"status": "pass", "title": "All admin accounts use two-factor authentication"})
         if len(admins) > 2:

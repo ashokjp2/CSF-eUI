@@ -202,6 +202,9 @@
                 <a href="#" class="topbar-btn" id="btn-restart-csfv2" title="Restart CSF-eUI">
                     <i class="ti ti-refresh"></i>
                 </a>
+                <a href="#" class="topbar-btn" id="btn-reboot-server" title="Reboot server (the whole machine)">
+                    <i class="ti ti-power"></i>
+                </a>
                 <a href="/logout" class="topbar-btn" title="Logout">
                     <i class="ti ti-logout"></i>
                 </a>
@@ -293,6 +296,7 @@
             });
         })();
     </script>
+    <script src="{{ url_for('static', filename='js/passkeys.js') }}"></script>
     <script src="{{ url_for('static', filename='js/csfv2.js') }}"></script>
     <script>
     var _toasts = [];
@@ -430,6 +434,18 @@
         }).fail(function() {
             showToast('Restarting... Reloading in 5 seconds.', 'info');
             setTimeout(function() { location.reload(); }, 5000);
+        });
+    });
+
+    $('#btn-reboot-server').on('click', function(e) {
+        e.preventDefault();
+        if (!confirm('Reboot the whole server?\n\nAll services and Docker containers will go down for a minute or two, and this page will be unreachable until the machine is back.')) return;
+        $.post('/api/reboot-server', function(r) {
+            showToast(r.success ? 'Server is rebooting... Reloading in 60 seconds.' : (r.error || 'Reboot failed'), r.success ? 'info' : 'danger');
+            if (r.success) setTimeout(function() { location.reload(); }, 60000);
+        }).fail(function() {
+            showToast('Server is rebooting... Reloading in 60 seconds.', 'info');
+            setTimeout(function() { location.reload(); }, 60000);
         });
     });
     </script>

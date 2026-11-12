@@ -39,7 +39,20 @@
                         </tr>
                         {% endfor %}
                     </table>
-                    {% if section['log_lines'] %}
+                    {% if section['log_explained'] %}
+                    <hr style="margin:10px 0">
+                    <p class="text-muted" style="font-size:11px; margin-bottom:5px"><strong>Most recent entries</strong> (hover a line and click <i class="ti ti-code"></i> to see the original text):</p>
+                    {% for ex in section['log_explained'] %}
+                    <div class="lv-row lv-{{ ex.level }}" style="padding:5px 8px">
+                        <div class="lv-time"><div class="lv-clock">{{ ex.clock }}</div><div class="lv-date">{{ ex.date }}{% if ex.ago %} · {{ ex.ago }}{% endif %}</div></div>
+                        <div class="lv-body">
+                            <span class="lv-kind lv-kind-{{ ex.level }}">{{ ex.kind }}</span><span class="lv-text">{{ ex.text }}</span>
+                            <a href="#" class="lv-raw-toggle" title="Show the original log line"><i class="ti ti-code"></i></a>
+                            <div class="lv-raw" style="display:none">{{ ex.raw }}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% elif section['log_lines'] %}
                     <hr style="margin:10px 0">
                     <p class="text-muted" style="font-size:11px; margin-bottom:5px"><strong>Recent log entries:</strong></p>
                     {% for line in section['log_lines'] %}
@@ -71,6 +84,11 @@
 {% block scripts %}
 <script>
 $(function() {
+    function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+    $(document).on('click', '.lv-raw-toggle', function(e) {
+        e.preventDefault();
+        $(this).toggleClass('open').siblings('.lv-raw').slideToggle(120);
+    });
     function doLookup() {
         var ip = $('#ip-input').val().trim();
         if (!ip) return;
@@ -95,7 +113,16 @@ $(function() {
                     html += '<tr><td style="width:150px;font-weight:bold">' + item.key + '</td><td>' + $('<span>').text(item.value).html() + '</td></tr>';
                 });
                 html += '</table>';
-                if (s.log_lines && s.log_lines.length) {
+                if (s.log_explained && s.log_explained.length) {
+                    html += '<hr style="margin:10px 0"><p class="text-muted" style="font-size:11px;margin-bottom:5px"><strong>Most recent entries</strong> (hover a line and click <i class="ti ti-code"></i> to see the original text):</p>';
+                    s.log_explained.forEach(function(ex) {
+                        html += '<div class="lv-row lv-' + esc(ex.level) + '" style="padding:5px 8px">'
+                              + '<div class="lv-time"><div class="lv-clock">' + esc(ex.clock) + '</div><div class="lv-date">' + esc(ex.date) + (ex.ago ? ' · ' + esc(ex.ago) : '') + '</div></div>'
+                              + '<div class="lv-body"><span class="lv-kind lv-kind-' + esc(ex.level) + '">' + esc(ex.kind) + '</span><span class="lv-text">' + esc(ex.text) + '</span>'
+                              + '<a href="#" class="lv-raw-toggle" title="Show the original log line"><i class="ti ti-code"></i></a>'
+                              + '<div class="lv-raw" style="display:none">' + esc(ex.raw) + '</div></div></div>';
+                    });
+                } else if (s.log_lines && s.log_lines.length) {
                     html += '<hr style="margin:10px 0"><p class="text-muted" style="font-size:11px;margin-bottom:5px"><strong>Recent log entries:</strong></p>';
                     s.log_lines.forEach(function(l) {
                         html += '<div style="font-family:monospace;font-size:11px;padding:2px 0;border-bottom:1px solid #f5f5f5">' + $('<span>').text(l).html() + '</div>';

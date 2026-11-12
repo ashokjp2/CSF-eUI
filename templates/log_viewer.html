@@ -2,58 +2,64 @@
 {% block page_title %}Log Viewer{% endblock %}
 
 {% block content %}
-<p class="text-muted" style="margin-bottom:15px">Live view of firewall and system logs with filtering</p>
+<p class="text-muted" style="margin-bottom:15px">What has been happening on your server, explained line by line. Click any IP address to see where it is from and allow or block it.</p>
 
 <!-- Controls -->
 <div class="panel panel-default">
     <div class="panel-body">
         <div class="row">
             <div class="col-md-3">
-                <label>Log File</label>
+                <label>Which log</label>
                 <select class="form-control" id="log-select">
                     {% for key, path in available_logs.items() %}
-                    <option value="{{ key }}" {{ 'selected' if key == current_log }}>{{ key }} ({{ path }})</option>
+                    <option value="{{ key }}" data-path="{{ path }}" {{ 'selected' if key == current_log }}>{{ log_labels.get(key, key) }}</option>
                     {% endfor %}
                 </select>
             </div>
             <div class="col-md-3">
-                <label>Filter Category</label>
+                <label>Show</label>
                 <select class="form-control" id="cat-filter">
-                    <option value="all">All</option>
-                    <option value="block">Blocks</option>
-                    <option value="login">Login/SSH</option>
-                    <option value="process">Process/Tracking</option>
-                    <option value="service">Service Events</option>
-                    <option value="other">Other</option>
+                    <option value="all">Everything</option>
+                    {% for key, label in categories.items() %}
+                    <option value="{{ key }}">{{ label }} only</option>
+                    {% endfor %}
                 </select>
             </div>
             <div class="col-md-4">
                 <label>Search</label>
                 <div class="input-group">
-                    <input type="text" class="form-control" id="log-search" placeholder="Search by IP, text...">
+                    <input type="text" class="form-control" id="log-search" placeholder="IP address, username, program name, any text…" value="{{ search or '' }}">
                     <span class="input-group-btn">
-                        <button class="btn btn-primary" onclick="refreshLog()">
+                        <button class="btn btn-primary" onclick="refreshLog()" title="Search">
                             <span class="ti ti-search"></span>
                         </button>
                     </span>
                 </div>
             </div>
             <div class="col-md-2">
-                <label>Lines</label>
+                <label>Last</label>
                 <select class="form-control" id="log-lines">
-                    <option value="100">100</option>
-                    <option value="200" selected>200</option>
-                    <option value="500">500</option>
-                    <option value="1000">1000</option>
+                    <option value="100">100 lines</option>
+                    <option value="200" selected>200 lines</option>
+                    <option value="500">500 lines</option>
+                    <option value="1000">1000 lines</option>
+                    <option value="2000">2000 lines</option>
                 </select>
             </div>
         </div>
-        <div class="row" style="margin-top:10px">
-            <div class="col-md-8">
-                <div id="log-stats" class="text-muted" style="font-size:12px"></div>
+        <div class="row" style="margin-top:12px">
+            <div class="col-md-7">
+                <div id="log-stats" class="lv-chips"></div>
             </div>
-            <div class="col-md-4 text-right">
-                <label class="checkbox-inline" style="margin-right:15px">
+            <div class="col-md-5 text-right" style="white-space:nowrap">
+                <div class="btn-group btn-group-sm lv-view" id="lv-view" style="margin-right:10px" title="Plain English explains each line; Raw log shows the original text">
+                    <button type="button" class="btn btn-default" data-view="simple"><span class="ti ti-message-2"></span> Plain English</button>
+                    <button type="button" class="btn btn-default" data-view="raw"><span class="ti ti-code"></span> Raw log</button>
+                </div>
+                <label class="checkbox-inline" style="margin-right:10px" title="Show the most recent lines at the top">
+                    <input type="checkbox" id="newest-first"> Newest first
+                </label>
+                <label class="checkbox-inline" style="margin-right:10px">
                     <input type="checkbox" id="auto-refresh"> Auto-refresh (10s)
                 </label>
                 <button class="btn btn-default btn-sm" onclick="refreshLog()">
@@ -64,10 +70,17 @@
     </div>
 </div>
 
+<!-- What am I looking at? -->
+<div class="lv-intro" id="lv-intro" style="display:none">
+    <i class="ti ti-bulb"></i>
+    <div class="lv-intro-text"><strong>What am I looking at?</strong> <span id="lv-intro-body"></span></div>
+    <button type="button" class="close" id="lv-intro-close" title="Hide this explanation">&times;</button>
+</div>
+
 <!-- Log entries -->
 <div class="panel panel-default">
     <div class="panel-body" style="padding:0">
-        <div id="log-entries" style="max-height:600px; overflow-y:auto; font-family:monospace; font-size:12px">
+        <div id="log-entries">
             <div class="text-center text-muted" style="padding:40px">
                 <span class="ti ti-hourglass"></span> Loading...
             </div>
@@ -79,14 +92,42 @@
 {% block scripts %}
 <script>
 var _autoTimer = null;
+var _lastData = null;
+var _view = localStorage.getItem('csfv2-log-view') || 'simple';
+var _newestFirst = localStorage.getItem('csfv2-log-newest') !== '0';
 
-function refreshLog() {
+var CAT_LABELS = {{ categories|tojson }};
+var CAT_LEVEL = {block: 'bad', login: 'warn', process: 'info', service: 'ok', change: 'warn', other: 'info'};
+
+var INTROS = {
+    lfd: 'This is the diary of <b>LFD</b>, the part of CSF that watches your server around the clock. <b>Blocked</b> lines mean an IP address was shut out for misbehaving, such as guessing passwords. <b>SSH login</b> lines record who signed in. <b>Process check</b> lines are routine: LFD lists long-running programs so you can spot anything you do not recognise. Most of what you see here is normal background activity.',
+    auth: 'Every login attempt, sudo command and session on this server is recorded here. <b>Failed login</b> lines from IPs you do not know are normal background noise on any internet-facing server; CSF blocks an IP after a few of them. <b>SSH login</b> lines show who actually got in, so those are the ones worth reading.',
+    syslog: 'General messages from the operating system and its services: things starting and stopping, scheduled tasks running, and errors. Red lines are worth a look; the rest is routine.',
+    kern: 'Messages from the Linux kernel. Lines marked <b>Dropped by firewall</b> are connections CSF refused because that port is not open to the internet. That is the firewall doing its job, not a problem.',
+    iptables: 'General system messages. On some systems firewall drops are written here too.'
+};
+
+function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+
+function ipLink(html, ip) {
+    if (!ip) return html;
+    var e = esc(ip);
+    return html.replace(e, '<a href="/ip-lookup?ip=' + encodeURIComponent(ip) + '" target="_blank" rel="noopener" class="lv-ip" title="Where is ' + e + ' from? Click to look it up, then allow or block it">' + e + '</a>');
+}
+
+function setLoading(soft) {
+    if (soft) return;
+    $('#log-entries').html('<div class="text-center text-muted" style="padding:20px"><span class="ti ti-hourglass"></span> Loading...</div>');
+}
+
+function refreshLog(soft) {
     var logname = $('#log-select').val();
     var category = $('#cat-filter').val();
     var search = $('#log-search').val();
     var lines = $('#log-lines').val();
 
-    $('#log-entries').html('<div class="text-center text-muted" style="padding:20px"><span class="ti ti-hourglass"></span> Loading...</div>');
+    setLoading(soft === true);
+    showIntro(logname);
 
     $.getJSON('/api/logs/view', {
         log: logname,
@@ -95,77 +136,133 @@ function refreshLog() {
         category: category,
     }, function(data) {
         if (data.error) {
-            $('#log-entries').html('<div class="alert alert-danger" style="margin:15px">' + data.error + '</div>');
+            $('#log-entries').html('<div class="alert alert-danger" style="margin:15px">' + esc(data.error) + '</div>');
             return;
         }
+        _lastData = data;
         renderLog(data);
     }).fail(function() {
-        $('#log-entries').html('<div class="alert alert-danger" style="margin:15px">Failed to load log</div>');
+        $('#log-entries').html('<div class="alert alert-danger" style="margin:15px">Could not load the log. Try Refresh; if it keeps failing, check that the file exists on the server.</div>');
     });
+}
+
+function showIntro(logname) {
+    var hidden = localStorage.getItem('csfv2-log-intro-hidden') === '1';
+    var body = INTROS[logname];
+    if (hidden || !body) { $('#lv-intro').hide(); return; }
+    $('#lv-intro-body').html(body);
+    $('#lv-intro').show();
+}
+
+function simpleRow(e, n) {
+    var level = e.level || 'info';
+    var when = '';
+    if (e.clock) {
+        when = '<div class="lv-time"><div class="lv-clock">' + esc(e.clock) + '</div>'
+             + '<div class="lv-date">' + esc(e.date) + (e.ago ? ' · ' + esc(e.ago) : '') + '</div></div>';
+    } else {
+        when = '<div class="lv-time"><div class="lv-date">#' + n + '</div></div>';
+    }
+    return '<div class="lv-row lv-' + level + '">' + when
+        + '<div class="lv-body">'
+        + '<span class="lv-kind lv-kind-' + level + '">' + esc(e.kind || 'Note') + '</span>'
+        + '<span class="lv-text">' + ipLink(esc(e.plain || e.text), e.ip) + '</span>'
+        + '<a href="#" class="lv-raw-toggle" title="Show the original log line"><i class="ti ti-code"></i></a>'
+        + '<div class="lv-raw" style="display:none">' + esc(e.text) + '</div>'
+        + '</div></div>';
+}
+
+function rawRow(e, n) {
+    var level = e.level || 'info';
+    var cat = '';
+    if (e.category && e.category !== 'other') {
+        cat = ' <span class="lv-kind lv-kind-' + (CAT_LEVEL[e.category] || 'info') + '" title="' + esc(CAT_LABELS[e.category] || e.category) + '">' + esc(e.kind || e.category) + '</span>';
+    }
+    return '<div class="lv-rawrow lv-' + level + '" title="' + esc(e.plain || '') + '">'
+        + '<span class="lv-num">' + n + '</span>' + ipLink(esc(e.text), e.ip) + cat + '</div>';
 }
 
 function renderLog(data) {
     var html = '';
-    if (!data.entries || data.entries.length === 0) {
-        html = '<div class="text-center text-muted" style="padding:40px">No log entries found</div>';
+    var entries = data.entries || [];
+    if (entries.length === 0) {
+        html = '<div class="text-center text-muted" style="padding:40px"><span class="ti ti-mood-smile" style="font-size:28px;display:block;margin-bottom:8px"></span>'
+             + 'Nothing matches. Try clearing the search, choosing <em>Everything</em> under Show, or increasing the number of lines.</div>';
     } else {
-        data.entries.forEach(function(e, i) {
-            var cls = '';
-            if (e.severity === 'danger') cls = 'background:#fdf2f2; border-left:3px solid #d9534f';
-            else if (e.severity === 'warning') cls = 'background:#fef9f0; border-left:3px solid #f0ad4e';
-            else if (e.severity === 'success') cls = 'background:#f0fdf0; border-left:3px solid #5cb85c';
-            else cls = 'border-left:3px solid #ddd';
-
-            var text = $('<span>').text(e.text).html();
-            if (e.ip) {
-                text = text.replace(e.ip, '<a href="#" class="log-ip-link" data-ip="' + e.ip + '" title="Look up ' + e.ip + '">' + e.ip + '</a>');
-            }
-
-            var catBadge = '';
-            if (e.category !== 'other') {
-                var catColors = {block:'danger', login:'warning', process:'info', service:'success'};
-                catBadge = ' <span class="label label-' + (catColors[e.category]||'default') + '" style="font-size:9px">' + e.category + '</span>';
-            }
-
-            html += '<div style="padding:4px 10px; ' + cls + '; border-bottom:1px solid #f0f0f0">'
-                + '<span class="text-muted" style="font-size:10px">' + (i+1) + '</span> '
-                + text + catBadge + '</div>';
+        var rows = [];
+        entries.forEach(function(e, i) {
+            rows.push(_view === 'raw' ? rawRow(e, i + 1) : simpleRow(e, i + 1));
         });
+        if (_newestFirst) rows.reverse();
+        html = rows.join('');
     }
     $('#log-entries').html(html);
-    $('#log-entries').scrollTop($('#log-entries')[0].scrollHeight);
+    var box = $('#log-entries')[0];
+    box.scrollTop = _newestFirst ? 0 : box.scrollHeight;
 
-    // Stats
-    var statHtml = '<strong>' + data.total + '</strong> entries';
+    // Summary chips
+    var current = $('#cat-filter').val();
+    var statHtml = '<span>Showing <strong>' + data.total + '</strong> line' + (data.total === 1 ? '' : 's') + '</span>';
     if (data.stats) {
-        var parts = [];
-        for (var k in data.stats) {
-            if (data.stats[k] > 0) parts.push(k + ': ' + data.stats[k]);
-        }
-        if (parts.length) statHtml += ' | ' + parts.join(' | ');
+        var order = ['block', 'login', 'change', 'process', 'service', 'other'];
+        order.forEach(function(k) {
+            var c = data.stats[k];
+            if (!c) return;
+            statHtml += '<a href="#" class="lv-chip lv-chip-' + k + (current === k ? ' active' : '') + '" data-cat="' + k + '" title="Show only ' + esc((CAT_LABELS[k] || k).toLowerCase()) + '">'
+                      + esc(CAT_LABELS[k] || k) + ': ' + c + '</a>';
+        });
     }
-    statHtml += ' | <em>' + data.path + '</em>';
+    statHtml += '<span class="text-muted" style="font-size:11px; margin-left:4px"><em>' + esc(data.path) + '</em></span>';
     $('#log-stats').html(statHtml);
+}
 
-    // IP click handlers
-    $('.log-ip-link').on('click', function(e) {
-        e.preventDefault();
-        var ip = $(this).data('ip');
-        window.open('/api/ip/lookup?ip=' + encodeURIComponent(ip), '_blank');
-    });
+function applyView() {
+    $('#lv-view button').removeClass('active').filter('[data-view="' + _view + '"]').addClass('active');
+    $('#newest-first').prop('checked', _newestFirst);
+    if (_lastData) renderLog(_lastData);
 }
 
 $(function() {
+    applyView();
     refreshLog();
 
-    $('#log-select, #cat-filter, #log-lines').on('change', refreshLog);
+    $('#log-select, #cat-filter, #log-lines').on('change', function() { refreshLog(); });
     $('#log-search').on('keypress', function(e) {
         if (e.which === 13) refreshLog();
     });
 
+    $('#lv-view').on('click', 'button', function() {
+        _view = $(this).data('view');
+        localStorage.setItem('csfv2-log-view', _view);
+        applyView();
+    });
+
+    $('#newest-first').on('change', function() {
+        _newestFirst = $(this).is(':checked');
+        localStorage.setItem('csfv2-log-newest', _newestFirst ? '1' : '0');
+        applyView();
+    });
+
+    $('#log-stats').on('click', '.lv-chip', function(e) {
+        e.preventDefault();
+        var cat = $(this).data('cat');
+        $('#cat-filter').val($('#cat-filter').val() === cat ? 'all' : cat);
+        refreshLog();
+    });
+
+    $('#log-entries').on('click', '.lv-raw-toggle', function(e) {
+        e.preventDefault();
+        $(this).toggleClass('open').siblings('.lv-raw').slideToggle(120);
+    });
+
+    $('#lv-intro-close').on('click', function() {
+        localStorage.setItem('csfv2-log-intro-hidden', '1');
+        $('#lv-intro').slideUp(150);
+    });
+
     $('#auto-refresh').on('change', function() {
         if ($(this).is(':checked')) {
-            _autoTimer = setInterval(refreshLog, 10000);
+            _autoTimer = setInterval(function() { refreshLog(true); }, 10000);
         } else {
             clearInterval(_autoTimer);
         }

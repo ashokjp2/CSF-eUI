@@ -54,9 +54,36 @@ def _get_sshd_val(key):
     return val
 
 
-def get_wizard_state():
+def get_wizard_state(username=None, passkey_problem=""):
     """Get current state of all wizard steps."""
     steps = []
+
+    # Step 0: protect this UI with a second sign-in step (passkey preferred)
+    if username:
+        from csf_backend import auth
+        twofa = auth.second_factor_status(username)
+        if twofa["passkeys"] and twofa["totp"]:
+            current = "passkey + authenticator app"
+        elif twofa["passkeys"]:
+            current = f"{twofa['passkeys']} passkey(s)"
+        elif twofa["totp"]:
+            current = "authenticator app"
+        else:
+            current = "password only"
+        steps.append({
+            "id": "ui_passkey",
+            "title": "Protect this UI with a passkey",
+            "description": "This UI controls the firewall. Add a second sign-in step so a leaked password alone is not enough.",
+            "status": "done" if twofa["enabled"] else "todo",
+            "current": current,
+            "recommended": "a passkey (Windows Hello, Touch ID, your phone or a security key)",
+            "risk": "high",
+            "category": "ui",
+            "passkey_problem": passkey_problem,
+            "help": ("A passkey never leaves your device and cannot be phished. It is tied to the address you register it on, "
+                     "so open the UI by its domain name over a trusted HTTPS certificate. "
+                     "An authenticator app (TOTP) works anywhere, including by IP, and can be set up on the Settings page."),
+        })
 
     # Step 1: SSH Port
     ssh_status = security_check.get_ssh_port_status()

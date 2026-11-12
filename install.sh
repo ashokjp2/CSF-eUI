@@ -33,8 +33,8 @@ $PYTHON -c "import sys; sys.exit(0 if sys.version_info >= (3,9) else 1)" \
     || error "Python 3.9+ required. Install with: apt-get install python3"
 
 # CSF must already be installed
-[[ -x /usr/sbin/csf ]] || error "CSF is not installed. Install it first:
-  cd /tmp && wget https://download.configserver.com/csf.tgz
+[[ -x /usr/sbin/csf ]] || error "CSF is not installed. Install the Aetherinox fork first (https://github.com/Aetherinox/csf-firewall):
+  cd /tmp && wget https://download.configserver.dev/csf.tgz
   tar -xzf csf.tgz && cd csf && sh install.sh"
 
 info "Requirements met."

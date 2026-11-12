@@ -5,7 +5,7 @@ import time
 from csf_backend import csf_wrapper as csf, auth, notifications, config_backup, port_defaults, auto_update, ssl_manager
 
 
-def build(username):
+def build(username, passkey_problem=""):
     conf = csf.load_csf_conf()
     items = []
 
@@ -23,8 +23,10 @@ def build(username):
     add("ssh", ssh_port in tcp_in, f"SSH port {ssh_port} is allowed in TCP_IN",
         "If SSH is not in TCP_IN you will be locked out the moment the firewall starts.", "/qconfig")
 
-    add("2fa", auth.totp_status(username)["enabled"], "Turn on two-factor authentication",
+    add("2fa", auth.second_factor_status(username)["enabled"], "Protect this UI with a passkey",
         "This UI controls the firewall; a password alone is not enough.", "/settings#twofactor")
+    items[-1]["action"] = "passkey"
+    items[-1]["problem"] = passkey_problem
 
     nconf = notifications.load_config()
     chan = any(notifications._channel_ready(n, nconf["channels"][n]) for n in notifications.CHANNELS)

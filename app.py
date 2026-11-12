@@ -20,6 +20,7 @@ from csf_backend import csf_wrapper as csf
 from csf_backend import docker_manager as docker
 from csf_backend import wireguard_manager as wg
 from csf_backend import auth
+from csf_backend import passkeys
 from csf_backend import system_stats
 from csf_backend import ip_utils
 from csf_backend import quick_config
@@ -93,6 +94,8 @@ if os.path.isdir("/run/systemd/system") and getattr(os, "geteuid", lambda: 1)() 
     for _timer_message in app_updater._repair_update_timer():
         if _timer_message.startswith("WARNING"):
             app.logger.error(_timer_message)
+    # Passkeys need the 'webauthn' package; a file deploy or git pull does not run pip, so do it here.
+    passkeys.ensure_installed()
 app.secret_key = (os.environ.get("CSFV2_SECRET_KEY")
                   or os.environ.get("SECRET_KEY")
                   or secrets.token_hex(32))
@@ -310,7 +313,101 @@ def login_2fa():
         auth.record_failed(auth.load_auth_config(), remote_ip)
         login_history.record_login(pending["username"], remote_ip, False)
         flash("Invalid authentication code", "danger")
-    return render_template("login_2fa.html")
+    return render_template("login_2fa.html", twofa=auth.second_factor_status(pending["username"]),
+                           passkey_problem=_passkey_problem())
+
+
+def _passkey_problem():
+    """Why passkeys cannot be used from the current request (IP address, no HTTPS, package missing), or ''."""
+    ok, reason = passkeys.availability()
+    if not ok:
+        return reason
+    secure = request.is_secure or request.headers.get("X-Forwarded-Proto", "").lower() == "https"
+    problem = passkeys.host_problem(request.host, secure)
+    if problem:
+        return problem
+    try:
+        if ssl_manager.get_ssl_status().get("self_signed"):
+            return ("Browsers refuse passkeys on a self-signed certificate. Get a Let's Encrypt certificate "
+                    "on the SSL page first, then open the UI by its domain name.")
+    except Exception:
+        pass
+    return ""
+
+
+def _passkey_origin():
+    scheme = request.headers.get("X-Forwarded-Proto", "").lower() or request.scheme
+    return f"{scheme}://{request.host}"
+
+
+def _passkey_challenge(key):
+    """Pop a stored WebAuthn challenge from the session; None when missing or expired."""
+    state = session.pop(key, None) or {}
+    if not state.get("challenge") or time.time() > state.get("expires", 0):
+        return None
+    return state["challenge"]
+
+
+@app.route("/api/passkeys/register/options", methods=["POST"])
+@login_required
+def api_passkey_register_options():
+    try:
+        opts, challenge = passkeys.registration_options(session.get("username", "admin"), request.host)
+    except RuntimeError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    session["passkey_reg"] = {"challenge": challenge, "expires": int(time.time()) + passkeys.CHALLENGE_TTL}
+    return jsonify({"success": True, "options": json.loads(opts)})
+
+
+@app.route("/api/passkeys/register/verify", methods=["POST"])
+@login_required
+def api_passkey_register_verify():
+    body = request.get_json(silent=True) or {}
+    challenge = _passkey_challenge("passkey_reg")
+    if not challenge:
+        return jsonify({"success": False, "error": "The registration took too long. Start again."}), 400
+    username = session.get("username", "admin")
+    ok, result = passkeys.registration_verify(username, request.host, _passkey_origin(), challenge,
+                                              body.get("credential") or {}, body.get("name", ""))
+    if not ok:
+        return jsonify({"success": False, "error": result}), 400
+    audit_log.log_event("config_change", username, request.remote_addr, f"Registered passkey '{result['name']}'")
+    if result.get("recovery_codes"):
+        session["totp_backup_codes"] = result["recovery_codes"]
+    return jsonify({"success": True, "name": result["name"], "recovery_codes": bool(result.get("recovery_codes"))})
+
+
+@app.route("/api/passkeys/login/options", methods=["POST"])
+def api_passkey_login_options():
+    pending = session.get("pending_2fa") or {}
+    if not pending.get("username") or time.time() > pending.get("expires", 0):
+        return jsonify({"success": False, "error": "Sign in again to continue"}), 401
+    try:
+        opts, challenge = passkeys.authentication_options(pending["username"], request.host)
+    except RuntimeError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    session["passkey_auth"] = {"challenge": challenge, "expires": int(time.time()) + passkeys.CHALLENGE_TTL}
+    return jsonify({"success": True, "options": json.loads(opts)})
+
+
+@app.route("/api/passkeys/login/verify", methods=["POST"])
+def api_passkey_login_verify():
+    pending = session.get("pending_2fa") or {}
+    if not pending.get("username") or time.time() > pending.get("expires", 0):
+        return jsonify({"success": False, "error": "Sign in again to continue"}), 401
+    challenge = _passkey_challenge("passkey_auth")
+    if not challenge:
+        return jsonify({"success": False, "error": "The passkey prompt took too long. Try again."}), 400
+    body = request.get_json(silent=True) or {}
+    remote_ip = request.remote_addr
+    ok, result = passkeys.authentication_verify(pending["username"], request.host, _passkey_origin(), challenge,
+                                                body.get("credential") or {})
+    if not ok:
+        auth.record_failed(auth.load_auth_config(), remote_ip)
+        login_history.record_login(pending["username"], remote_ip, False)
+        return jsonify({"success": False, "error": result}), 400
+    _complete_login(pending["username"], remote_ip)
+    return jsonify({"success": True, "redirect": url_for("dashboard")})
 
 
 @app.route("/logout")
@@ -1046,6 +1143,8 @@ def logs_view():
     return render_template(
         "log_viewer.html",
         available_logs=available,
+        log_labels=log_viewer.LOG_LABELS,
+        categories=log_viewer.CATEGORIES,
         current_log=current_log,
         search=search,
         status=get_firewall_status(),
@@ -1481,6 +1580,23 @@ def settings_view():
             ok, msg = auth.totp_disable(session.get("username", "admin"),
                                         request.form.get("current_password", ""), request.form.get("code", ""))
             flash(msg, "success" if ok else "danger")
+            if ok:
+                # Passkeys left without TOTP: hand out recovery codes so a lost device is not a lockout
+                codes = auth.ensure_recovery_codes(session.get("username", "admin"))
+                if codes:
+                    session["totp_backup_codes"] = codes
+            return redirect(url_for("settings_view") + "#twofactor")
+        elif action == "passkey_remove":
+            ok, msg = passkeys.remove_passkey(session.get("username", "admin"), request.form.get("id", ""),
+                                              request.form.get("current_password", ""))
+            if ok:
+                audit_log.log_event("config_change", session.get("username", ""), request.remote_addr, msg)
+            flash(msg, "success" if ok else "danger")
+            return redirect(url_for("settings_view") + "#twofactor")
+        elif action == "passkey_rename":
+            ok, msg = passkeys.rename_passkey(session.get("username", "admin"), request.form.get("id", ""),
+                                              request.form.get("name", ""))
+            flash(msg, "success" if ok else "danger")
             return redirect(url_for("settings_view") + "#twofactor")
         elif action in ("add_user", "set_role", "delete_user", "token_create", "token_revoke"):
             if not _is_admin():
@@ -1526,7 +1642,9 @@ def settings_view():
     setup_secret = session.get("totp_setup_secret")
     return render_template(
         "settings.html", status=get_firewall_status(), admin_email=admin_email,
-        totp=auth.totp_status(username),
+        twofa=auth.second_factor_status(username),
+        passkeys=passkeys.list_passkeys(username),
+        passkey_problem=_passkey_problem(),
         totp_setup_secret=setup_secret,
         totp_setup_uri=auth.totp_uri(setup_secret, username) if setup_secret else None,
         totp_backup_codes=session.pop("totp_backup_codes", None),
@@ -1903,7 +2021,11 @@ def api_port_tags(key):
 @login_required
 def api_logs_view():
     logname = request.args.get("log", "lfd")
-    lines = int(request.args.get("lines", "200"))
+    try:
+        lines = int(request.args.get("lines", "200"))
+    except ValueError:
+        lines = 200
+    lines = max(10, min(lines, log_viewer.MAX_LINES))
     search = request.args.get("search", "")
     category = request.args.get("category", "all")
     return jsonify(log_viewer.get_log(logname, lines, search, category))
@@ -2240,6 +2362,20 @@ def api_restart_csfv2():
     return jsonify({"success": True, "message": "CSFv2 is restarting. Page will reload in a few seconds."})
 
 
+@app.route("/api/reboot-server", methods=["POST"])
+@login_required
+def api_reboot_server():
+    """Reboot the whole machine."""
+    import threading
+    audit_log.log_event("action", _actor(), request.remote_addr, "Server reboot requested")
+    def delayed_reboot():
+        import time
+        time.sleep(2)
+        subprocess.run(["systemctl", "reboot"], timeout=15)
+    threading.Thread(target=delayed_reboot, daemon=True).start()
+    return jsonify({"success": True, "message": "Server is rebooting."})
+
+
 @app.route("/api/ssl/revoke", methods=["POST"])
 @login_required
 def api_ssl_revoke():
@@ -2555,7 +2691,8 @@ def qconfig_services_autofix():
 @app.route("/wizard")
 @login_required
 def wizard():
-    state = setup_wizard.get_wizard_state()
+    state = setup_wizard.get_wizard_state(username=session.get("username", "admin"),
+                                          passkey_problem=_passkey_problem())
     return render_template("wizard.html", status=get_firewall_status(), wizard=state)
 
 
@@ -3563,7 +3700,7 @@ def api_activity():
 @login_required
 def api_checklist():
     try:
-        return jsonify(checklist.build(session.get("username", "")))
+        return jsonify(checklist.build(session.get("username", ""), passkey_problem=_passkey_problem()))
     except Exception as e:
         return jsonify({"items": [], "done": 0, "total": 0, "error": str(e)})
 

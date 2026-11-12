@@ -675,9 +675,31 @@ var CSFv2 = {
             box.html('<div class="panel panel-default checklist"><div class="panel-heading"><h4><i class="ti ti-checklist"></i> Getting set up <span class="panel-hint">' + c.done + ' of ' + c.total + ' done</span></h4><a href="#" class="panel-link js-dismiss">Hide</a></div>' +
                 '<div class="panel-body"><div class="checklist-bar"><b style="width:' + Math.round(c.done / c.total * 100) + '%"></b></div>' +
                 items.map(function(i) {
-                    return '<a class="check-item' + (i.ok ? ' done' : '') + '" href="' + esc(i.href) + '"><i class="ti ' + (i.ok ? 'ti-circle-check' : 'ti-circle') + '"></i><span><b>' + esc(i.title) + '</b>' + (i.ok ? '' : '<small>' + esc(i.detail) + '</small>') + '</span>' + (i.ok ? '' : '<i class="ti ti-chevron-right"></i>') + '</a>';
+                    var extra = '';
+                    if (!i.ok && i.action === 'passkey') {
+                        var canPk = !i.problem && window.csfPasskeys && csfPasskeys.supported();
+                        var note = i.problem || (canPk ? '' : 'This browser does not support passkeys.');
+                        extra = '<span class="check-action">' +
+                            '<button type="button" class="btn btn-primary btn-xs js-check-passkey"' + (canPk ? '' : ' disabled') + '><i class="ti ti-fingerprint"></i> Add passkey</button>' +
+                            (note ? '<small class="text-warning">' + esc(note) + ' <a href="/settings#twofactor">Use an authenticator app instead.</a></small>' : '') +
+                            '<small class="js-check-passkey-msg"></small></span>';
+                    }
+                    return '<a class="check-item' + (i.ok ? ' done' : '') + '" href="' + esc(i.href) + '"><i class="ti ' + (i.ok ? 'ti-circle-check' : 'ti-circle') + '"></i><span><b>' + esc(i.title) + '</b>' + (i.ok ? '' : '<small>' + esc(i.detail) + '</small>') + extra + '</span>' + (i.ok ? '' : '<i class="ti ti-chevron-right"></i>') + '</a>';
                 }).join('') + '</div></div>').show();
             box.on('click', '.js-dismiss', function(e) { e.preventDefault(); localStorage.setItem(key, '1'); box.hide(); });
+            box.on('click', '.check-action', function(e) { e.preventDefault(); e.stopPropagation(); });
+            box.on('click', '.js-check-passkey', function(e) {
+                e.preventDefault(); e.stopPropagation();
+                var btn = $(this), msg = btn.siblings('.js-check-passkey-msg');
+                var csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                btn.prop('disabled', true); msg.attr('class', 'js-check-passkey-msg text-muted').text('Follow the prompt from your browser…');
+                csfPasskeys.register('Passkey', csrf).then(function(r) {
+                    if (r.recovery_codes) { location.href = '/settings#twofactor'; return; }
+                    location.reload();
+                }).catch(function(err) {
+                    btn.prop('disabled', false); msg.attr('class', 'js-check-passkey-msg text-danger').text(err.message);
+                });
+            });
         });
     },
 

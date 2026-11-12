@@ -14,8 +14,12 @@
             <div class="col-md-4 col-md-offset-4 col-sm-6 col-sm-offset-3">
                 <div class="panel panel-default login-panel">
                     <div class="panel-heading text-center">
-                        <h3><span class="ti ti-shield-lock"></span> Two-factor code</h3>
-                        <p class="text-muted">Enter the 6-digit code from your authenticator app</p>
+                        <h3><span class="ti ti-shield-lock"></span> {{ 'Second step' if twofa.passkeys else 'Two-factor code' }}</h3>
+                        <p class="text-muted">
+                            {%- if twofa.passkeys and twofa.totp %}Use your passkey, or enter the code from your authenticator app
+                            {%- elif twofa.passkeys %}Use your passkey, or enter a recovery code
+                            {%- else %}Enter the 6-digit code from your authenticator app{% endif -%}
+                        </p>
                     </div>
                     <div class="panel-body">
                         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -23,23 +27,34 @@
                         <div class="alert alert-{{ category }}">{{ message }}</div>
                         {% endfor %}
                         {% endwith %}
+                        {% if twofa.passkeys %}
+                        {% if passkey_problem %}
+                        <div class="alert alert-warning" style="font-size:13px"><span class="ti ti-alert-triangle"></span> {{ passkey_problem }}</div>
+                        {% else %}
+                        <button type="button" class="btn btn-primary btn-block btn-lg" id="passkey-login-btn">
+                            <span class="ti ti-fingerprint"></span> Use passkey
+                        </button>
+                        <p id="passkey-login-msg" class="text-center text-muted" style="margin:8px 0 0; font-size:13px; min-height:18px"></p>
+                        <div class="text-center text-muted" style="margin:10px 0; font-size:12px; text-transform:uppercase; letter-spacing:1px">or</div>
+                        {% endif %}
+                        {% endif %}
                         <form method="POST" action="/login/2fa">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                             <div class="form-group">
-                                <label for="code">Authentication code</label>
+                                <label for="code">{{ 'Authentication code' if twofa.totp else 'Recovery code' }}</label>
                                 <div class="input-group">
                                     <span class="input-group-addon"><span class="ti ti-device-mobile"></span></span>
-                                    <input type="text" class="form-control" id="code" name="code" inputmode="numeric"
-                                           autocomplete="one-time-code" placeholder="123456" required autofocus
+                                    <input type="text" class="form-control" id="code" name="code" {% if twofa.totp %}inputmode="numeric"{% endif %}
+                                           autocomplete="one-time-code" placeholder="{{ '123456' if twofa.totp else 'recovery code' }}" required {% if not twofa.passkeys or passkey_problem %}autofocus{% endif %}
                                            style="font-family:monospace; font-size:18px; letter-spacing:4px">
                                 </div>
                             </div>
-                            <button type="submit" class="btn btn-primary btn-block btn-lg">
+                            <button type="submit" class="btn {{ 'btn-default' if twofa.passkeys and not passkey_problem else 'btn-primary' }} btn-block btn-lg">
                                 <span class="ti ti-check"></span> Verify
                             </button>
                         </form>
                         <p class="text-muted text-center" style="margin:14px 0 0; font-size:12px">
-                            Lost your phone? Enter one of your backup codes instead.
+                            {% if twofa.totp %}Lost your phone? Enter one of your backup codes instead.{% else %}Lost your passkey device? Enter one of your recovery codes.{% endif %}
                             <br><a href="/login">Back to sign in</a>
                         </p>
                     </div>
@@ -47,5 +62,30 @@
             </div>
         </div>
     </div>
+    {% if twofa.passkeys and not passkey_problem %}
+    <script src="{{ url_for('static', filename='js/passkeys.js') }}"></script>
+    <script>
+    (function () {
+        var csrf = {{ csrf_token|tojson }};
+        var btn = document.getElementById('passkey-login-btn'), msg = document.getElementById('passkey-login-msg');
+        function go() {
+            btn.disabled = true; msg.className = 'text-center text-muted'; msg.textContent = 'Follow the prompt from your browser…';
+            csfPasskeys.login(csrf).then(function (j) {
+                msg.textContent = 'Signed in';
+                location.href = j.redirect || '/';
+            }).catch(function (e) {
+                btn.disabled = false; msg.className = 'text-center text-danger'; msg.textContent = e.message;
+            });
+        }
+        if (!csfPasskeys.supported()) {
+            btn.disabled = true; msg.textContent = 'This browser does not support passkeys. Use a code instead.';
+            document.getElementById('code').focus();
+            return;
+        }
+        btn.addEventListener('click', go);
+        go();  /* prompt straight away; the button retries */
+    })();
+    </script>
+    {% endif %}
 </body>
 </html>

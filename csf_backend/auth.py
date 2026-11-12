@@ -69,7 +69,9 @@ def get_role(username):
 def list_users():
     users = load_auth_config().get("users", {})
     return [{"username": u, "role": d.get("role", "admin"), "created": d.get("created"),
-             "totp": bool((d.get("totp") or {}).get("enabled"))} for u, d in sorted(users.items())]
+             "totp": bool((d.get("totp") or {}).get("enabled")),
+             "passkeys": len(d.get("passkeys") or []),
+             "twofa": user_has_second_factor(d)} for u, d in sorted(users.items())]
 
 
 def set_role(username, role):
@@ -313,23 +315,63 @@ def totp_disable(username, password, code):
 
 
 def totp_check_login(username, code):
-    """Verify a login code: TOTP first, then single-use backup codes."""
+    """Verify a login code: TOTP first, then single-use backup codes (TOTP or passkey recovery)."""
     config = load_auth_config()
     user = config.get("users", {}).get(username, {})
-    t = user.get("totp") or {}
-    if not t.get("enabled"):
+    if not user_has_second_factor(user):
         return True
-    if totp_verify(t.get("secret", ""), code):
+    t = user.get("totp") or {}
+    if t.get("enabled") and totp_verify(t.get("secret", ""), code):
         return True
     digest = hashlib.sha256((code or "").strip().lower().encode()).hexdigest()
-    codes = t.get("backup_codes", [])
-    for stored in codes:
-        if hmac.compare_digest(stored, digest):
-            codes.remove(stored)
-            save_auth_config(config)
-            log_event(f"Backup code used for {username} ({len(codes)} left)")
-            return True
+    for pool_name, codes in (("backup", t.get("backup_codes", [])), ("recovery", user.get("passkey_recovery", []))):
+        for stored in codes:
+            if hmac.compare_digest(stored, digest):
+                codes.remove(stored)
+                save_auth_config(config)
+                log_event(f"{pool_name.capitalize()} code used for {username} ({len(codes)} left)")
+                return True
     return False
+
+
+# --- Second factor: TOTP and/or passkeys ---
+
+def user_has_second_factor(user):
+    """True when a user record has TOTP on or at least one passkey."""
+    user = user or {}
+    return bool((user.get("totp") or {}).get("enabled")) or bool(user.get("passkeys"))
+
+
+def second_factor_status(username):
+    """Everything the Settings page and sign-in need to know about a user's second factor."""
+    user = load_auth_config().get("users", {}).get(username, {})
+    t = user.get("totp") or {}
+    return {
+        "enabled": user_has_second_factor(user),
+        "totp": bool(t.get("enabled")),
+        "backup_codes_left": len(t.get("backup_codes", [])),
+        "passkeys": len(user.get("passkeys") or []),
+        "recovery_codes_left": len(user.get("passkey_recovery", [])),
+    }
+
+
+def ensure_recovery_codes(username):
+    """Give a passkey-only user single-use recovery codes, so a lost device is not a lockout.
+
+    Returns the plain codes when a fresh set was generated, else None. Nothing is done while
+    TOTP is on (its backup codes cover the user) or while a set already exists.
+    """
+    config = load_auth_config()
+    user = config.get("users", {}).get(username)
+    if user is None or not user.get("passkeys"):
+        return None
+    if (user.get("totp") or {}).get("enabled") or user.get("passkey_recovery"):
+        return None
+    plain = [secrets.token_hex(4) for _ in range(8)]
+    user["passkey_recovery"] = [hashlib.sha256(c.encode()).hexdigest() for c in plain]
+    save_auth_config(config)
+    log_event(f"Recovery codes issued for {username}")
+    return plain
 
 
 def change_password(username, new_password):

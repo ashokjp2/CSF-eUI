@@ -5,6 +5,8 @@ import shutil
 import socket
 from urllib.request import Request, urlopen
 
+from csf_backend import log_viewer
+
 
 def lookup_ip(ip):
     ip = (ip or "").strip()
@@ -110,13 +112,20 @@ def lookup_ip(ip):
             capture_output=True, text=True, timeout=5,
         )
         recent = r2.stdout.strip().split("\n")[-5:] if r2.stdout.strip() else []
+        explained = []
+        for line in recent:
+            try:
+                explained.append(log_viewer.explain_line(line, "lfd"))
+            except Exception:
+                explained.append({"kind": "Note", "text": line, "level": "info", "raw": line, "date": "", "clock": "", "ago": ""})
         info["sections"].append({
-            "title": "LFD Log Activity",
+            "title": "What the firewall log says about this IP",
             "icon": "list-alt",
             "items": [
-                {"key": "Total mentions", "value": str(count)},
+                {"key": "Times mentioned", "value": (str(count) + " in the LFD log") if count else "Never seen by LFD"},
             ],
             "log_lines": recent,
+            "log_explained": explained,
         })
     except Exception:
         pass

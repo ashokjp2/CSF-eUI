@@ -81,6 +81,21 @@
                             <span class="ti ti-check"></span> Apply
                         </button>
                     </div>
+                    {% elif step.category == 'ui' %}
+                    {% if step.passkey_problem %}
+                    <div class="form-inline" style="margin-top:10px">
+                        <button class="btn btn-primary" disabled><span class="ti ti-fingerprint"></span> Add passkey</button>
+                        <a href="/settings#twofactor" class="btn btn-default" style="margin-left:6px"><span class="ti ti-device-mobile"></span> Use an authenticator app instead</a>
+                    </div>
+                    <p class="text-warning" style="margin:8px 0 0; font-size:13px"><span class="ti ti-alert-triangle"></span> {{ step.passkey_problem }}</p>
+                    {% else %}
+                    <form class="form-inline" id="wiz-passkey-form" onsubmit="return false" style="margin-top:10px">
+                        <input type="text" class="form-control" id="wiz-passkey-name" placeholder="Name, e.g. Work laptop" maxlength="60" style="width:220px">
+                        <button type="submit" class="btn btn-primary" id="wiz-passkey-btn" style="margin-left:8px"><span class="ti ti-fingerprint"></span> Add passkey</button>
+                        <a href="/settings#twofactor" class="btn btn-link btn-sm">Use an authenticator app instead</a>
+                        <span id="wiz-passkey-msg" style="margin-left:8px; font-size:13px"></span>
+                    </form>
+                    {% endif %}
                     {% elif step.category == 'ssh' %}
                     <div class="alert alert-warning" style="margin-bottom:0">
                         <span class="ti ti-alert-triangle"></span>
@@ -103,6 +118,24 @@
 {% block scripts %}
 <script>
 $(function() {
+    var pkForm = document.getElementById('wiz-passkey-form');
+    if (pkForm) {
+        var pkBtn = document.getElementById('wiz-passkey-btn'), pkMsg = document.getElementById('wiz-passkey-msg');
+        if (!window.csfPasskeys || !csfPasskeys.supported()) {
+            pkBtn.disabled = true; pkMsg.className = 'text-warning'; pkMsg.textContent = 'This browser does not support passkeys.';
+        }
+        pkForm.addEventListener('submit', function() {
+            var name = document.getElementById('wiz-passkey-name').value.trim() || 'Passkey';
+            pkBtn.disabled = true; pkMsg.className = 'text-muted'; pkMsg.textContent = 'Follow the prompt from your browser…';
+            var csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            csfPasskeys.register(name, csrf).then(function(r) {
+                if (r.recovery_codes) { location.href = '/settings#twofactor'; return; }
+                location.reload();
+            }).catch(function(e) {
+                pkBtn.disabled = false; pkMsg.className = 'text-danger'; pkMsg.textContent = e.message;
+            });
+        });
+    }
     $('.wiz-apply').on('click', function() {
         var btn = $(this);
         var setting = btn.data('setting');
