@@ -18,6 +18,7 @@ app still starts if the package is not installed yet; the UI then explains why.
 
 import ipaddress
 import json
+import os
 import time
 
 from csf_backend import auth
@@ -46,7 +47,7 @@ def _try_import():
         importlib.invalidate_caches()
         import webauthn as _wa_mod
         from webauthn.helpers import (base64url_to_bytes, bytes_to_base64url, options_to_json,
-                                      generate_user_handle, parse_registration_credential_json)
+                                      parse_registration_credential_json)
         from webauthn.helpers.structs import (AuthenticatorSelectionCriteria, PublicKeyCredentialDescriptor,
                                               ResidentKeyRequirement, UserVerificationRequirement)
         _wa = _wa_mod
@@ -172,8 +173,10 @@ def remove_passkey(username, cred_id, password):
     if kept:
         user["passkeys"] = kept
     else:
+        # no passkeys left: forget the handle too, so the next registration starts clean
         user.pop("passkeys", None)
         user.pop("passkey_recovery", None)
+        user.pop("passkey_handle", None)
     auth.save_auth_config(config)
     auth.log_event(f"Passkey '{removed.get('name', '')}' removed for {username} ({len(kept)} left)")
     return True, f"Passkey '{removed.get('name', '')}' removed"
@@ -234,7 +237,8 @@ def registration_options(username, host):
     # A stable per-user handle so the authenticator can tell accounts apart; never the username.
     handle = user.get("passkey_handle")
     if not handle:
-        handle = bytes_to_base64url(generate_user_handle())
+        # 32 random bytes: the spec allows up to 64, but a few phone providers misbehave at the limit
+        handle = bytes_to_base64url(os.urandom(32))
         user["passkey_handle"] = handle
         auth.save_auth_config(config)
     exclude = [_descriptor(p) for p in user.get("passkeys", [])]
