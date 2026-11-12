@@ -276,7 +276,7 @@ def login():
         remote_ip = request.remote_addr
         ok, msg = auth.authenticate(username, password, remote_ip)
         if ok:
-            if auth.totp_status(username)["enabled"]:
+            if auth.second_factor_status(username)["enabled"]:
                 session.clear()
                 session["pending_2fa"] = {"username": username, "expires": int(time.time()) + 300}
                 return redirect(url_for("login_2fa"))
