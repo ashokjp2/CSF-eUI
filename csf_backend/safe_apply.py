@@ -56,6 +56,16 @@ def _save(state):
     os.replace(tmp, STATE_PATH)
 
 
+def csf_busy():
+    """True if a `csf` run (e.g. a slow `csf -sf` started by lfd) is already in progress."""
+    try:
+        r = subprocess.run(["pgrep", "-f", r"^/usr/bin/perl /usr/sbin/csf "],
+                           capture_output=True, text=True, timeout=5)
+        return r.returncode == 0 and bool(r.stdout.strip())
+    except Exception:
+        return False
+
+
 def is_change_path(path):
     return any(path.startswith(p) for p in CHANGE_PATHS)
 
@@ -98,6 +108,9 @@ def arm(seconds=DEFAULT_SECONDS):
     state = _load()
     if state.get("armed"):
         return {"success": False, "error": "A safe apply is already waiting for confirmation"}
+    if csf_busy():
+        return {"success": False, "error": "A firewall reload is already running (started by lfd or an earlier "
+                                           "apply). It can take a few minutes; wait for it to finish, then try again."}
     if not state.get("baseline"):
         state = snapshot_baseline()
         if not state.get("baseline"):
@@ -120,7 +133,14 @@ def arm(seconds=DEFAULT_SECONDS):
         _save(state)
         return {"success": False, "error": f"Restarted, but the rollback watchdog could not start: {e}"}
     _log(f"armed for {seconds}s (baseline {state['baseline']})")
-    return {"success": bool(result.get("success", True)), "seconds": seconds, "restart": result}
+    ok = bool(result.get("success", True))
+    out = {"success": ok, "seconds": seconds, "restart": result}
+    if not ok:
+        detail = " ".join(((result.get("stderr") or "") + " " + (result.get("stdout") or "")).split())[-300:]
+        out["error"] = ("The firewall reload reported a problem" + (f": {detail}" if detail else "") +
+                        ". The rollback timer is still running; confirm only if the firewall looks right.")
+        _log(f"restart reported failure: {detail}")
+    return out
 
 
 def confirm():

@@ -351,7 +351,10 @@ var CSFv2 = {
                     var b = $(this).prop('disabled', true).text('Applying…');
                     $.ajax({url: '/api/safe-apply/start', method: 'POST', contentType: 'application/json', data: JSON.stringify({seconds: s.seconds})})
                         .done(function(r) { if (!r.success) self.toast(r.error || 'Apply failed', 'danger'); refresh(); })
-                        .fail(function() { self.toast('Apply failed', 'danger'); b.prop('disabled', false); });
+                        .fail(function(x) {
+                            var m = x && x.responseJSON && x.responseJSON.error;
+                            self.toast(m || 'Apply failed (no response from the server)', 'danger'); b.prop('disabled', false);
+                        });
                 }));
                 act.append($('<a class="btn btn-default btn-sm" href="/backup-restore">Backups</a>'));
             } else {
