@@ -69,12 +69,10 @@
     (function () {
         var csrf = {{ csrf_token|tojson }};
         var btn = document.getElementById('passkey-login-btn'), msg = document.getElementById('passkey-login-msg');
-        var FLAG = 'csfv2-passkey-login';
         function go() {
             btn.disabled = true; msg.className = 'text-center text-muted'; msg.textContent = 'Follow the prompt from your browser…';
             var username = document.getElementById('username').value.trim();
             csfPasskeys.login(csrf, username).then(function (j) {
-                try { localStorage.setItem(FLAG, '1'); } catch (e) {}
                 msg.textContent = 'Signed in';
                 location.href = j.redirect || '/';
             }).catch(function (e) {
@@ -86,9 +84,6 @@
             return;
         }
         btn.addEventListener('click', go);
-        var usedBefore = false;
-        try { usedBefore = !!localStorage.getItem(FLAG); } catch (e) {}
-        if (usedBefore) go();  /* this browser signed in with a passkey before: prompt straight away */
     })();
     </script>
     {% endif %}
