@@ -20,7 +20,14 @@ def build(username, passkey_problem=""):
     except Exception:
         ssh_port = "22"
     tcp_in = {p.strip() for p in conf.get("TCP_IN", "").split(",")}
-    add("ssh", ssh_port in tcp_in, f"SSH port {ssh_port} is allowed in TCP_IN",
+    # A health-check finding the user accepted/ignored ("Port N is listening but not in TCP_IN") counts as handled.
+    try:
+        from csf_backend import hardening_checks
+        suffix = f":port-{ssh_port}-is-listening-but-not-in-tcp-in"
+        ssh_waived = any(k.endswith(suffix) for k in hardening_checks.load_accepted())
+    except Exception:
+        ssh_waived = False
+    add("ssh", ssh_port in tcp_in or ssh_waived, f"SSH port {ssh_port} is allowed in TCP_IN",
         "If SSH is not in TCP_IN you will be locked out the moment the firewall starts.", "/qconfig")
 
     add("2fa", auth.second_factor_status(username)["enabled"], "Protect this UI with a passkey",
@@ -39,14 +46,15 @@ def build(username, passkey_problem=""):
 
     try:
         upd = auto_update.load() or {}
-        upd_on = any(bool(v) for k, v in upd.items() if k in ("enabled", "auto_update", "notify", "check", "mode") and v not in ("off", "0", "", None, False))
+        upd_on = bool(upd.get("auto_check")) or bool(upd.get("auto_install"))
     except Exception:
         upd_on = False
     add("updates", upd_on, "Enable update checks", "Know when a new CSF-eUI version is out.", "/updates")
 
     try:
         st = ssl_manager.get_ssl_status()
-        self_signed = (st.get("current_cert") or {}).get("self_signed", True)
+        cur = st.get("current_cert") or {}
+        self_signed = (not cur) or bool(st.get("self_signed", True)) or cur.get("provider") == "Self-Signed"
     except Exception:
         self_signed = True
     add("ssl", not self_signed, "Use a real HTTPS certificate", "A Let's Encrypt certificate removes the browser warning and stops password theft on the wire.", "/ssl")
