@@ -5,7 +5,7 @@
 <p class="text-muted" style="margin-bottom:15px">Public lists of known-bad addresses that CSF downloads on a schedule and blocks automatically. Each row shows whether the feed is really being fetched and how many addresses it contributes. Changes need a firewall restart — the safe-apply bar appears after you toggle a feed. Advanced editing: <a href="/lfd/blocklists">csf.blocklists editor</a>.</p>
 
 <div class="panel panel-default">
-    <div class="panel-heading"><h4><i class="ti ti-list-check"></i> Feeds</h4><span class="panel-hint" id="bf-hint"></span></div>
+    <div class="panel-heading"><h4><i class="ti ti-list-check"></i> Feeds</h4><span class="panel-hint" id="bf-hint"></span> <button class="btn btn-default btn-xs pull-right js-fetch-all" title="Download every enabled feed now, ignoring its schedule"><i class="ti ti-refresh"></i> Fetch all now</button></div>
     <div class="panel-body" style="padding:8px 16px 12px">
         <table class="table table-condensed table-hover" id="bf-table">
             <thead><tr><th>On</th><th>Feed</th><th>Health</th><th>Addresses</th><th>Last fetch</th><th>Every</th><th></th></tr></thead>
@@ -30,7 +30,7 @@ $(function() {
                     '<td><strong>' + esc(f.name) + '</strong>' + (f.preset ? '<br><small class="text-muted">' + esc(f.preset) + '</small>' : '<br><small class="text-muted">' + esc(f.url) + '</small>') + '</td>' +
                     '<td class="feed-' + esc(f.health) + '" title="' + esc(f.url) + '">' + esc(HEALTH[f.health] || f.health) + keyBtn + '</td>' +
                     '<td>' + (f.ips ? f.ips.toLocaleString() : '—') + '</td><td class="text-muted">' + (f.last_fetch ? new Date(f.last_fetch * 1000).toLocaleString() + ' (' + f.age_h + 'h ago)' : '—') + '</td><td>' + every + '</td>' +
-                    '<td class="text-right"><a href="' + esc(f.url) + '" target="_blank" rel="noopener" class="btn btn-default btn-xs" title="Open feed URL"><i class="ti ti-external-link"></i></a></td></tr>';
+                    '<td class="text-right">' + (f.enabled ? '<button class="btn btn-default btn-xs js-fetch" data-name="' + esc(f.name) + '" title="Fetch this feed now"><i class="ti ti-refresh"></i></button> ' : '') + '<a href="' + esc(f.url) + '" target="_blank" rel="noopener" class="btn btn-default btn-xs" title="Open feed URL"><i class="ti ti-external-link"></i></a></td></tr>';
             }).join(''));
             var on = feeds.filter(function(f) { return f.enabled; });
             $('#bf-hint').text(on.length + ' enabled · ' + on.reduce(function(a, f) { return a + (f.ips || 0); }, 0).toLocaleString() + ' addresses blocked via feeds');
@@ -44,6 +44,18 @@ $(function() {
         var key = prompt('Paste your API key for ' + $(this).data('name') + ':'); if (!key) return;
         $.ajax({url: '/api/blocklist-feeds/toggle', method: 'POST', contentType: 'application/json', data: JSON.stringify({name: $(this).data('name'), enabled: true, url: String($(this).data('url')).replace('YOUR_KEY', key.trim())})}).done(load);
     });
+    function forceFetch(btn, name) {
+        btn.prop('disabled', true);
+        $.ajax({url: '/api/blocklist-feeds/fetch', method: 'POST', contentType: 'application/json', data: JSON.stringify(name ? {name: name} : {})})
+            .done(function(r) {
+                if (r.fetched) { CSFv2.toast('Fetched ' + r.fetched + ' feed(s)' + (r.error ? ' — ' + r.error : '') + '. Apply safely to load the new addresses.', r.error ? 'warning' : 'success'); setTimeout(CSFv2.initSafeApply.bind(CSFv2), 500); }
+                else { CSFv2.toast(r.error || 'Nothing fetched', 'danger'); }
+            })
+            .fail(function() { CSFv2.toast('Fetch failed', 'danger'); })
+            .always(function() { btn.prop('disabled', false); load(); });
+    }
+    $('#bf-table').on('click', '.js-fetch', function() { forceFetch($(this), $(this).data('name')); });
+    $('.js-fetch-all').on('click', function() { forceFetch($(this), null); });
     load();
 });
 </script>

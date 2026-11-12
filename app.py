@@ -3404,6 +3404,25 @@ def api_blocklist_feeds_toggle():
     return jsonify(r)
 
 
+@app.route("/api/blocklist-feeds/fetch", methods=["POST"])
+@login_required
+def api_blocklist_feeds_fetch():
+    d = request.get_json(silent=True) or {}
+    names = [d["name"]] if d.get("name") else [f["name"] for f in blocklist_feeds.status() if f["enabled"]]
+    results, ok, fail = {}, 0, []
+    for n in names:
+        r = blocklist_feeds.force_fetch(n)
+        results[n] = r
+        if r.get("success"):
+            ok += 1
+        else:
+            fail.append(f"{n}: {r.get('error')}")
+    if ok:
+        audit_log.log_event("config_change", _actor(), request.remote_addr, f"Blocklist feeds force-fetched: {', '.join(n for n in names if results[n].get('success'))}")
+    return jsonify({"success": ok > 0 and not fail, "fetched": ok, "errors": fail, "results": results,
+                    "error": "; ".join(fail) if fail else None, "restart_needed": ok > 0})
+
+
 # --- Temporary SSH window ---
 
 @app.route("/api/quick/ssh-window", methods=["POST"])

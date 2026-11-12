@@ -74,6 +74,73 @@ def status():
     return sorted(feeds.values(), key=lambda f: (order.get(f["health"], 9), f["name"]))
 
 
+_IP_RE = re.compile(r"(?<![\w.:/])((?:\d{1,3}\.){3}\d{1,3}(?:/\d{1,2})?|[0-9a-fA-F:]{3,39}(?:/\d{1,3})?)(?![\w.:/])")
+
+
+def _extract_ips(text, limit):
+    import ipaddress
+    out, seen = [], set()
+    for line in text.splitlines():
+        line = line.split("#", 1)[0].split(";", 1)[0].strip()
+        if not line:
+            continue
+        for tok in _IP_RE.findall(line)[:1]:
+            try:
+                net = ipaddress.ip_network(tok, strict=False)
+            except ValueError:
+                continue
+            if net.is_private or net.is_loopback or net.is_multicast:
+                continue
+            s = str(net.network_address) if net.num_addresses == 1 else str(net)
+            if s not in seen:
+                seen.add(s)
+                out.append(s)
+            if limit and len(out) >= limit:
+                return out
+    return out
+
+
+def force_fetch(name):
+    """Download one enabled feed right now and rewrite its state file, ignoring the interval."""
+    if not re.match(r"^[A-Z0-9_]+$", name or ""):
+        return {"success": False, "error": "Bad feed name"}
+    feed = next((f for f in status() if f["name"] == name), None)
+    if not feed or not feed["enabled"]:
+        return {"success": False, "error": "Feed is not enabled"}
+    url = feed["url"]
+    if "YOUR_KEY" in url:
+        return {"success": False, "error": "Set the API key first"}
+    if not url.lower().startswith(("http://", "https://")):
+        return {"success": False, "error": "Unsupported URL scheme"}
+    import urllib.request
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "CSF-eUI blocklist fetch"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = resp.read(20 * 1024 * 1024 + 1)
+        if len(data) > 20 * 1024 * 1024:
+            return {"success": False, "error": "Feed is larger than 20 MB"}
+        text = data.decode("utf-8", "replace")
+    except Exception as e:
+        return {"success": False, "error": f"Download failed: {e}"}
+    try:
+        mx = int(feed["max"] or 0)
+    except ValueError:
+        mx = 0
+    ips = _extract_ips(text, mx)
+    if not ips:
+        return {"success": False, "error": "Downloaded, but no usable addresses were found; existing list kept"}
+    path = os.path.join(STATE_DIR, f"csf.block.{name}")
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w") as f:
+            f.write("\n".join(ips) + "\n")
+        os.replace(tmp, path)
+    except OSError as e:
+        return {"success": False, "error": str(e)}
+    return {"success": True, "count": len(ips), "restart_needed": True}
+
+
 def set_enabled(name, enabled, url=None):
     """Toggle a feed by (un)commenting its line; add a preset line if missing."""
     if not re.match(r"^[A-Z0-9_]+$", name or ""):
