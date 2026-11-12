@@ -1,0 +1,10 @@
+{# Summary badges shown under the page heading. Re-rendered client-side too. #}
+<span class="label label-primary" style="font-size:12px">{{ info.summary.active }} active</span>
+{% if info.summary.disabled %}<span class="label label-default" style="font-size:12px">{{ info.summary.disabled }} commented out</span>{% endif %}
+{% if info.summary.parked %}<span class="label label-default" style="font-size:12px">{{ info.summary.parked }} parked in a heredoc</span>{% endif %}
+{% if info.summary.custom_chains %}<span class="label label-info" style="font-size:12px">chains: {{ info.summary.custom_chains|join(', ') }}</span>{% endif %}
+{% if info.summary.interfaces %}<span class="label label-default" style="font-size:12px">interfaces: {{ info.summary.interfaces|join(', ') }}</span>{% endif %}
+{% if info.summary.tables|length > 1 %}<span class="label label-default" style="font-size:12px">tables: {{ info.summary.tables|join(', ') }}</span>{% endif %}
+{% for s in info.summary.sections %}
+<span class="label {{ 'label-warning' if s.managed else 'label-success' }}" style="font-size:12px">{{ s.label }}{% if s.managed %} (auto){% endif %}</span>
+{% endfor %}

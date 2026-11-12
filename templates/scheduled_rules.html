@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block page_title %}Scheduled rules{% endblock %}
+
+{% block content %}
+<p class="text-muted" style="margin-bottom:15px">Allow or deny an address only between two times — a contractor for a week, a migration window, a maintenance slot. The entry is added to csf.allow / csf.deny when the start time arrives and removed at the end, automatically.</p>
+
+<div class="row">
+    <div class="col-md-5">
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4><i class="ti ti-calendar-plus"></i> New scheduled rule</h4></div>
+            <div class="panel-body">
+                <form id="sr-form">
+                    <div class="form-group"><div class="seg" id="sr-kind"><button type="button" class="seg-item active" data-kind="allow">Allow</button><button type="button" class="seg-item" data-kind="deny">Deny</button></div></div>
+                    <div class="form-group"><input type="text" class="form-control" name="ip" data-validate="ip" placeholder="203.0.113.9 or 10.0.0.0/24" required></div>
+                    <div class="form-group"><input type="text" class="form-control input-sm" name="ports" data-validate="ports" placeholder="Ports (optional, e.g. 22,3306) — blank = all"></div>
+                    <div class="row">
+                        <div class="col-xs-6"><label style="font-weight:400; font-size:12px">Start</label><input type="datetime-local" class="form-control input-sm" name="start" required></div>
+                        <div class="col-xs-6"><label style="font-weight:400; font-size:12px">End</label><input type="datetime-local" class="form-control input-sm" name="end" required></div>
+                    </div>
+                    <div class="form-group" style="margin-top:8px"><input type="text" class="form-control input-sm" name="comment" placeholder="Why (e.g. contractor access)" maxlength="80"></div>
+                    <div class="chip-row" style="margin-bottom:10px">
+                        <button type="button" class="chip js-quick" data-h="1">Now → +1h</button><button type="button" class="chip js-quick" data-h="24">Now → +24h</button><button type="button" class="chip js-quick" data-h="168">Now → +7 days</button>
+                    </div>
+                    <button type="submit" class="btn btn-primary"><i class="ti ti-calendar-plus"></i> Schedule</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-7">
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4><i class="ti ti-calendar-time"></i> This week</h4><span class="panel-hint" id="sr-week-hint"></span></div>
+            <div class="panel-body" id="sr-week" style="padding:10px 16px"></div>
+        </div>
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4><i class="ti ti-list"></i> All scheduled rules</h4></div>
+            <div class="panel-body" style="padding:8px 16px 12px">
+                <table class="table table-condensed" id="sr-table">
+                    <thead><tr><th>Rule</th><th>From</th><th>Until</th><th>State</th><th></th></tr></thead>
+                    <tbody><tr><td colspan="5" class="text-muted">Loading…</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    var kind = 'allow';
+    function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+    function toLocal(ts) { var d = new Date(ts * 1000); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); }
+    function fmt(ts) { return new Date(ts * 1000).toLocaleString([], {dateStyle: 'short', timeStyle: 'short'}); }
+    $('#sr-kind').on('click', '.seg-item', function() { kind = $(this).data('kind'); $('#sr-kind .seg-item').removeClass('active'); $(this).addClass('active'); });
+    $('.js-quick').on('click', function() { var now = Math.floor(Date.now() / 1000); $('[name=start]').val(toLocal(now)); $('[name=end]').val(toLocal(now + $(this).data('h') * 3600)); });
+    $('#sr-form').on('submit', function(e) {
+        e.preventDefault();
+        var f = this, start = Math.floor(new Date(f.start.value).getTime() / 1000), end = Math.floor(new Date(f.end.value).getTime() / 1000);
+        $.ajax({url: '/api/scheduled-rules', method: 'POST', contentType: 'application/json', data: JSON.stringify({kind: kind, ip: f.ip.value, ports: f.ports.value, start: start, end: end, comment: f.comment.value})})
+            .done(function(r) { if (r.success) { CSFv2.toast('Rule scheduled', 'success'); f.reset(); load(); } else CSFv2.toast(r.error || 'Failed', 'danger'); });
+    });
+    function load() {
+        $.getJSON('/api/scheduled-rules', function(r) {
+            var rules = r.rules || [], now = r.now, state = {scheduled: 'pill-muted', pending: 'pill-warning', active: 'pill-success', expired: 'pill-muted'};
+            $('#sr-table tbody').html(rules.map(function(x) {
+                var act = x.state === 'expired' ? '' : '<button class="btn btn-default btn-xs js-extend" data-id="' + x.id + '" data-end="' + x.end + '">+24h</button> <button class="btn btn-default btn-xs js-expire" data-id="' + x.id + '">End now</button> ';
+                return '<tr><td><span class="pill ' + (x.kind === 'allow' ? 'pill-success' : 'pill-danger') + '">' + x.kind + '</span> <code>' + esc(x.ip) + '</code>' + (x.ports ? ' <small class="text-muted">ports ' + esc(x.ports) + '</small>' : '') + (x.comment ? '<br><small class="text-muted">' + esc(x.comment) + '</small>' : '') + (x.apply_error ? '<br><small class="text-danger">' + esc(x.apply_error) + '</small>' : '') + '</td>' +
+                    '<td>' + fmt(x.start) + '</td><td>' + fmt(x.end) + '</td><td><span class="pill ' + state[x.state] + '">' + x.state + '</span></td><td class="text-right" style="white-space:nowrap">' + act + '<button class="btn btn-danger btn-xs js-del" data-id="' + x.id + '"><i class="ti ti-trash"></i></button></td></tr>';
+            }).join('') || '<tr><td colspan="5" class="text-muted">No scheduled rules</td></tr>');
+            /* week strip */
+            var days = [], d0 = new Date(); d0.setHours(0, 0, 0, 0);
+            for (var i = 0; i < 7; i++) { var d = new Date(d0.getTime() + i * 86400000); days.push({d: d, items: []}); }
+            rules.forEach(function(x) { if (x.state === 'expired') return; days.forEach(function(day) { var s = day.d.getTime() / 1000, e = s + 86400; if (x.start < e && x.end > s) day.items.push(x); }); });
+            $('#sr-week').html('<div style="display:grid; grid-template-columns:repeat(7, minmax(0,1fr)); gap:6px">' + days.map(function(day) {
+                return '<div style="border:1px solid var(--border-color); border-radius:8px; padding:6px; min-height:70px; font-size:11px"><div style="color:var(--text-muted); margin-bottom:4px">' + day.d.toLocaleDateString([], {weekday: 'short', day: 'numeric'}) + '</div>' +
+                    day.items.map(function(x) { return '<div class="pill ' + (x.kind === 'allow' ? 'pill-success' : 'pill-danger') + '" style="display:block; margin-bottom:3px; overflow:hidden; text-overflow:ellipsis" title="' + esc(x.ip) + '">' + esc(x.ip) + '</div>'; }).join('') + '</div>';
+            }).join('') + '</div>');
+            $('#sr-week-hint').text(rules.filter(function(x) { return x.state === 'active'; }).length + ' active now');
+        });
+    }
+    $('#sr-table').on('click', '.js-extend', function() { $.ajax({url: '/api/scheduled-rules/' + $(this).data('id'), method: 'POST', contentType: 'application/json', data: JSON.stringify({op: 'extend', end: $(this).data('end') + 86400})}).done(load); })
+        .on('click', '.js-expire', function() { if (confirm('End this rule now? The entry is removed from the firewall.')) $.ajax({url: '/api/scheduled-rules/' + $(this).data('id'), method: 'POST', contentType: 'application/json', data: JSON.stringify({op: 'expire'})}).done(load); })
+        .on('click', '.js-del', function() { if (confirm('Delete this scheduled rule?')) $.ajax({url: '/api/scheduled-rules/' + $(this).data('id'), method: 'DELETE'}).done(load); });
+    load();
+});
+</script>
+{% endblock %}

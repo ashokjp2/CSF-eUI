@@ -1,0 +1,798 @@
+{# Page script for the csfpost.sh / csfpre.sh editor. Plain jQuery, Bootstrap 3. #}
+<style>
+.cp-row{display:table;width:100%;border:1px solid #e5e5e5;border-radius:3px;margin-bottom:4px;background:#fff}
+.cp-row > div{display:table-cell;vertical-align:middle;padding:6px 8px}
+.cp-badge{width:92px;text-align:center}
+.cp-main{word-break:break-all}
+.cp-actions{width:1%;white-space:nowrap;text-align:right}
+.cp-desc{font-size:13px;color:#333}
+.cp-cmd{display:block;font-size:11.5px;color:#555;background:transparent;padding:1px 0;white-space:pre-wrap}
+.cp-row.cp-off{background:#fafafa}
+.cp-row.cp-off .cp-desc,.cp-row.cp-off .cp-cmd{color:#999;text-decoration:line-through}
+.cp-row.cp-note{border-style:dashed;background:#fcfcfc}
+.cp-row.cp-note .cp-main{color:#888;font-style:italic;font-size:12px;white-space:pre-wrap}
+.cp-row.cp-spacer{border:none;background:transparent;padding:0;height:10px}
+.cp-row.cp-spacer .cp-main{color:#ccc;font-size:11px;padding:0 8px}
+.cp-sec{border:1px solid #ddd;border-radius:3px;margin-bottom:10px}
+.cp-sec > .cp-sec-head{padding:6px 10px;background:#f5f5f5;border-bottom:1px solid #ddd;font-weight:600;font-size:13px}
+.cp-sec > .cp-sec-body{padding:8px 8px 4px 8px}
+.cp-sec.cp-managed > .cp-sec-head{background:#fcf8e3}
+.cp-block{border:1px dashed #ccc;border-radius:3px;margin-bottom:6px}
+.cp-block > .cp-block-head{padding:5px 10px;background:#f9f9f9;font-size:12px;font-family:monospace;color:#666;border-bottom:1px dashed #ddd;white-space:pre-wrap;word-break:break-all}
+.cp-block > .cp-block-body{padding:6px 6px 2px 18px}
+.cp-tag{display:inline-block;font-size:10px;padding:0 5px;margin-left:4px;border-radius:2px;background:#eee;color:#666;vertical-align:middle}
+.cp-actions .btn{padding:1px 6px;font-size:11px}
+.cp-empty{text-align:center;color:#999;padding:40px 0}
+#tree-root .form-control-static{padding:0}
+.cp-neg{font-size:11px;font-weight:normal;color:#a94442;margin-left:6px}
+</style>
+<script>
+(function(){
+'use strict';
+
+var D = window.CSFPOST;
+var SCRIPT = D.script;
+var nodes = D.nodes;
+var summary = D.summary;
+var backups = D.backups;
+
+function esc(s){ return $('<div>').text(s == null ? '' : String(s)).html(); }
+function toast(msg, type){
+    if (window.CSFv2 && CSFv2.toast) { CSFv2.toast(msg, type || 'info'); return; }
+    var cls = type === 'danger' ? 'danger' : (type || 'info');
+    $('#alert-area').prepend('<div class="alert alert-'+cls+' alert-dismissible">' +
+        '<button type="button" class="close" data-dismiss="alert">&times;</button>'+esc(msg)+'</div>');
+}
+
+/* ------------------------------------------------------------------ *
+ * Server calls
+ * ------------------------------------------------------------------ */
+function post(url, body){
+    return $.ajax({url: url, method: 'POST', contentType: 'application/json',
+                   data: JSON.stringify(body || {})});
+}
+
+function applyOp(op, payload, done){
+    post('/api/csfpost/edit', {script: SCRIPT, op: op, payload: payload})
+      .done(function(r){
+          if (!r.success) { toast(r.error || 'Change refused', 'danger'); return; }
+          ingest(r);
+          if (done) done(r);
+          if (r.warning) toast(r.warning, 'warning');
+          else if (!r.unchanged) toast('Saved. Restart CSF+LFD to apply.', 'success');
+      })
+      .fail(function(x){ toast((x.responseJSON && x.responseJSON.error) || 'Request failed', 'danger'); });
+}
+
+function ingest(r){
+    if (r.nodes) { nodes = r.nodes; renderTree(); }
+    if (r.summary) { summary = r.summary; renderSummary(); }
+    if (typeof r.content === 'string') $('#script-editor').val(r.content);
+    refreshBackups();
+}
+
+function refreshBackups(){
+    $.get('/api/csfpost/backups?script=' + SCRIPT, function(r){
+        backups = r.backups || []; renderBackups();
+    });
+}
+
+/* ------------------------------------------------------------------ *
+ * Summary + chain/interface suggestions
+ * ------------------------------------------------------------------ */
+function renderSummary(){
+    var h = ['<span class="label label-primary" style="font-size:12px">'+summary.active+' active</span>'];
+    if (summary.disabled) h.push('<span class="label label-default" style="font-size:12px">'+summary.disabled+' commented out</span>');
+    if (summary.parked) h.push('<span class="label label-default" style="font-size:12px">'+summary.parked+' parked in a heredoc</span>');
+    if (summary.custom_chains.length) h.push('<span class="label label-info" style="font-size:12px">chains: '+esc(summary.custom_chains.join(', '))+'</span>');
+    if (summary.interfaces.length) h.push('<span class="label label-default" style="font-size:12px">interfaces: '+esc(summary.interfaces.join(', '))+'</span>');
+    if (summary.tables.length > 1) h.push('<span class="label label-default" style="font-size:12px">tables: '+esc(summary.tables.join(', '))+'</span>');
+    (summary.sections || []).forEach(function(s){
+        h.push('<span class="label '+(s.managed?'label-warning':'label-success')+'" style="font-size:12px">'+esc(s.label)+(s.managed?' (auto)':'')+'</span>');
+    });
+    $('#summary-bar').html(h.join(' '));
+    $('#rules-badge').text(summary.rules);
+}
+
+function allChains(){
+    var builtin = [];
+    $.each(D.choices.chains, function(_, names){ builtin = builtin.concat(names); });
+    return builtin.concat(summary.chains || []).filter(function(v,i,a){ return v && a.indexOf(v)===i; });
+}
+function allInterfaces(){ return (summary.interfaces || []); }
+function allTargets(){
+    var t = D.choices.target.map(function(x){ return x[0]; });
+    return t.concat(summary.custom_chains || []).filter(function(v,i,a){ return a.indexOf(v)===i; });
+}
+
+/* ------------------------------------------------------------------ *
+ * Tree rendering
+ * ------------------------------------------------------------------ */
+function ruleTags(n){
+    var t = [];
+    if (n.family === 'ipv6') t.push('IPv6');
+    if (n.table && n.table !== 'filter') t.push(n.table);
+    if (n.guard === 'check-then-add') t.push('added once');
+    if (n.guard === 'create-or-flush') t.push('create or flush');
+    if (n.guard === 'custom') t.push('shell idiom');
+    if (n.dynamic) t.push('uses $variables');
+    if (n.multiline) t.push('multi-line');
+    if (n.unknown && n.unknown.length) t.push('kept as-is: ' + n.unknown.join(' '));
+    return t.map(function(x){ return '<span class="cp-tag">'+esc(x)+'</span>'; }).join('');
+}
+
+function btn(action, id, icon, title, cls){
+    return '<button class="btn btn-'+(cls||'default')+' cp-act" data-act="'+action+'" data-id="'+id+'" title="'+esc(title)+'">'+
+           '<span class="ti ti-'+icon+'"></span></button> ';
+}
+
+function renderRule(n, readonly, readonlyNote){
+    var label = n.target || n.op_label || 'rule';
+    var cls = 'cp-row cp-rule' + (n.disabled ? ' cp-off' : '');
+    var acts = '';
+    if (!readonly) {
+        acts += btn('edit', n.id, 'pencil', 'Edit this rule', 'primary');
+        acts += btn('toggle', n.id, n.disabled ? 'eye' : 'eye-off', n.disabled ? 'Enable this rule' : 'Comment this rule out');
+        acts += btn('add-after', n.id, 'plus', 'Add a rule after this one');
+        acts += btn('duplicate', n.id, 'copy', 'Duplicate');
+        acts += btn('up', n.id, 'arrow-up', 'Move up');
+        acts += btn('down', n.id, 'arrow-down', 'Move down');
+        acts += btn('delete', n.id, 'trash', 'Delete', 'danger');
+    } else {
+        acts = '<span class="text-muted" style="font-size:11px">' + esc(readonlyNote || 'managed') + '</span>';
+    }
+    return '<div class="'+cls+'" data-id="'+n.id+'" data-kind="rule" data-active="'+(n.disabled?'0':'1')+'" data-search="'+esc((n.description+' '+n.raw).toLowerCase())+'">' +
+        '<div class="cp-badge"><span class="label label-'+(n.badge||'default')+'">'+esc(label)+'</span></div>' +
+        '<div class="cp-main"><div class="cp-desc">'+esc(n.description)+ruleTags(n)+'</div>' +
+        '<code class="cp-cmd">'+esc(n.raw)+'</code></div>' +
+        '<div class="cp-actions">'+acts+'</div></div>';
+}
+
+function renderNode(n, readonly, readonlyNote){
+    switch (n.kind) {
+    case 'rule':
+        return renderRule(n, readonly, readonlyNote);
+
+    case 'section': {
+        var ro = readonly || n.managed;
+        var head = '<div class="cp-sec-head"><span class="ti ti-'+(n.managed?'lock':'folder')+'"></span> ' +
+            esc(n.label) + ' <span class="text-muted" style="font-weight:normal;font-size:12px">(' + n.rule_count + ' rule' + (n.rule_count===1?'':'s') + ')</span>';
+        head += '<span class="pull-right">';
+        if (n.managed) {
+            head += '<span class="text-muted" style="font-weight:normal;font-size:11px">maintained by CSF-eUI &mdash; rebuilt automatically</span>';
+        } else {
+            head += btn('add-in', n.id, 'plus', 'Add a rule inside this section', 'success');
+            head += btn('rename', n.id, 'pencil', 'Rename section');
+            head += btn('up', n.id, 'arrow-up', 'Move section up');
+            head += btn('down', n.id, 'arrow-down', 'Move section down');
+            head += btn('delete', n.id, 'trash', 'Delete the whole section', 'danger');
+        }
+        head += '</span></div>';
+        return '<div class="cp-sec'+(n.managed?' cp-managed':'')+'" data-id="'+n.id+'" data-kind="section" data-search="'+esc(n.label.toLowerCase())+'">' +
+            head + '<div class="cp-sec-body">' + n.children.map(function(c){ return renderNode(c, ro, 'managed'); }).join('') + '</div></div>';
+    }
+
+    case 'heredoc': {
+        var note = n.comment_block
+            ? '<strong>Parked block</strong> &mdash; the lines below sit inside a <code>&lt;&lt;' + esc(n.marker) +
+              '</code> heredoc, so none of them run. Activate the block to turn them back into live rules.'
+            : 'Heredoc fed to <code>' + esc(n.head) + '</code>.';
+        var acts = '';
+        if (n.comment_block) acts += btn('unwrap', n.id, 'player-play', 'Activate: drop the heredoc wrapper so these lines run', 'success');
+        acts += btn('raw', n.id, 'pencil', 'Edit this block as text') + btn('delete', n.id, 'trash', 'Delete the block', 'danger');
+        return '<div class="cp-block" data-id="'+n.id+'" data-kind="heredoc" data-search="'+esc(n.raw.toLowerCase())+'">' +
+            '<div class="cp-block-head"><span class="ti ti-file-text"></span> ' + note +
+            '<span class="pull-right">' + acts + '</span></div>' +
+            '<div class="cp-block-body">' + n.children.map(function(c){
+                return renderNode(c, n.comment_block, 'parked'); }).join('') + '</div></div>';
+    }
+
+    case 'block':
+        return '<div class="cp-block" data-id="'+n.id+'" data-kind="block" data-search="'+esc(n.raw.toLowerCase())+'">' +
+            '<div class="cp-block-head"><span class="ti ti-code"></span> ' + esc(n.head) +
+            '<span class="pull-right">' + btn('raw', n.id, 'pencil', 'Edit this block as text') + btn('delete', n.id, 'trash', 'Delete the block', 'danger') + '</span></div>' +
+            '<div class="cp-block-body">' + n.children.map(function(c){ return renderNode(c, readonly, readonlyNote); }).join('') + '</div></div>';
+
+    case 'comment':
+        return '<div class="cp-row cp-note" data-id="'+n.id+'" data-kind="comment" data-search="'+esc(n.text.toLowerCase())+'">' +
+            '<div class="cp-badge"><span class="ti ti-message" style="color:#bbb"></span></div>' +
+            '<div class="cp-main">'+esc(n.text)+'</div>' +
+            '<div class="cp-actions">'+(readonly?'':btn('raw', n.id, 'pencil', 'Edit comment')+btn('delete', n.id, 'trash', 'Delete comment', 'danger'))+'</div></div>';
+
+    case 'blank':
+        return '<div class="cp-row cp-spacer" data-id="'+n.id+'" data-kind="blank" data-search="">' +
+            '<div class="cp-main">' + n.count + ' blank line' + (n.count===1?'':'s') + '</div></div>';
+
+    case 'var':
+        return '<div class="cp-row" data-id="'+n.id+'" data-kind="var" data-search="'+esc(n.raw.toLowerCase())+'">' +
+            '<div class="cp-badge"><span class="label label-default">variable</span></div>' +
+            '<div class="cp-main"><div class="cp-desc"><strong>'+esc(n.name)+'</strong> = '+esc(n.value)+
+            '<span class="cp-tag">reusable in rules as $'+esc(n.name)+'</span></div></div>' +
+            '<div class="cp-actions">'+(readonly?'':btn('raw', n.id, 'pencil', 'Edit')+btn('delete', n.id, 'trash', 'Delete', 'danger'))+'</div></div>';
+
+    case 'shebang':
+        return '<div class="cp-row cp-note" data-id="'+n.id+'" data-kind="shebang" data-search="">' +
+            '<div class="cp-badge"><span class="ti ti-terminal-2" style="color:#bbb"></span></div>' +
+            '<div class="cp-main">'+esc(n.raw)+' &mdash; interpreter line</div><div class="cp-actions"></div></div>';
+
+    default:
+        return '<div class="cp-row" data-id="'+n.id+'" data-kind="shell" data-search="'+esc((n.raw||'').toLowerCase())+'">' +
+            '<div class="cp-badge"><span class="label label-default">shell</span></div>' +
+            '<div class="cp-main"><code class="cp-cmd">'+esc(n.raw)+'</code></div>' +
+            '<div class="cp-actions">'+(readonly?'':btn('raw', n.id, 'pencil', 'Edit')+btn('up', n.id, 'arrow-up', 'Move up')+btn('down', n.id, 'arrow-down', 'Move down')+btn('delete', n.id, 'trash', 'Delete', 'danger'))+'</div></div>';
+    }
+}
+
+function renderTree(){
+    if (!nodes.length) {
+        $('#tree-root').html('<div class="cp-empty"><span class="ti ti-file-off" style="font-size:32px;opacity:.4"></span>' +
+            '<p style="margin-top:10px">This script is empty. Use <strong>Add</strong> to create your first rule.</p></div>');
+        return;
+    }
+    $('#tree-root').html(nodes.map(function(n){ return renderNode(n, false); }).join(''));
+    applyFilter();
+}
+
+function applyFilter(){
+    var q = ($('#tree-filter').val() || '').toLowerCase().trim();
+    var showComments = $('#show-comments').is(':checked');
+    var showSpacers = $('#show-spacers').is(':checked');
+    var activeOnly = $('#only-active').is(':checked');
+    $('#tree-root [data-kind]').each(function(){
+        var el = $(this), kind = el.data('kind'), show = true;
+        if (kind === 'comment' || kind === 'shebang') show = showComments;
+        if (kind === 'blank') show = showSpacers;
+        if (activeOnly && kind !== 'rule' && kind !== 'section' && kind !== 'block') show = false;
+        if (show && activeOnly && kind === 'rule' && el.data('active') === 0) show = false;
+        if (show && q) show = String(el.data('search') || '').indexOf(q) !== -1 ||
+                               el.find('[data-search]').filter(function(){ return String($(this).data('search')||'').indexOf(q) !== -1; }).length > 0;
+        el.toggle(show);
+    });
+}
+
+/* ------------------------------------------------------------------ *
+ * Rule form (shared by Add and Edit)
+ * ------------------------------------------------------------------ */
+var NEGATABLE = ['src', 'dst', 'in_iface', 'out_iface', 'proto'];
+var PFX = 'a';   /* which form the markup helpers are currently building */
+
+function sel(id, options, value){
+    var h = '<select class="form-control input-sm rf" data-key="'+id+'">';
+    options.forEach(function(o){
+        var v = $.isArray(o) ? o[0] : o, t = $.isArray(o) ? o[1] : o;
+        h += '<option value="'+esc(v)+'"'+(String(value||'') === String(v) ? ' selected' : '')+'>'+esc(t)+'</option>';
+    });
+    return h + '</select>';
+}
+
+function txt(id, value, placeholder, list){
+    var dl = 'dl-' + PFX + '-' + id;
+    return '<input type="text" class="form-control input-sm rf" data-key="'+id+'" ' +
+           'value="'+esc(value||'')+'" placeholder="'+esc(placeholder||'')+'"' +
+           (list ? ' list="'+dl+'" autocomplete="off"' : '') + '>' +
+           (list ? '<datalist id="'+dl+'">' + list.map(function(v){ return '<option value="'+esc(v)+'">'; }).join('') + '</datalist>' : '');
+}
+
+/* The Add tab and the Edit modal hold two copies of the same form, so every
+   lookup is scoped to one of them. */
+function formScope(el){
+    var $s = el ? $(el).closest('.rf-form') : $();
+    if ($s.length) return $s;
+    return $('#rule-modal').hasClass('in') ? $('#rule-modal-body .rf-form') : $('#add-form-host .rf-form');
+}
+
+function field(label, inner, width, help, negKey, negOn){
+    var neg = negKey ? ' <label class="cp-neg"><input type="checkbox" class="rf-neg" data-key="'+negKey+'"'+(negOn?' checked':'')+'> NOT</label>' : '';
+    return '<div class="col-md-'+(width||4)+'"><div class="form-group"><label class="control-label" style="font-size:12px">'+
+           esc(label)+neg+'</label>'+inner+
+           (help ? '<p class="help-block" style="font-size:11px;margin:2px 0 0">'+help+'</p>' : '')+'</div></div>';
+}
+
+function buildRuleForm(spec, mode, prefix){
+    PFX = prefix || 'a';
+    var f = spec.fields || {}, neg = spec.negated || {};
+    var v6 = spec.family === 'ipv6';
+    var h = '<div class="rf-form"><div class="row">';
+    h += field('IP version', sel('family', D.choices.family, spec.family || 'ipv4'), 3);
+    h += field('Table', sel('table', D.choices.table, spec.table || 'filter'), 3);
+    h += field('Operation', sel('op', D.choices.op, spec.op || 'insert'), 3);
+    h += field('Insert position', txt('position', spec.position, '1'), 3, 'Only used by Insert. 1 = very top.');
+    h += '</div><div class="row">';
+    h += field('Chain', txt('chain', spec.chain, 'INPUT', allChains()), 4, 'Built-in or one of your own chains.');
+    h += field('Target', txt('target', spec.target, 'ACCEPT', allTargets()), 4, 'ACCEPT, DROP, REJECT, LOG, RETURN, DNAT&hellip; or a custom chain name.');
+    h += field('Guard', sel('guard', D.choices.guard, spec.guard || ''), 4,
+               mode === 'edit' ? 'Shown for reference; changing this needs a raw edit.' : 'Check-first keeps re-runs from stacking duplicates.');
+    h += '</div><div class="row">';
+    h += field('In interface (-i)', txt('in_iface', f.in_iface, 'eth0, wg0, wt0', allInterfaces()), 3, '', 'in_iface', neg.in_iface);
+    h += field('Out interface (-o)', txt('out_iface', f.out_iface, 'eth0, tun0', allInterfaces()), 3, '', 'out_iface', neg.out_iface);
+    h += field('Protocol (-p)', sel('proto', D.choices.proto, f.proto), 3, '', 'proto', neg.proto);
+    h += field('Rule comment', txt('comment', f.comment, 'why this rule exists'), 3, 'Stored in the rule itself (-m comment).');
+    h += '</div><div class="row">';
+    h += field('Source (-s)', txt('src', f.src, '203.0.113.0/24 or $VAR'), 3, '', 'src', neg.src);
+    h += field('Destination (-d)', txt('dst', f.dst, '10.0.0.5 or $VAR'), 3, '', 'dst', neg.dst);
+    h += field('Source port', txt('sport', f.sport, '1194'), 3, 'One port or a range like 5060:5062.');
+    h += field('Destination port', txt('dport', f.dport, '8096'), 3, 'One port or a range like 10000:20000.');
+    h += '</div><div class="row">';
+    h += field('Several dest ports', txt('dports', f.dports, '80,443,8080'), 3, 'Comma separated (multiport).');
+    h += field('Several source ports', txt('sports', f.sports, '80,443'), 3, 'Comma separated (multiport).');
+    h += field('Connection state', txt('state', f.state, 'ESTABLISHED,RELATED'), 3, 'Uses -m state.');
+    h += field('Conntrack state', txt('ctstate', f.ctstate, 'NEW,ESTABLISHED'), 3, 'Uses -m conntrack.');
+    h += '</div><div class="row">';
+    h += field(v6 ? 'ICMPv6 type' : 'ICMP type', txt(v6 ? 'icmpv6_type' : 'icmp_type', v6 ? f.icmpv6_type : f.icmp_type, 'echo-request'), 3);
+    h += field('Original dest port', txt('ctorigdstport', f.ctorigdstport, '8080'), 3, 'For Docker published ports.');
+    h += field('Rate limit', txt('limit', f.limit, '10/min'), 3);
+    h += field('Limit burst', txt('limit_burst', f.limit_burst, '20'), 3);
+    h += '</div><div class="rf-target-opts row"></div>';
+    h += '<div class="rf-preview" style="margin-top:6px"></div></div>';
+    return h;
+}
+
+function renderTargetOpts($scope, spec, prefix){
+    PFX = prefix || 'a';
+    var target = ($scope.find('.rf[data-key="target"]').val() || '').toUpperCase();
+    var f = spec.fields || {};
+    var h = '';
+    D.targetOpts.forEach(function(opt){
+        if (opt.targets.indexOf(target) === -1) return;
+        var labels = {
+            to_destination: ['Forward to (host:port)', '10.12.10.12:8096'],
+            to_source: ['Rewrite source as', '203.0.113.9'],
+            to_ports: ['To port(s)', '8080'],
+            reject_with: ['Reject with', 'icmp-port-unreachable'],
+            log_prefix: ['Log prefix', 'CSF-DROP: '],
+            log_level: ['Log level', '4'],
+            set_mark: ['Mark value', '1'],
+            set_mss: ['MSS', '1400']
+        }[opt.key] || [opt.key, ''];
+        h += field(labels[0], txt(opt.key, f[opt.key], labels[1]), 3);
+    });
+    $scope.find('.rf-target-opts').html(h);
+}
+
+/* A log prefix without its trailing space runs into the kernel's own fields,
+   so those two values are never trimmed. */
+var KEEP_SPACES = ['log_prefix', 'nflog_prefix'];
+
+function collectSpec($scope){
+    var spec = {fields: {}, negated: {}};
+    $scope.find('.rf').each(function(){
+        var key = $(this).data('key'), raw = $(this).val() || '';
+        var val = KEEP_SPACES.indexOf(key) === -1 ? $.trim(raw) : raw;
+        if (['family','table','op','chain','position','target','guard'].indexOf(key) !== -1) {
+            spec[key] = val;
+        } else if (val !== '') {
+            spec.fields[key] = val;
+        }
+    });
+    $scope.find('.rf-neg:checked').each(function(){ spec.negated[$(this).data('key')] = true; });
+    return spec;
+}
+
+function livePreview($scope){
+    var box = $scope.find('.rf-preview');
+    post('/api/csfpost/preview', {spec: collectSpec($scope)}).done(function(r){
+        if (r.success) {
+            box.html('<div class="alert alert-success" style="padding:6px 10px;margin:0">' +
+                '<code style="background:transparent;color:#2b542c;font-size:12.5px">'+esc(r.line)+'</code>' +
+                '<div class="text-muted" style="font-size:11px;margin-top:3px">'+esc(r.description)+'</div></div>');
+        } else {
+            box.html('<div class="alert alert-warning" style="padding:6px 10px;margin:0;font-size:12px">' +
+                '<span class="ti ti-alert-triangle"></span> '+esc(r.error)+'</div>');
+        }
+    });
+}
+
+/* ---- Add tab ---- */
+var addSpec = {family: 'ipv4', table: 'filter', op: 'insert', position: '1',
+               chain: 'INPUT', target: 'ACCEPT', fields: {}, negated: {}};
+var addTarget = {after_id: null, section_id: null};
+
+function renderAddForm(){
+    var where = addTarget.section_id ? 'inside the selected section'
+              : (addTarget.after_id ? 'after the selected line' : 'at the end of the script');
+    $('#add-form-host').html(
+        '<p class="text-muted" style="font-size:12px;margin-bottom:10px">New rule will be added <strong>'+where+'</strong>. ' +
+        '<a href="#" id="add-reset-pos">Put it at the end instead</a>.</p>' +
+        buildRuleForm(addSpec, 'add', 'a') +
+        '<div class="form-group" style="margin-top:8px"><label style="font-size:12px">Comment to put above the rule (optional)</label>' +
+        '<input type="text" class="form-control input-sm" id="add-comment" placeholder="e.g. Allow Jellyfin from the VPN"></div>' +
+        '<label class="checkbox" style="font-size:12px"><input type="checkbox" id="add-disabled"> Add it commented out (so it does not run yet)</label>' +
+        '<div class="text-right"><button class="btn btn-success btn-sm" id="add-submit"><span class="ti ti-plus"></span> Add rule</button></div>');
+    var $scope = $('#add-form-host .rf-form');
+    renderTargetOpts($scope, addSpec, 'a');
+    livePreview($scope);
+}
+
+/* ---- Edit modal ---- */
+var editing = null, editBaseline = null;
+
+function findNode(id, list){
+    list = list || nodes;
+    for (var i = 0; i < list.length; i++) {
+        if (list[i].id === id) return list[i];
+        if (list[i].children) { var f = findNode(id, list[i].children); if (f) return f; }
+    }
+    return null;
+}
+
+function openEdit(id){
+    var n = findNode(id);
+    if (!n) return;
+    editing = n;
+    $('#rule-modal-title').text('Edit rule' + (n.disabled ? ' (currently commented out)' : ''));
+    var warn = '';
+    if (!n.editable) {
+        warn = '<div class="alert alert-warning" style="font-size:12px;padding:8px 10px">' +
+               '<span class="ti ti-alert-triangle"></span> This line uses shell syntax the form cannot rewrite safely. Edit it as text below.</div>';
+    } else if (n.unknown && n.unknown.length) {
+        warn = '<div class="alert alert-info" style="font-size:12px;padding:8px 10px">' +
+               'Options this editor does not know (<code>'+esc(n.unknown.join(' '))+'</code>) stay on the line untouched.</div>';
+    }
+    var body = warn;
+    if (n.editable) {
+        body += buildRuleForm(n, 'edit', 'e');
+        body += '<hr style="margin:12px 0"><p style="font-size:12px"><a href="#" id="toggle-raw">Edit the exact text instead</a></p>';
+        body += '<div id="raw-edit" style="display:none"><textarea class="form-control" id="rule-raw" rows="5" spellcheck="false" style="font-family:monospace;font-size:12px">'+esc(n.raw)+'</textarea></div>';
+    } else {
+        body += '<textarea class="form-control" id="rule-raw" rows="6" spellcheck="false" style="font-family:monospace;font-size:12px">'+esc(n.raw)+'</textarea>';
+        body += '<input type="hidden" id="raw-only" value="1">';
+    }
+    $('#rule-modal-body').html(body);
+    $('#rule-modal-note').html('Line ' + n.lineno + ' &middot; only the fields you change are rewritten.');
+    if (n.editable) {
+        var $scope = $('#rule-modal-body .rf-form');
+        renderTargetOpts($scope, n, 'e');
+        editBaseline = collectSpec($scope);
+    }
+    $('#rule-modal').modal('show');
+}
+
+function diffUpdates(before, after){
+    var updates = {}, keys = ['family','table','op','chain','position','target'];
+    keys.forEach(function(k){
+        if ((before[k] || '') !== (after[k] || '')) updates[k] = after[k] || '';
+    });
+    var all = {};
+    Object.keys(before.fields || {}).forEach(function(k){ all[k] = 1; });
+    Object.keys(after.fields || {}).forEach(function(k){ all[k] = 1; });
+    Object.keys(all).forEach(function(k){
+        var b = (before.fields || {})[k] || '', a = (after.fields || {})[k] || '';
+        if (b !== a) updates[k] = a;
+    });
+    NEGATABLE.forEach(function(k){
+        var b = !!(before.negated || {})[k], a = !!(after.negated || {})[k];
+        if (b !== a) updates['neg_' + k] = a;
+    });
+    return updates;
+}
+
+/* ------------------------------------------------------------------ *
+ * Backups
+ * ------------------------------------------------------------------ */
+function renderBackups(){
+    if (!backups.length) {
+        $('#backup-list').html('<div class="cp-empty">No backups yet &mdash; one is written before each save.</div>');
+        return;
+    }
+    var h = '<table class="table table-condensed table-hover"><thead><tr><th>When</th><th>Size</th><th class="text-right">Actions</th></tr></thead><tbody>';
+    backups.forEach(function(b){
+        h += '<tr><td>'+esc(b.when)+'</td><td><small class="text-muted">'+b.size+' bytes</small></td>' +
+             '<td class="text-right">' +
+             '<button class="btn btn-default btn-xs bk-view" data-file="'+esc(b.file)+'"><span class="ti ti-eye"></span> View</button> ' +
+             '<button class="btn btn-warning btn-xs bk-restore" data-file="'+esc(b.file)+'"><span class="ti ti-repeat"></span> Restore</button></td></tr>';
+    });
+    $('#backup-list').html(h + '</tbody></table><pre id="bk-preview" style="display:none;max-height:360px;overflow:auto;font-size:12px"></pre>');
+}
+
+/* ------------------------------------------------------------------ *
+ * Wiring
+ * ------------------------------------------------------------------ */
+$(function(){
+    renderTree(); renderSummary(); renderBackups(); renderAddForm();
+
+    $('#tree-filter').on('input', applyFilter);
+    $('#show-comments, #show-spacers, #only-active').on('change', applyFilter);
+
+    /* Row actions */
+    $(document).on('click', '.cp-act', function(e){
+        e.preventDefault();
+        var id = $(this).data('id'), act = $(this).data('act');
+        var n = findNode(id);
+        switch (act) {
+        case 'edit': openEdit(id); break;
+        case 'toggle': applyOp('toggle', {id: id}); break;
+        case 'duplicate': applyOp('duplicate', {id: id}); break;
+        case 'up': applyOp('move', {id: id, direction: 'up'}); break;
+        case 'down': applyOp('move', {id: id, direction: 'down'}); break;
+        case 'delete':
+            if (confirm('Delete this ' + (n && n.kind === 'section' ? 'section and everything in it'
+                                        : (n && (n.kind === 'heredoc' || n.kind === 'block') ? 'whole block' : 'line')) + '?'))
+                applyOp('delete', {id: id});
+            break;
+        case 'unwrap':
+            if (confirm('Drop the heredoc wrapper so these lines become live rules?\n\n' +
+                        'Anything commented out inside stays commented out.'))
+                applyOp('unwrap', {id: id});
+            break;
+        case 'add-after':
+            addTarget = {after_id: id, section_id: null};
+            renderAddForm(); $('a[href="#tab-add"]').tab('show');
+            break;
+        case 'add-in':
+            addTarget = {after_id: null, section_id: id};
+            renderAddForm(); $('a[href="#tab-add"]').tab('show');
+            break;
+        case 'rename':
+            openTextModal('Rename section', 'New name for this section.', n ? n.label : '', true, function(v){
+                applyOp('rename_section', {id: id, label: v});
+            });
+            break;
+        case 'raw':
+            openTextModal('Edit lines', 'These exact lines replace what is in the file.', n ? n.raw : '', false, function(v){
+                applyOp('replace_raw', {id: id, text: v});
+            });
+            break;
+        }
+    });
+
+    /* Rule form reactions */
+    $(document).on('change', '.rf', function(){
+        var key = $(this).data('key');
+        var $scope = formScope(this);
+        var inAdd = $scope.closest('#add-form-host').length > 0;
+        if (key === 'family' && inAdd) { addSpec = collectSpec($scope); renderAddForm(); return; }
+        if (key === 'target' || key === 'family') {
+            renderTargetOpts($scope, collectSpec($scope), inAdd ? 'a' : 'e');
+        }
+    });
+    $(document).on('input change', '.rf, .rf-neg', function(){
+        livePreview(formScope(this));
+    });
+
+    /* Add tab */
+    $(document).on('click', '.tmpl-btn', function(e){
+        e.preventDefault();
+        $('.tmpl-btn').removeClass('active'); $(this).addClass('active');
+        var t = D.templates.filter(function(x){ return x.id === $(e.currentTarget).data('id'); })[0];
+        if (!t) return;
+        addSpec = JSON.parse(JSON.stringify(t.spec));
+        addSpec.fields = addSpec.fields || {}; addSpec.negated = {};
+        renderAddForm();
+    });
+    $(document).on('click', '#add-reset-pos', function(e){
+        e.preventDefault(); addTarget = {after_id: null, section_id: null}; renderAddForm();
+    });
+    $(document).on('click', '#add-submit', function(){
+        var payload = {spec: collectSpec($('#add-form-host .rf-form')),
+                       comment: $.trim($('#add-comment').val() || ''),
+                       disabled: $('#add-disabled').is(':checked')};
+        if (addTarget.after_id) payload.after_id = addTarget.after_id;
+        if (addTarget.section_id) payload.section_id = addTarget.section_id;
+        applyOp('add_rule', payload, function(){
+            addTarget = {after_id: null, section_id: null};
+            $('#add-comment').val(''); $('#add-disabled').prop('checked', false);
+            $('a[href="#tab-rules"]').tab('show');
+        });
+    });
+
+    /* Edit modal */
+    $(document).on('click', '#toggle-raw', function(e){ e.preventDefault(); $('#raw-edit').toggle(); });
+    $('#rule-modal-save').on('click', function(){
+        if (!editing) return;
+        var rawOnly = $('#raw-only').length > 0;
+        var rawVisible = $('#raw-edit').is(':visible');
+        if (rawOnly || rawVisible) {
+            applyOp('replace_raw', {id: editing.id, text: $('#rule-raw').val()},
+                    function(){ $('#rule-modal').modal('hide'); });
+            return;
+        }
+        var updates = diffUpdates(editBaseline, collectSpec($('#rule-modal-body .rf-form')));
+        if (!Object.keys(updates).length) { $('#rule-modal').modal('hide'); return; }
+        applyOp('update_rule', {id: editing.id, updates: updates},
+                function(){ $('#rule-modal').modal('hide'); });
+    });
+
+    /* Bottom buttons */
+    $('#btn-add-end').on('click', function(){
+        addTarget = {after_id: null, section_id: null};
+        renderAddForm(); $('a[href="#tab-add"]').tab('show');
+    });
+    $('#btn-add-section').on('click', function(){
+        openTextModal('New section', 'Sections group related rules with BEGIN/END markers so they stay together.', '', true, function(v){
+            applyOp('add_section', {label: v});
+        });
+    });
+    $('#btn-add-comment').on('click', function(){
+        openTextModal('Add comment', 'Added at the end of the script. One # is put in front of each line.', '', false, function(v){
+            applyOp('add_comment', {text: v});
+        });
+    });
+    $('#btn-add-raw').on('click', function(){
+        openTextModal('Add shell lines', 'Added verbatim at the end of the script. Use this for anything the rule form cannot express.', '', false, function(v){
+            applyOp('add_raw', {text: v});
+        });
+    });
+
+    /* Text modal */
+    var textCb = null, textSingle = false;
+    window.openTextModal = function(title, help, value, single, cb){
+        textCb = cb; textSingle = !!single;
+        $('#text-modal-title').text(title);
+        $('#text-modal-help').text(help);
+        $('#text-modal-input').toggle(textSingle).val(textSingle ? value : '');
+        $('#text-modal-area').toggle(!textSingle).val(textSingle ? '' : value);
+        $('#text-modal').modal('show');
+        setTimeout(function(){ (textSingle ? $('#text-modal-input') : $('#text-modal-area')).focus(); }, 300);
+    };
+    $('#text-modal-save').on('click', function(){
+        var v = textSingle ? $('#text-modal-input').val() : $('#text-modal-area').val();
+        if (!$.trim(v || '')) { toast('Nothing entered', 'warning'); return; }
+        $('#text-modal').modal('hide');
+        if (textCb) textCb(v);
+    });
+    $('#text-modal-input').on('keydown', function(e){
+        if (e.which === 13) { e.preventDefault(); $('#text-modal-save').trigger('click'); }
+    });
+
+    /* Raw tab */
+    $('#check-btn').on('click', function(){
+        var b = $(this).prop('disabled', true);
+        post('/api/csfpost/check', {content: $('#script-editor').val()}).done(function(r){
+            var box = $('#syntax-result');
+            if (r.valid) {
+                box.html('<div class="alert alert-success" style="margin:0;padding:6px 12px"><span class="ti ti-check"></span> '+esc(r.note || 'Syntax OK.')+'</div>');
+            } else {
+                box.html('<div class="alert alert-danger" style="margin:0;padding:6px 12px"><strong>Syntax errors:</strong><ul style="margin:4px 0 0">' +
+                    (r.errors||[]).map(function(e){ return '<li>'+esc(e)+'</li>'; }).join('') + '</ul></div>');
+            }
+            box.show();
+        }).always(function(){ b.prop('disabled', false); });
+    });
+    $('#save-btn').on('click', function(){
+        var b = $(this).prop('disabled', true);
+        post('/api/csfpost/save', {script: SCRIPT, content: $('#script-editor').val()})
+            .done(function(r){
+                if (r.success) { ingest(r); toast(r.warning || r.message || 'Saved', r.warning ? 'warning' : 'success'); }
+                else toast(r.error || 'Save failed', 'danger');
+            })
+            .always(function(){ b.prop('disabled', false); });
+    });
+    $('#reload-btn').on('click', function(){
+        if (confirm('Reload from disk? Unsaved text-editor changes are lost.')) window.location.reload();
+    });
+
+    $('#restart-btn').on('click', function(){
+        var b = $(this).prop('disabled', true).html('<span class="ti ti-refresh"></span> Restarting...');
+        $.post('/api/restart', function(r){
+            toast(r.success ? 'CSF+LFD restarted' : ('Restart failed: ' + (r.error || 'unknown')),
+                  r.success ? 'success' : 'danger');
+        }).fail(function(){ toast('Restart request failed', 'danger'); })
+          .always(function(){ b.prop('disabled', false).html('<span class="ti ti-refresh"></span> Restart CSF+LFD'); });
+    });
+
+    /* Dry run */
+    $('#btn-dry-run').on('click', function(){
+        post('/api/csfpost/dry-run', {script: SCRIPT}).done(function(r){
+            if (!r.rules.length) { $('#dry-body').html('<div class="cp-empty">No active rules &mdash; this script applies nothing.</div>'); }
+            else {
+                var h = '<p class="text-muted" style="font-size:12px">In the order they run. Commented-out lines are left out.</p>' +
+                    '<table class="table table-condensed"><thead><tr><th style="width:50px">Line</th><th>Command</th><th>Meaning</th></tr></thead><tbody>';
+                r.rules.forEach(function(x){
+                    h += '<tr><td><code style="font-size:11px">'+x.line+'</code></td>' +
+                         '<td><code style="font-size:11px">'+esc(x.command)+'</code>'+(x.dynamic?' <span class="cp-tag">expands $variables at run time</span>':'')+'</td>' +
+                         '<td><small class="text-muted">'+esc(x.description)+'</small></td></tr>';
+                });
+                $('#dry-body').html(h + '</tbody></table>');
+            }
+            $('#dry-modal').modal('show');
+        });
+    });
+
+    /* Transfer: export */
+    $('#btn-copy-bundle').on('click', function(){
+        $.get('/api/csfpost/export?script=' + SCRIPT, function(b){
+            var text = JSON.stringify(b, null, 2);
+            if (navigator.clipboard) navigator.clipboard.writeText(text).then(function(){ toast('Bundle copied to the clipboard', 'success'); });
+            else { $('#import-text').val(text); toast('Bundle placed in the import box', 'info'); }
+        });
+    });
+
+    /* Transfer: push */
+    $('#btn-push').on('click', function(){
+        var ids = $('.push-server:checked').map(function(){ return this.value; }).get();
+        if (!ids.length) { toast('Pick at least one server', 'warning'); return; }
+        var mode = $('#push-mode').val();
+        if (mode === 'replace' && !confirm('Replace will overwrite the whole script on ' + ids.length + ' server(s). Continue?')) return;
+        var b = $(this).prop('disabled', true);
+        post('/api/csfpost/push', {script: SCRIPT, servers: ids, mode: mode, restart: $('#push-restart').is(':checked')})
+          .done(function(r){
+              var h = '<table class="table table-condensed"><tbody>';
+              (r.results || []).forEach(function(x){
+                  h += '<tr><td>'+esc(x.name)+'</td><td>' +
+                       (x.ok ? '<span class="label label-success">done</span>'
+                             : '<span class="label label-danger">failed</span> <small class="text-muted">'+esc(x.error)+'</small>') +
+                       '</td></tr>';
+              });
+              $('#push-results').html(h + '</tbody></table>');
+          })
+          .fail(function(){ toast('Push failed', 'danger'); })
+          .always(function(){ b.prop('disabled', false); });
+    });
+
+    /* Transfer: pull */
+    $('#btn-pull').on('click', function(){
+        var b = $(this).prop('disabled', true);
+        post('/api/csfpost/pull', {script: SCRIPT, server: $('#pull-server').val()})
+          .done(function(r){
+              if (!r.success) { toast(r.error || 'Could not fetch', 'danger'); return; }
+              $('#import-text').val(JSON.stringify(r.bundle, null, 2));
+              toast('Fetched from ' + r.server + '. Pick a mode and press Import.', 'success');
+              previewImport();
+          })
+          .always(function(){ b.prop('disabled', false); });
+    });
+
+    /* Transfer: import */
+    function parseImport(){
+        var text = $.trim($('#import-text').val() || '');
+        if (!text) return null;
+        if (text.charAt(0) === '{') {
+            try { return {bundle: JSON.parse(text)}; }
+            catch (e) { toast('That does not look like valid JSON', 'danger'); return null; }
+        }
+        return {raw: text};
+    }
+    function previewImport(){
+        var p = parseImport();
+        if (!p) { $('#import-preview').empty(); return; }
+        if (p.raw) {
+            $('#import-preview').html('<div class="alert alert-info" style="font-size:12px;padding:8px 10px">' +
+                p.raw.split('\n').length + ' line(s) of shell will be added. They are parsed into rules once imported.</div>');
+            return;
+        }
+        var s = (p.bundle || {}).summary || {};
+        $('#import-preview').html('<div class="alert alert-info" style="font-size:12px;padding:8px 10px">' +
+            'Bundle from <strong>'+esc(p.bundle.hostname || 'an unnamed server')+'</strong> (' + esc(p.bundle.script || '?') + '): ' +
+            (s.active || 0) + ' active and ' + (s.disabled || 0) + ' disabled rules' +
+            (s.sections && s.sections.length ? ', sections: ' + esc(s.sections.map(function(x){ return x.label; }).join(', ')) : '') +
+            '.</div>');
+    }
+    $('#btn-import-preview').on('click', previewImport);
+    $('#import-text').on('change', previewImport);
+    $('#btn-import').on('click', function(){
+        var p = parseImport();
+        if (!p) { toast('Paste a bundle or some shell lines first', 'warning'); return; }
+        var mode = $('#import-mode').val();
+        if (mode === 'replace' && !confirm('Replace will overwrite this whole script. A backup is kept. Continue?')) return;
+        var body = {script: SCRIPT, mode: mode};
+        if (p.raw) body.raw = p.raw; else body.bundle = p.bundle;
+        var b = $(this).prop('disabled', true);
+        post('/api/csfpost/import', body)
+          .done(function(r){
+              if (!r.success) { toast(r.error || 'Import failed', 'danger'); return; }
+              ingest(r);
+              toast(r.message || 'Imported', 'success');
+              $('#import-text').val(''); $('#import-preview').empty();
+              $('a[href="#tab-rules"]').tab('show');
+          })
+          .always(function(){ b.prop('disabled', false); });
+    });
+
+    /* Backups */
+    $(document).on('click', '.bk-view', function(){
+        $.get('/api/csfpost/backup?script=' + SCRIPT + '&file=' + encodeURIComponent($(this).data('file')), function(r){
+            if (r.success) $('#bk-preview').text(r.content).show();
+        });
+    });
+    $(document).on('click', '.bk-restore', function(){
+        var file = $(this).data('file');
+        if (!confirm('Restore this backup over the current script?')) return;
+        post('/api/csfpost/restore', {script: SCRIPT, file: file}).done(function(r){
+            if (!r.success) { toast(r.error || 'Restore failed', 'danger'); return; }
+            ingest(r); toast('Restored. Restart CSF+LFD to apply.', 'success');
+            $('a[href="#tab-rules"]').tab('show');
+        });
+    });
+});
+})();
+</script>

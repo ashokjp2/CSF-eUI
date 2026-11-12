@@ -1,0 +1,56 @@
+"""Onboarding checklist for the dashboard: what a new install still needs."""
+import os
+import time
+
+from csf_backend import csf_wrapper as csf, auth, notifications, config_backup, port_defaults, auto_update, ssl_manager
+
+
+def build(username):
+    conf = csf.load_csf_conf()
+    items = []
+
+    def add(key, ok, title, detail, href):
+        items.append({"key": key, "ok": bool(ok), "title": title, "detail": detail, "href": href})
+
+    add("testing", conf.get("TESTING", "1") == "0", "Turn off TESTING mode",
+        "While TESTING = 1 the firewall clears its rules every 5 minutes; nothing is really blocked.", "/config?q=TESTING")
+
+    try:
+        ssh_port = port_defaults._detect_ssh()
+    except Exception:
+        ssh_port = "22"
+    tcp_in = {p.strip() for p in conf.get("TCP_IN", "").split(",")}
+    add("ssh", ssh_port in tcp_in, f"SSH port {ssh_port} is allowed in TCP_IN",
+        "If SSH is not in TCP_IN you will be locked out the moment the firewall starts.", "/qconfig")
+
+    add("2fa", auth.totp_status(username)["enabled"], "Turn on two-factor authentication",
+        "This UI controls the firewall; a password alone is not enough.", "/settings#twofactor")
+
+    nconf = notifications.load_config()
+    chan = any(notifications._channel_ready(n, nconf["channels"][n]) for n in notifications.CHANNELS)
+    add("notify", chan or bool(conf.get("LF_ALERT_TO")), "Set up alerts",
+        "Get told when LFD goes down or something is blocked — Telegram, Slack, Discord, webhook or email.", "/notifications")
+
+    backups = config_backup.list_backups()
+    recent = bool(backups) and (time.time() - os.path.getmtime(os.path.join(config_backup.BACKUP_DIR, backups[0]["filename"]))) < 30 * 86400
+    add("backup", recent, "Take a configuration backup", "A backup from the last 30 days means a mistake is a two-click restore.", "/backup-restore")
+
+    try:
+        upd = auto_update.load() or {}
+        upd_on = any(bool(v) for k, v in upd.items() if k in ("enabled", "auto_update", "notify", "check", "mode") and v not in ("off", "0", "", None, False))
+    except Exception:
+        upd_on = False
+    add("updates", upd_on, "Enable update checks", "Know when a new CSF-eUI version is out.", "/updates")
+
+    try:
+        st = ssl_manager.get_ssl_status()
+        self_signed = (st.get("current_cert") or {}).get("self_signed", True)
+    except Exception:
+        self_signed = True
+    add("ssl", not self_signed, "Use a real HTTPS certificate", "A Let's Encrypt certificate removes the browser warning and stops password theft on the wire.", "/ssl")
+
+    add("docker", conf.get("DOCKER", "0") == "1" or not os.path.exists("/var/run/docker.sock"), "Tell CSF about Docker",
+        "With Docker installed, DOCKER = 1 lets CSF manage container traffic.", "/config?q=DOCKER")
+
+    done = sum(1 for i in items if i["ok"])
+    return {"items": items, "done": done, "total": len(items)}

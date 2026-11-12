@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block page_title %}Emergency{% endblock %}
+
+{% block content %}
+<div class="status-hero {{ 'status-ok' if status.enabled and status.lfd_running and not status.testing else 'status-warning' if status.testing else 'status-danger' }}" style="margin-bottom:12px">
+    <i class="ti {{ 'ti-shield-check' if status.enabled and status.lfd_running and not status.testing else 'ti-shield-half' }} status-icon"></i>
+    <div class="status-text">
+        <b>{{ 'Firewall running' if status.enabled else 'Firewall disabled' }}{{ ' — test mode' if status.testing else '' }}</b>
+        <span>Attack detection {{ 'running' if status.lfd_running else 'DOWN' }} · you are {{ my_ip }}</span>
+    </div>
+</div>
+
+<div class="mobile-grid">
+    <a href="#" class="mobile-btn" id="mb-unblock-me"><i class="ti ti-lock-open"></i> Unblock my IP</a>
+    <a href="#" class="mobile-btn" id="mb-ssh"><i class="ti ti-key"></i> Open SSH to me (1h)</a>
+    <a href="#" class="mobile-btn danger" id="mb-block"><i class="ti ti-ban"></i> Block an IP</a>
+    <a href="#" class="mobile-btn" id="mb-restart"><i class="ti ti-refresh"></i> Restart firewall</a>
+    <a href="/temp" class="mobile-btn"><i class="ti ti-clock-pause"></i> Temp blocks</a>
+    <a href="/" class="mobile-btn"><i class="ti ti-layout-dashboard"></i> Full dashboard</a>
+</div>
+
+<div class="panel panel-default" id="mb-block-panel" style="display:none; margin-top:12px">
+    <div class="panel-body">
+        <input type="text" class="form-control" id="mb-ip" data-validate="ip" placeholder="Address to block" style="margin-bottom:8px">
+        <button class="btn btn-danger btn-block" id="mb-block-go"><i class="ti ti-ban"></i> Block now</button>
+    </div>
+</div>
+<div id="mb-result" style="margin-top:12px"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    var MY = {{ my_ip|tojson }};
+    function out(msg, ok) { $('#mb-result').html('<div class="alert alert-' + (ok ? 'success' : 'danger') + '">' + $('<div>').text(msg).html() + '</div>'); }
+    $('#mb-unblock-me').on('click', function(e) { e.preventDefault(); $.post('/quick/unblock', {ip: MY}, function(r) { out(r.success ? MY + ' unblocked' : (r.stderr || 'Nothing to unblock'), !!r.success); }); });
+    $('#mb-ssh').on('click', function(e) { e.preventDefault(); $.ajax({url: '/api/quick/ssh-window', method: 'POST', contentType: 'application/json', data: '{"hours":1}'}).done(function(r) { out(r.success ? 'SSH port ' + r.port + ' open to ' + r.ip + ' for 1 hour' : (r.error || 'Failed'), !!r.success); }); });
+    $('#mb-block').on('click', function(e) { e.preventDefault(); $('#mb-block-panel').toggle(); $('#mb-ip').focus(); });
+    $('#mb-block-go').on('click', function() { var ip = $('#mb-ip').val(); if (!ip) return; if (ip === MY && !confirm('That is your own address. Block it anyway?')) return; $.post('/quick/deny', {ip: ip, comment: 'blocked from phone'}, function(r) { out(r.success ? ip + ' blocked' : (r.stderr || 'Failed'), !!r.success); }); });
+    $('#mb-restart').on('click', function(e) { e.preventDefault(); if (!confirm('Restart csf and lfd now? Connections stay up; rules reload in a few seconds.')) return; var f = $('<form method="POST" action="/action/restartboth"><input type="hidden" name="csrf_token" value="' + $('meta[name=csrf-token]').attr('content') + '"><input type="hidden" name="redirect_to" value="/m"></form>').appendTo('body'); f.submit(); });
+});
+</script>
+{% endblock %}

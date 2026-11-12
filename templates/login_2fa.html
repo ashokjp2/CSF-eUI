@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSFv2 - Two-factor code</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.4.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.34.1/tabler-icons.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/csfv2.css') }}">
+</head>
+<body class="login-page">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-4 col-md-offset-4 col-sm-6 col-sm-offset-3">
+                <div class="panel panel-default login-panel">
+                    <div class="panel-heading text-center">
+                        <h3><span class="ti ti-shield-lock"></span> Two-factor code</h3>
+                        <p class="text-muted">Enter the 6-digit code from your authenticator app</p>
+                    </div>
+                    <div class="panel-body">
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                        {% endfor %}
+                        {% endwith %}
+                        <form method="POST" action="/login/2fa">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <div class="form-group">
+                                <label for="code">Authentication code</label>
+                                <div class="input-group">
+                                    <span class="input-group-addon"><span class="ti ti-device-mobile"></span></span>
+                                    <input type="text" class="form-control" id="code" name="code" inputmode="numeric"
+                                           autocomplete="one-time-code" placeholder="123456" required autofocus
+                                           style="font-family:monospace; font-size:18px; letter-spacing:4px">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-block btn-lg">
+                                <span class="ti ti-check"></span> Verify
+                            </button>
+                        </form>
+                        <p class="text-muted text-center" style="margin:14px 0 0; font-size:12px">
+                            Lost your phone? Enter one of your backup codes instead.
+                            <br><a href="/login">Back to sign in</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

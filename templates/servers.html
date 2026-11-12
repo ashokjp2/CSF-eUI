@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block page_title %}Servers{% endblock %}
+
+{% block content %}
+<p class="text-muted" style="margin-bottom:15px">Watch several CSF-eUI servers from here and push an allow, block or unblock to all of them at once. Each remote server needs an API token created on <em>that</em> server under Settings → API tokens (scopes: read plus allow/deny/unblock as needed).</p>
+
+<div class="panel panel-default">
+    <div class="panel-heading"><h4><i class="ti ti-server-2"></i> Fleet</h4><span class="panel-hint" id="fleet-meta"></span></div>
+    <div class="panel-body" style="padding:8px 16px 12px">
+        <table class="table table-condensed table-hover no-toolbar" id="fleet-table">
+            <thead><tr><th>Server</th><th>Firewall</th><th>LFD</th><th>Temp blocks</th><th>CSF</th><th>CSF-eUI</th><th>Latency</th><th></th></tr></thead>
+            <tbody><tr><td colspan="8" class="text-muted">Loading…</td></tr></tbody>
+        </table>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-7">
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4><i class="ti ti-send"></i> Push an IP action to servers</h4></div>
+            <div class="panel-body">
+                <form id="fan-form">
+                    <div class="ipact-row">
+                        <div class="ipact-input"><i class="ti ti-network"></i><input type="text" class="form-control" id="fan-ip" placeholder="203.0.113.45 or 10.0.0.0/24" required></div>
+                        <div class="seg" id="fan-seg">
+                            <button type="button" class="seg-item active" data-act="allow">Allow</button>
+                            <button type="button" class="seg-item" data-act="deny">Block</button>
+                            <button type="button" class="seg-item" data-act="temp-deny">Temp block</button>
+                            <button type="button" class="seg-item" data-act="unblock">Unblock</button>
+                        </div>
+                    </div>
+                    <div class="ipact-extra" id="fan-temp" style="display:none">
+                        <input type="number" class="form-control input-sm" id="fan-seconds" value="3600" min="60" style="max-width:120px" aria-label="Seconds"> <span style="font-size:12px; line-height:30px">seconds</span>
+                    </div>
+                    <div class="ipact-extra"><input type="text" class="form-control input-sm" id="fan-comment" placeholder="Comment (optional)" style="max-width:420px"></div>
+                    <div style="margin-top:10px; font-size:13px" id="fan-targets"><span class="text-muted">Add servers first.</span></div>
+                    <div style="margin-top:12px; display:flex; gap:8px; align-items:center">
+                        <button type="submit" class="btn btn-primary" id="fan-go"><i class="ti ti-send"></i> Push to selected</button>
+                        <label style="font-weight:400; font-size:12px; margin:0"><input type="checkbox" id="fan-local" checked> also apply on this server</label>
+                    </div>
+                </form>
+                <div id="fan-results" style="margin-top:12px"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-5">
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4><i class="ti ti-plus"></i> Add a server</h4></div>
+            <div class="panel-body">
+                <form id="add-form">
+                    <div class="form-group"><input type="text" class="form-control input-sm" name="name" placeholder="Name (e.g. web-02)" required></div>
+                    <div class="form-group"><input type="url" class="form-control input-sm" name="url" placeholder="https://host:8750" required></div>
+                    <div class="form-group"><input type="password" class="form-control input-sm" name="token" placeholder="API token from that server (csf_…)" required autocomplete="new-password"></div>
+                    <div class="checkbox" style="margin-top:0"><label style="font-size:12px"><input type="checkbox" name="verify_tls" checked> Verify TLS certificate (untick for self-signed)</label></div>
+                    <button type="submit" class="btn btn-default btn-sm"><i class="ti ti-plus"></i> Add server</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+    var servers = [];
+    function pill(ok, txt) { return '<span class="pill ' + (ok ? 'pill-success' : 'pill-danger') + '">' + txt + '</span>'; }
+    function load() {
+        $.getJSON('/api/servers', function(d) {
+            servers = d.servers || [];
+            var html = '';
+            (d.status || []).forEach(function(s) {
+                if (!s.ok) {
+                    html += '<tr><td><strong>' + esc(s.name) + '</strong><br><small class="text-muted">' + esc(s.url) + '</small></td><td colspan="6"><span class="text-danger"><i class="ti ti-plug-connected-x"></i> ' + esc(s.error || 'unreachable') + '</span></td>' + actions(s) + '</tr>';
+                    return;
+                }
+                var fw = !s.enabled ? pill(false, 'Disabled') : s.testing ? '<span class="pill pill-warning">Testing</span>' : pill(true, 'Active');
+                html += '<tr><td><strong>' + esc(s.name) + '</strong>' + (s.local ? ' <span class="text-muted">(this server)</span>' : '') + '<br><small class="text-muted">' + esc(s.hostname || s.url) + '</small></td>' +
+                    '<td>' + fw + '</td><td>' + pill(!!s.lfd_running, s.lfd_running ? 'Running' : 'Down') + '</td><td>' + esc(s.temp_blocks) + '</td><td>' + esc(s.version) + '</td>' +
+                    '<td>' + esc(s.app_version) + (s.update_available ? ' <span class="label label-warning">update</span>' : '') + '</td><td class="text-muted">' + (s.ms != null ? s.ms + ' ms' : '—') + '</td>' + actions(s) + '</tr>';
+            });
+            $('#fleet-table tbody').html(html || '<tr><td colspan="8" class="text-muted">No servers added yet — add one on the right.</td></tr>');
+            $('#fleet-meta').text(servers.length + ' remote server' + (servers.length === 1 ? '' : 's'));
+            $('#fan-targets').html(servers.length ? servers.map(function(s) {
+                return '<label style="font-weight:400; margin-right:14px"><input type="checkbox" class="fan-target" value="' + esc(s.id) + '" checked> ' + esc(s.name) + '</label>';
+            }).join('') : '<span class="text-muted">No remote servers yet.</span>');
+        });
+    }
+    function actions(s) {
+        if (s.local) return '<td></td>';
+        return '<td class="text-right" style="white-space:nowrap"><a href="' + esc(s.url) + '" target="_blank" rel="noopener" class="btn btn-default btn-xs" title="Open"><i class="ti ti-external-link"></i></a> ' +
+            '<button class="btn btn-default btn-xs js-test" data-id="' + esc(s.id) + '" title="Test connection"><i class="ti ti-plug"></i></button> ' +
+            '<button class="btn btn-danger btn-xs js-del" data-id="' + esc(s.id) + '" title="Remove"><i class="ti ti-trash"></i></button></td>';
+    }
+    $('#add-form').on('submit', function(e) {
+        e.preventDefault();
+        var f = this, body = {name: f.name.value, url: f.url.value, token: f.token.value, verify_tls: f.verify_tls.checked};
+        $.ajax({url: '/api/servers', method: 'POST', contentType: 'application/json', data: JSON.stringify(body)}).done(function(r) {
+            if (r.success) { CSFv2.toast('Server added', 'success'); f.reset(); load(); } else CSFv2.toast(r.error || 'Could not add server', 'danger');
+        });
+    });
+    $('#fleet-table').on('click', '.js-del', function() {
+        var id = $(this).data('id');
+        if (!confirm('Remove this server from the list?')) return;
+        $.ajax({url: '/api/servers/' + id, method: 'DELETE'}).done(function() { load(); });
+    }).on('click', '.js-test', function() {
+        var b = $(this).prop('disabled', true);
+        $.post('/api/servers/' + b.data('id') + '/test', function(r) {
+            CSFv2.toast(r.ok ? 'Connected: CSF v' + r.version + ', eUI v' + r.app_version + ' (' + r.ms + ' ms)' : 'Failed: ' + (r.error || 'unreachable'), r.ok ? 'success' : 'danger', 7000);
+        }).always(function() { b.prop('disabled', false); });
+    });
+    var act = 'allow';
+    $('#fan-seg').on('click', '.seg-item', function() { act = $(this).data('act'); $('#fan-seg .seg-item').removeClass('active'); $(this).addClass('active'); $('#fan-temp').toggle(act === 'temp-deny'); });
+    $('#fan-form').on('submit', function(e) {
+        e.preventDefault();
+        var ids = $('.fan-target:checked').map(function() { return this.value; }).get();
+        var ip = $.trim($('#fan-ip').val());
+        if (!ip) return;
+        if (!ids.length && !$('#fan-local').is(':checked')) { CSFv2.toast('Pick at least one server', 'warning'); return; }
+        var b = $('#fan-go').prop('disabled', true);
+        $.ajax({url: '/api/servers/action', method: 'POST', contentType: 'application/json',
+                data: JSON.stringify({action: act, ip: ip, comment: $('#fan-comment').val(), seconds: $('#fan-seconds').val(), servers: ids, local: $('#fan-local').is(':checked')})})
+            .done(function(r) {
+                var html = '<table class="table table-condensed no-enhance" style="margin:0"><tbody>';
+                (r.results || []).forEach(function(x) {
+                    html += '<tr><td style="width:40%"><strong>' + esc(x.name) + '</strong></td><td>' + (x.ok ? '<span class="text-success"><i class="ti ti-check"></i> done</span>' : '<span class="text-danger"><i class="ti ti-x"></i> ' + esc(x.error || 'failed') + '</span>') + '</td></tr>';
+                });
+                $('#fan-results').html(html + '</tbody></table>');
+                load();
+            }).fail(function() { CSFv2.toast('Request failed', 'danger'); }).always(function() { b.prop('disabled', false); });
+    });
+    load();
+    setInterval(load, 30000);
+});
+</script>
+{% endblock %}

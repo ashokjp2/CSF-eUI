@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block page_title %}Guided tasks{% endblock %}
+
+{% block content %}
+<p class="text-muted" style="margin-bottom:15px">What do you want to do? Each task takes two or three steps and ends with a safe apply, so a mistake cannot lock you out.</p>
+
+<div class="task-grid" id="task-grid">
+    <button type="button" class="task-card" data-task="open-port"><i class="ti ti-door-enter"></i><div><b>Open a port for an app</b><span>Let the internet reach a service you run</span></div></button>
+    <button type="button" class="task-card" data-task="stop-attacker"><i class="ti ti-shield-x"></i><div><b>Stop someone attacking me</b><span>Block an address or its whole network</span></div></button>
+    <button type="button" class="task-card" data-task="let-office-in"><i class="ti ti-building"></i><div><b>Let my office or home in</b><span>Whitelist an address so it is never blocked</span></div></button>
+    <button type="button" class="task-card" data-task="locked-out"><i class="ti ti-key"></i><div><b>I locked myself out (or nearly)</b><span>Open SSH to where you are right now</span></div></button>
+    <button type="button" class="task-card" data-task="docker-app"><i class="ti ti-brand-docker"></i><div><b>Add a Docker app</b><span>Publish it safely behind the firewall</span></div></button>
+    <button type="button" class="task-card" data-task="block-country"><i class="ti ti-world-off"></i><div><b>Block a country</b><span>Stop all traffic from where you never expect visitors</span></div></button>
+</div>
+
+<div class="panel panel-default" id="task-panel" style="display:none">
+    <div class="panel-heading"><h4 id="task-title"></h4><a href="#" class="panel-link" id="task-cancel">Cancel</a></div>
+    <div class="panel-body">
+        <div class="task-steps-nav" id="task-nav"></div>
+
+        <!-- open-port -->
+        <div class="task-flow" data-task="open-port">
+            <div class="task-step active" data-step="1">
+                <p>Which port does the app listen on? Common ones: 80/443 web, 3000 Dokploy, 8000 Coolify, 25565 Minecraft, 51820 WireGuard (UDP).</p>
+                <div class="form-inline"><input type="text" class="form-control" id="op-port" data-validate="port" placeholder="8080" style="width:140px"> <select class="form-control" id="op-proto"><option value="tcp">TCP</option><option value="udp">UDP</option></select></div>
+                <div class="impact-note" id="op-impact" style="display:none"></div>
+            </div>
+            <div class="task-step" data-step="2">
+                <p>Who should reach it?</p>
+                <label style="font-weight:400"><input type="radio" name="op-who" value="all" checked> Everyone on the internet (public service)</label><br>
+                <label style="font-weight:400"><input type="radio" name="op-who" value="ip"> Only one address or network: <input type="text" class="form-control input-sm" id="op-ip" data-validate="ip" placeholder="203.0.113.9 or 10.0.0.0/24" style="width:220px; display:inline-block"></label>
+            </div>
+            <div class="task-step" data-step="3">
+                <p id="op-summary"></p>
+                <p class="text-muted" style="font-size:12px">The port is added to the allowed list, then the firewall restarts with automatic rollback if you lose access.</p>
+            </div>
+        </div>
+
+        <!-- stop-attacker -->
+        <div class="task-flow" data-task="stop-attacker">
+            <div class="task-step active" data-step="1">
+                <p>Which address is attacking you? Find it in <a href="/lfd-blocks">LFD block log</a> or <a href="/logs">Log viewer</a>.</p>
+                <input type="text" class="form-control" id="sa-ip" data-validate="ip" placeholder="45.148.10.92" style="max-width:300px">
+                <div class="impact-note" id="sa-impact" style="display:none"></div>
+            </div>
+            <div class="task-step" data-step="2">
+                <p>How wide?</p>
+                <label style="font-weight:400"><input type="radio" name="sa-scope" value="ip" checked> Just this address</label><br>
+                <label style="font-weight:400"><input type="radio" name="sa-scope" value="net"> The whole /24 network (256 addresses) — use when several addresses from the same range attack</label>
+                <p style="margin-top:8px">For how long?</p>
+                <label style="font-weight:400"><input type="radio" name="sa-dur" value="perm" checked> Permanently</label>&nbsp;&nbsp;
+                <label style="font-weight:400"><input type="radio" name="sa-dur" value="24"> 24 hours</label>&nbsp;&nbsp;
+                <label style="font-weight:400"><input type="radio" name="sa-dur" value="1"> 1 hour</label>
+            </div>
+            <div class="task-step" data-step="3"><p id="sa-summary"></p></div>
+        </div>
+
+        <!-- let-office-in -->
+        <div class="task-flow" data-task="let-office-in">
+            <div class="task-step active" data-step="1">
+                <p>Which address should never be blocked? You are connecting from <code>{{ my_ip }}</code> right now.</p>
+                <div class="form-inline"><input type="text" class="form-control" id="lo-ip" data-validate="ip" value="{{ my_ip }}" style="width:260px"> <input type="text" class="form-control" id="lo-comment" placeholder="Label, e.g. office" style="width:200px"></div>
+                <p class="text-muted" style="font-size:12px; margin-top:6px">If your office IP changes often, use <a href="/lfd/dyndns">csf.dyndns</a> with a hostname instead.</p>
+            </div>
+            <div class="task-step" data-step="2"><p id="lo-summary"></p><p class="text-muted" style="font-size:12px">The address goes into csf.allow; LFD will never block it, and all ports are open to it.</p></div>
+        </div>
+
+        <!-- locked-out -->
+        <div class="task-flow" data-task="locked-out">
+            <div class="task-step active" data-step="1">
+                <p>Your current address is <code>{{ my_ip }}</code>. SSH is on port <code>{{ ssh_port }}</code>{% if ssh_port in tcp_in.split(',') %} and it is already in the allowed ports{% else %} and it is <strong>not</strong> in TCP_IN — the next firewall restart would lock everyone out{% endif %}.</p>
+                <p>Open SSH to your address for:</p>
+                <select class="form-control" id="lk-hours" style="width:140px"><option value="1">1 hour</option><option value="4">4 hours</option><option value="24">24 hours</option></select>
+                <label style="font-weight:400; margin-top:10px"><input type="checkbox" id="lk-perm"> Also add port {{ ssh_port }} to TCP_IN permanently{% if ssh_port in tcp_in.split(',') %} (already there){% endif %}</label>
+            </div>
+            <div class="task-step" data-step="2"><p id="lk-summary"></p></div>
+        </div>
+
+        <!-- docker-app -->
+        <div class="task-flow" data-task="docker-app">
+            <div class="task-step active" data-step="1">
+                <p>How will people reach the app?</p>
+                <label style="font-weight:400"><input type="radio" name="da-how" value="proxy" checked> Through the Coolify / Traefik / Caddy proxy on 80/443 (recommended)</label><br>
+                <label style="font-weight:400"><input type="radio" name="da-how" value="port"> Directly on its own port: <input type="text" class="form-control input-sm" id="da-port" data-validate="port" placeholder="3000" style="width:110px; display:inline-block"></label>
+            </div>
+            <div class="task-step" data-step="2">
+                <p id="da-summary"></p>
+                <ul style="font-size:13px; color:var(--text-secondary)">
+                    <li>Bind internal ports to <code>127.0.0.1</code> in your compose file (e.g. <code>127.0.0.1:5432:5432</code>) so databases are never public.</li>
+                    <li>After deploying, check <a href="/docker">Docker → Exposure</a>: anything marked Internet that should not be can be restricted with one click.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- block-country -->
+        <div class="task-flow" data-task="block-country">
+            <div class="task-step active" data-step="1">
+                <p>Which countries? Two-letter codes, comma separated.</p>
+                <input type="text" class="form-control" id="bc-codes" data-validate="cc" placeholder="CN,RU,KP" style="max-width:300px">
+                <p class="text-muted" style="font-size:12px; margin-top:6px">Tip: if you only ever expect visitors from one country, it is simpler to allow just that one on <a href="/countries">Country Blocks</a> (CC_ALLOW_FILTER).</p>
+            </div>
+            <div class="task-step" data-step="2"><p id="bc-summary"></p><p class="text-muted" style="font-size:12px">Country blocking needs the GeoIP database (MM_LICENSE_KEY) to be set; the Country Blocks page shows whether it is.</p></div>
+        </div>
+
+        <div style="margin-top:14px; display:flex; gap:8px">
+            <button type="button" class="btn btn-default" id="task-back" style="display:none"><i class="ti ti-arrow-left"></i> Back</button>
+            <button type="button" class="btn btn-primary" id="task-next">Next <i class="ti ti-arrow-right"></i></button>
+        </div>
+        <div id="task-result" style="margin-top:12px"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    var MY_IP = {{ my_ip|tojson }}, SSH_PORT = {{ ssh_port|tojson }};
+    var TITLES = {'open-port': 'Open a port for an app', 'stop-attacker': 'Stop someone attacking me', 'let-office-in': 'Let my office or home in', 'locked-out': 'I locked myself out', 'docker-app': 'Add a Docker app', 'block-country': 'Block a country'};
+    var task = null, step = 1, total = 1;
+    function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+    function flow() { return $('.task-flow[data-task="' + task + '"]'); }
+    function show() {
+        flow().find('.task-step').removeClass('active').filter('[data-step="' + step + '"]').addClass('active');
+        $('#task-nav').html(Array.from({length: total}, function(_, i) { return (i + 1 === step ? '<b>' : '<span>') + 'Step ' + (i + 1) + (i + 1 === step ? '</b>' : '</span>'); }).join('<span>›</span>'));
+        $('#task-back').toggle(step > 1);
+        $('#task-next').html(step === total ? '<i class="ti ti-check"></i> Do it' : 'Next <i class="ti ti-arrow-right"></i>');
+        if (step === total) summary();
+    }
+    $('#task-grid').on('click', '.task-card', function() {
+        task = $(this).data('task'); step = 1; total = flow().find('.task-step').length;
+        $('.task-card').removeClass('active'); $(this).addClass('active');
+        $('.task-flow').hide(); flow().show();
+        $('#task-title').text(TITLES[task]); $('#task-panel').show(); $('#task-result').empty(); show();
+        $('html,body').animate({scrollTop: $('#task-panel').offset().top - 80}, 200);
+    });
+    $('#task-cancel').on('click', function(e) { e.preventDefault(); $('#task-panel').hide(); $('.task-card').removeClass('active'); });
+    $('#task-back').on('click', function() { if (step > 1) { step--; show(); } });
+    $('#task-next').on('click', function() { if (step < total) { if (validateStep()) { step++; show(); } } else run(); });
+    $('#op-port').on('change', function() { var p = $(this).val(); if (/^\d+$/.test(p)) $.getJSON('/api/impact', {type: 'port', target: p}, function(r) { var n = $('#op-impact').show(); if (r.listening && r.listening.length) n.removeClass('warn').text('Good: something is already listening on ' + p + ' (' + r.listening.join(', ') + (r.containers.length ? '; containers: ' + r.containers.join(', ') : '') + ').'); else n.addClass('warn').text('Nothing is listening on port ' + p + ' yet. Opening it is harmless, but double-check the number.'); }); });
+    $('#sa-ip').on('change', function() { var ip = $(this).val(); if (ip) $.getJSON('/api/impact', {type: 'block', target: ip.split('/')[0] + '/24'}, function(r) { $('#sa-impact').show().toggleClass('warn', !!r.warning).text('Its /24 network produced ' + r.attackers_covered + ' attacker IP(s) and ' + r.blocks_covered + ' block(s) recently.' + (r.warning ? ' Warning: ' + r.warning + ' (' + r.allowed_clash.join(', ') + ')' : '')); }); });
+    function validateStep() {
+        var bad = flow().find('.task-step.active input.is-invalid:visible, .task-step.active input[required]:visible').filter(function() { return $(this).hasClass('is-invalid') || !$(this).val(); });
+        if (task === 'open-port' && step === 1 && !/^\d{1,5}$/.test($('#op-port').val())) { CSFv2.toast('Enter a port number', 'warning'); return false; }
+        if (task === 'stop-attacker' && step === 1 && !$('#sa-ip').val()) { CSFv2.toast('Enter the attacking address', 'warning'); return false; }
+        if (task === 'block-country' && step === 1 && !$('#bc-codes').val()) { CSFv2.toast('Enter at least one country code', 'warning'); return false; }
+        if (bad.length) { CSFv2.toast('Fix the highlighted field first', 'warning'); return false; }
+        return true;
+    }
+    function summary() {
+        if (task === 'open-port') { var who = $('input[name=op-who]:checked').val(); $('#op-summary').html('Open port <code>' + esc($('#op-port').val()) + '/' + $('#op-proto').val() + '</code> to ' + (who === 'all' ? 'everyone' : '<code>' + esc($('#op-ip').val()) + '</code> only') + '.'); }
+        if (task === 'stop-attacker') { var ip = $('#sa-ip').val(), net = $('input[name=sa-scope]:checked').val() === 'net', d = $('input[name=sa-dur]:checked').val(); $('#sa-summary').html('Block <code>' + esc(net ? ip.split('/')[0].replace(/\.\d+$/, '.0/24') : ip) + '</code> ' + (d === 'perm' ? 'permanently' : 'for ' + d + ' hour(s)') + '.'); }
+        if (task === 'let-office-in') $('#lo-summary').html('Always allow <code>' + esc($('#lo-ip').val()) + '</code>' + ($('#lo-comment').val() ? ' (' + esc($('#lo-comment').val()) + ')' : '') + '.');
+        if (task === 'locked-out') $('#lk-summary').html('Open SSH port <code>' + SSH_PORT + '</code> to <code>' + MY_IP + '</code> for ' + $('#lk-hours').val() + ' hour(s)' + ($('#lk-perm').is(':checked') ? ', and add it to TCP_IN permanently' : '') + '.');
+        if (task === 'docker-app') { var how = $('input[name=da-how]:checked').val(); $('#da-summary').html(how === 'proxy' ? 'Nothing to open: the proxy already owns 80/443. Make sure your app has <strong>no</strong> published port of its own, only the proxy label/domain.' : 'Open port <code>' + esc($('#da-port').val()) + '/tcp</code> for the app and confirm it in the Exposure tab afterwards.'); }
+        if (task === 'block-country') $('#bc-summary').html('Deny all traffic from <code>' + esc($('#bc-codes').val().toUpperCase()) + '</code>.');
+    }
+    function done(msg, ok, safe) {
+        $('#task-result').html('<div class="alert alert-' + (ok ? 'success' : 'danger') + '">' + esc(msg) + (ok && safe ? ' <br><small>Now press <strong>Apply safely</strong> in the bar at the top; it rolls back automatically if you lose access.</small>' : '') + '</div>');
+        if (ok && safe) setTimeout(function() { CSFv2.initSafeApply(); }, 800);
+    }
+    function run() {
+        var b = $('#task-next').prop('disabled', true);
+        var fin = function() { b.prop('disabled', false); };
+        if (task === 'open-port') {
+            var port = $('#op-port').val(), proto = $('#op-proto').val(), who = $('input[name=op-who]:checked').val();
+            if (who === 'ip') {
+                $.post('/quick/allow', {ip: proto + '|in|d=' + port + '|s=' + $('#op-ip').val(), comment: 'Guided: port ' + port}, function(r) { done(r.success ? 'Rule added for ' + $('#op-ip').val() + ' on port ' + port + '.' : (r.stderr || 'Failed'), !!r.success, true); }).always(fin);
+            } else {
+                $.ajax({url: '/api/ports/add-port', method: 'POST', contentType: 'application/json', data: JSON.stringify({port: port, proto: proto, key: (proto === 'udp' ? 'UDP_IN' : 'TCP_IN')})})
+                    .done(function(r) { done(r.success ? 'Port ' + port + '/' + proto + ' added to the allowed list.' : (r.error || 'Failed'), !!r.success, true); })
+                    .fail(function() { $.post('/qconfig/ports', {TCP_IN_add: port}).always(function() { done('Port ' + port + ' submitted. Check Quick Config → Ports.', true, true); }); }).always(fin);
+            }
+        } else if (task === 'stop-attacker') {
+            var ip = $('#sa-ip').val(), net = $('input[name=sa-scope]:checked').val() === 'net', d = $('input[name=sa-dur]:checked').val();
+            var target = net ? ip.split('/')[0].replace(/\.\d+$/, '.0/24') : ip;
+            if (d === 'perm') $.post('/quick/deny', {ip: target, comment: 'Guided: attacker'}, function(r) { done(r.success ? target + ' is blocked.' : (r.stderr || 'Failed'), !!r.success, false); }).always(fin);
+            else $.ajax({url: '/api/v1/temp-deny', method: 'POST'}).always(function() {
+                $.post('/temp/add', {ip: target, timeout: d, dur: 'hours', ports: '*', comment: 'Guided: attacker', do: 'block'}).always(function() { done(target + ' is blocked for ' + d + ' hour(s).', true, false); fin(); });
+            });
+        } else if (task === 'let-office-in') {
+            $.post('/quick/allow', {ip: $('#lo-ip').val(), comment: $('#lo-comment').val() || 'Guided: trusted address'}, function(r) { done(r.success ? $('#lo-ip').val() + ' will never be blocked.' : (r.stderr || 'Failed'), !!r.success, false); }).always(fin);
+        } else if (task === 'locked-out') {
+            $.ajax({url: '/api/quick/ssh-window', method: 'POST', contentType: 'application/json', data: JSON.stringify({hours: $('#lk-hours').val()})}).done(function(r) {
+                var msg = r.success ? 'SSH on port ' + r.port + ' is open to ' + r.ip + ' for ' + r.hours + ' hour(s).' : (r.error || 'Failed');
+                if (r.success && $('#lk-perm').is(':checked')) {
+                    $.ajax({url: '/api/ports/add-port', method: 'POST', contentType: 'application/json', data: JSON.stringify({port: SSH_PORT, proto: 'tcp', key: 'TCP_IN'})}).always(function() { done(msg + ' Port ' + SSH_PORT + ' added to TCP_IN.', true, true); fin(); });
+                } else { done(msg, !!r.success, false); fin(); }
+            }).fail(fin);
+        } else if (task === 'docker-app') {
+            var how = $('input[name=da-how]:checked').val();
+            if (how === 'proxy') { done('No firewall change needed. Deploy the app and check Docker → Exposure.', true, false); fin(); }
+            else $.ajax({url: '/api/ports/add-port', method: 'POST', contentType: 'application/json', data: JSON.stringify({port: $('#da-port').val(), proto: 'tcp', key: 'TCP_IN'})}).done(function(r) { done(r.success ? 'Port ' + $('#da-port').val() + ' added.' : (r.error || 'Failed'), !!r.success, true); }).always(fin);
+        } else if (task === 'block-country') {
+            $.ajax({url: '/api/country/add', method: 'POST', contentType: 'application/json', data: JSON.stringify({list: 'CC_DENY', codes: $('#bc-codes').val().toUpperCase(), code: $('#bc-codes').val().toUpperCase().split(',')[0].trim()})})
+                .done(function(r) { done(r.success ? 'Countries added to CC_DENY.' : (r.error || 'Failed'), !!r.success, true); }).fail(function() { done('Could not update CC_DENY automatically; add the codes on the Country Blocks page.', false, false); }).always(fin);
+        }
+    }
+    var pre = (location.hash || '').replace('#', '');
+    if (pre) $('.task-card[data-task="' + pre + '"]').trigger('click');
+});
+</script>
+{% endblock %}

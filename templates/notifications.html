@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block page_title %}Notifications{% endblock %}
+
+{% block content %}
+<p class="text-muted" style="margin-bottom:15px">Get pushed when something happens: blocks, LFD or firewall going down, updates, certificate expiry. Email alerts from LFD itself are configured under <a href="/email-alerts">Email Alerts</a>.</p>
+
+<form id="notify-form">
+<div class="row">
+    <div class="col-md-7">
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4><i class="ti ti-send"></i> Channels</h4></div>
+            <div class="panel-body" id="channels">
+                <div class="notify-ch" data-ch="telegram">
+                    <div class="notify-ch-head">
+                        <label class="notify-switch"><input type="checkbox" name="telegram.enabled"> <i class="ti ti-brand-telegram"></i> Telegram</label>
+                        <button type="button" class="btn btn-default btn-xs js-test" data-ch="telegram"><i class="ti ti-send"></i> Send test</button>
+                    </div>
+                    <div class="notify-ch-body">
+                        <div class="row">
+                            <div class="col-sm-7"><input type="password" class="form-control input-sm" name="telegram.bot_token" placeholder="Bot token (from @BotFather)" autocomplete="new-password"></div>
+                            <div class="col-sm-5"><input type="text" class="form-control input-sm" name="telegram.chat_id" placeholder="Chat ID"></div>
+                        </div>
+                        <small class="text-muted">Create a bot with @BotFather, start a chat with it, then get your chat ID from @userinfobot.</small>
+                    </div>
+                </div>
+                <div class="notify-ch" data-ch="slack">
+                    <div class="notify-ch-head">
+                        <label class="notify-switch"><input type="checkbox" name="slack.enabled"> <i class="ti ti-brand-slack"></i> Slack</label>
+                        <button type="button" class="btn btn-default btn-xs js-test" data-ch="slack"><i class="ti ti-send"></i> Send test</button>
+                    </div>
+                    <div class="notify-ch-body">
+                        <input type="password" class="form-control input-sm" name="slack.webhook_url" placeholder="Incoming webhook URL (https://hooks.slack.com/services/…)" autocomplete="new-password">
+                    </div>
+                </div>
+                <div class="notify-ch" data-ch="discord">
+                    <div class="notify-ch-head">
+                        <label class="notify-switch"><input type="checkbox" name="discord.enabled"> <i class="ti ti-brand-discord"></i> Discord</label>
+                        <button type="button" class="btn btn-default btn-xs js-test" data-ch="discord"><i class="ti ti-send"></i> Send test</button>
+                    </div>
+                    <div class="notify-ch-body">
+                        <input type="password" class="form-control input-sm" name="discord.webhook_url" placeholder="Channel webhook URL (https://discord.com/api/webhooks/…)" autocomplete="new-password">
+                    </div>
+                </div>
+                <div class="notify-ch" data-ch="webhook">
+                    <div class="notify-ch-head">
+                        <label class="notify-switch"><input type="checkbox" name="webhook.enabled"> <i class="ti ti-webhook"></i> Generic webhook</label>
+                        <button type="button" class="btn btn-default btn-xs js-test" data-ch="webhook"><i class="ti ti-send"></i> Send test</button>
+                    </div>
+                    <div class="notify-ch-body">
+                        <div class="row">
+                            <div class="col-sm-8"><input type="text" class="form-control input-sm" name="webhook.url" placeholder="https://example.com/hook"></div>
+                            <div class="col-sm-4"><input type="password" class="form-control input-sm" name="webhook.secret" placeholder="Signing secret (optional)" autocomplete="new-password"></div>
+                        </div>
+                        <small class="text-muted">POSTs JSON <code>{title, body, level, host, time}</code>. With a secret, each request carries <code>X-CSFv2-Signature: sha256=HMAC(body)</code>.</small>
+                    </div>
+                </div>
+                <p class="text-muted" style="font-size:12px; margin:10px 0 0">Saved tokens and URLs are never shown again; leave a field blank to keep the saved value.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-5">
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4><i class="ti ti-bell"></i> Events</h4></div>
+            <div class="panel-body" id="events"></div>
+        </div>
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4><i class="ti ti-clock"></i> Rate limit</h4></div>
+            <div class="panel-body">
+                <div class="form-inline">
+                    <label style="font-weight:400; font-size:13px">Group block alerts into one message every</label>
+                    <input type="number" class="form-control input-sm" name="min_interval" min="10" max="3600" style="width:90px"> <span style="font-size:13px">seconds</span>
+                </div>
+            </div>
+        </div>
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4><i class="ti ti-calendar-stats"></i> Weekly digest</h4></div>
+            <div class="panel-body">
+                <label style="font-weight:400; font-size:13px"><input type="checkbox" id="dg-enabled"> Send a weekly summary (blocks by country and reason, new open ports, config changes, certificate, updates)</label>
+                <div class="form-inline" style="margin-top:8px; font-size:13px">
+                    every <select class="form-control input-sm" id="dg-weekday"><option value="0">Monday</option><option value="1">Tuesday</option><option value="2">Wednesday</option><option value="3">Thursday</option><option value="4">Friday</option><option value="5">Saturday</option><option value="6">Sunday</option></select>
+                    at <select class="form-control input-sm" id="dg-hour">{% for h in range(24) %}<option value="{{ h }}">{{ '%02d:00' % h }}</option>{% endfor %}</select>
+                </div>
+                <p class="text-muted" style="font-size:12px; margin:8px 0">Goes to the channels above and to the LF_ALERT_TO email if set.</p>
+                <button type="button" class="btn btn-default btn-xs" id="dg-preview"><i class="ti ti-eye"></i> Preview</button>
+                <button type="button" class="btn btn-default btn-xs" id="dg-send"><i class="ti ti-send"></i> Send now</button>
+                <pre id="dg-body" style="display:none; margin-top:8px; font-size:11px; white-space:pre-wrap"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+<button type="submit" class="btn btn-primary" id="notify-save"><i class="ti ti-device-floppy"></i> Save notifications</button>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    var form = $('#notify-form');
+    function load() {
+        $.getJSON('/api/notifications', function(c) {
+            Object.keys(c.channels).forEach(function(ch) {
+                var v = c.channels[ch];
+                form.find('[name="' + ch + '.enabled"]').prop('checked', !!v.enabled);
+                Object.keys(v).forEach(function(k) {
+                    var el = form.find('[name="' + ch + '.' + k + '"]');
+                    if (!el.length || k === 'enabled') return;
+                    if (v[k + '_set'] && !v[k]) el.attr('placeholder', 'Saved — leave blank to keep');
+                    else if (v[k]) el.val(v[k]);
+                });
+                $('.notify-ch[data-ch="' + ch + '"]').toggleClass('on', !!v.enabled);
+            });
+            var html = '';
+            Object.keys(c.event_labels).forEach(function(ev) {
+                html += '<label class="notify-event"><input type="checkbox" name="ev.' + ev + '"' + (c.events[ev] ? ' checked' : '') + '> ' + c.event_labels[ev] + '</label>';
+            });
+            $('#events').html(html);
+            form.find('[name=min_interval]').val(c.min_interval);
+            var dg = c.digest || {}; $('#dg-enabled').prop('checked', !!dg.enabled); $('#dg-weekday').val(dg.weekday || 0); $('#dg-hour').val(dg.hour || 8);
+        });
+    }
+    $('#dg-preview').on('click', function() { $.getJSON('/api/digest/preview', function(r) { $('#dg-body').text(r.body || '').show(); }); });
+    $('#dg-send').on('click', function() { var b = $(this).prop('disabled', true); $.post('/api/digest/send', function(r) { CSFv2.toast('Digest sent: ' + JSON.stringify(r.sent || {}), 'success', 7000); $('#dg-body').text(r.body || '').show(); }).always(function() { b.prop('disabled', false); }); });
+    function payload() {
+        var p = {channels: {}, events: {}, min_interval: form.find('[name=min_interval]').val(),
+                 digest: {enabled: $('#dg-enabled').is(':checked'), weekday: $('#dg-weekday').val(), hour: $('#dg-hour').val()}};
+        form.find('[name]').each(function() {
+            var n = this.name, v = this.type === 'checkbox' ? this.checked : this.value;
+            if (n.indexOf('ev.') === 0) p.events[n.slice(3)] = v;
+            else if (n.indexOf('.') > 0) { var a = n.split('.'); p.channels[a[0]] = p.channels[a[0]] || {}; if (this.type === 'checkbox' || v !== '') p.channels[a[0]][a[1]] = v; }
+        });
+        return p;
+    }
+    form.on('change', '.notify-switch input', function() { $(this).closest('.notify-ch').toggleClass('on', this.checked); });
+    form.on('submit', function(e) {
+        e.preventDefault();
+        $('#notify-save').prop('disabled', true);
+        $.ajax({url: '/api/notifications', method: 'POST', contentType: 'application/json', data: JSON.stringify(payload())})
+            .done(function(r) { CSFv2.toast(r.success ? 'Notification settings saved' : (r.error || 'Save failed'), r.success ? 'success' : 'danger'); load(); })
+            .fail(function() { CSFv2.toast('Save failed', 'danger'); })
+            .always(function() { $('#notify-save').prop('disabled', false); });
+    });
+    $('.js-test').on('click', function() {
+        var btn = $(this), ch = btn.data('ch'), p = payload();
+        btn.prop('disabled', true);
+        $.ajax({url: '/api/notifications/test', method: 'POST', contentType: 'application/json', data: JSON.stringify({channel: ch, values: p.channels[ch] || {}})})
+            .done(function(r) { CSFv2.toast(r.success ? 'Test message sent to ' + ch : ('Test failed: ' + r.error), r.success ? 'success' : 'danger', 7000); })
+            .fail(function() { CSFv2.toast('Test failed', 'danger'); })
+            .always(function() { btn.prop('disabled', false); });
+    });
+    load();
+});
+</script>
+{% endblock %}

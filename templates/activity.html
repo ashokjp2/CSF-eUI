@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block page_title %}Activity{% endblock %}
+
+{% block content %}
+<p class="text-muted" style="margin-bottom:15px">Everything that changed, in one list: UI actions, configuration edits, safe-apply events and notifications. Filter, sort, or export as CSV for your records.</p>
+<div class="btn-group" style="margin-bottom:10px" id="act-filters">
+    <button class="btn btn-default btn-sm active" data-src="">All</button>
+    <button class="btn btn-default btn-sm" data-src="audit">UI actions</button>
+    <button class="btn btn-default btn-sm" data-src="config">Config changes</button>
+    <button class="btn btn-default btn-sm" data-src="safe-apply">Safe apply</button>
+    <button class="btn btn-default btn-sm" data-src="event">Events</button>
+    <button class="btn btn-default btn-sm" data-src="action">Undoable actions</button>
+</div>
+<div class="panel panel-default">
+    <div class="panel-body" style="padding:8px 16px 12px">
+        <table class="table table-condensed table-hover" id="act-table">
+            <thead><tr><th style="width:150px">When</th><th style="width:110px">Source</th><th style="width:140px">Who</th><th>What</th></tr></thead>
+            <tbody><tr><td colspan="4" class="text-muted">Loading…</td></tr></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    var all = [], src = '';
+    function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+    function render() {
+        var rows = all.filter(function(i) { return !src || i.source === src; });
+        var pill = {audit: 'pill-muted', config: 'pill-warning', 'safe-apply': 'pill-danger', event: 'pill-muted', action: 'pill-success'};
+        $('#act-table tbody').html(rows.map(function(i) {
+            var when = i.ts ? new Date(i.ts * 1000).toLocaleString() : '';
+            return '<tr><td>' + esc(when) + '</td><td><span class="pill ' + (pill[i.source] || 'pill-muted') + '">' + esc(i.source) + '</span></td><td>' + esc(i.who) + (i.ip ? '<br><small class="text-muted">' + esc(i.ip) + '</small>' : '') + '</td><td style="font-size:12px">' + esc(i.what) + '</td></tr>';
+        }).join('') || '<tr><td colspan="4" class="text-muted">Nothing recorded yet</td></tr>');
+    }
+    $('#act-filters').on('click', 'button', function() { $('#act-filters button').removeClass('active'); $(this).addClass('active'); src = $(this).data('src'); render(); });
+    $.getJSON('/api/activity', function(r) { all = r.items || []; render(); });
+});
+</script>
+{% endblock %}

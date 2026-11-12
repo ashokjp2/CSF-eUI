@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block page_title %}IP report{% endblock %}
+
+{% block content %}
+{% if r.error %}
+<div class="alert alert-danger">{{ r.error }}</div>
+{% else %}
+{% set st = r.status.state %}
+<div class="ip-head">
+    <h2>{{ r.ip }}</h2>
+    <span class="pill {{ 'pill-danger' if st == 'blocked' else 'pill-warning' if st == 'temp_blocked' else 'pill-success' if st in ('allowed', 'ignored') else 'pill-muted' }}">
+        {{ {'blocked': 'Blocked', 'temp_blocked': 'Temp blocked', 'allowed': 'Allowed', 'ignored': 'Ignored', 'clear': 'Not blocked'}[st] }}
+    </span>
+    <span class="ip-meta">{{ r.summary }}{% if r.top_reason_why %} &middot; <em>{{ r.top_reason_why }}</em>{% endif %}</span>
+    <div class="ip-actions">
+        {% if st in ('blocked', 'temp_blocked') %}
+        <form method="POST" action="/quick/unblock" data-ajax="true" data-success-msg="{{ r.ip }} unblocked" data-refresh="page"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="ip" value="{{ r.ip }}"><button class="btn btn-default btn-sm"><i class="ti ti-lock-open"></i> Unblock</button></form>
+        {% endif %}
+        {% if st != 'allowed' %}
+        <form method="POST" action="/quick/allow" data-ajax="true" data-success-msg="{{ r.ip }} allowed" data-refresh="page"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="ip" value="{{ r.ip }}"><input type="hidden" name="comment" value="Allowed from IP report"><button class="btn btn-default btn-sm"><i class="ti ti-circle-check"></i> Allow</button></form>
+        {% endif %}
+        {% if st not in ('blocked',) %}
+        <form method="POST" action="/quick/deny" data-ajax="true" data-success-msg="{{ r.ip }} blocked" data-refresh="page"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="ip" value="{{ r.ip }}"><input type="hidden" name="comment" value="Blocked from IP report"><button class="btn btn-danger btn-sm"><i class="ti ti-ban"></i> Block</button></form>
+        {% endif %}
+        {% if not r.status.ignore %}
+        <form method="POST" action="/quick/ignore" data-ajax="true" data-success-msg="{{ r.ip }} added to csf.ignore" data-refresh="page"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="ip" value="{{ r.ip }}"><button class="btn btn-default btn-sm" title="LFD will never block this IP"><i class="ti ti-eye-off"></i> Ignore</button></form>
+        {% endif %}
+        <a href="/#ip={{ r.ip }}&act=tempblock" class="btn btn-default btn-sm"><i class="ti ti-clock-pause"></i> Temp block</a>
+    </div>
+</div>
+
+<div class="ip-grid">
+    <div class="panel panel-default">
+        <div class="panel-heading"><h4><i class="ti ti-shield"></i> Firewall status</h4></div>
+        <div class="panel-body">
+            <table class="kv no-enhance">
+                <tr><td>csf.deny</td><td>{{ r.status.deny if r.status.deny is not none else '—' }}</td></tr>
+                <tr><td>csf.allow</td><td>{{ r.status.allow or '—' }}</td></tr>
+                <tr><td>Temporary entry</td><td>{{ r.status.temp or '—' }}</td></tr>
+                <tr><td>csf.ignore</td><td>{{ 'yes' if r.status.ignore else 'no' }}</td></tr>
+                <tr><td>LFD blocks seen</td><td>{{ r.history_count }}{% if r.top_reason %} &middot; mostly <code>{{ r.top_reason }}</code>{% endif %}</td></tr>
+                {% if r.net %}
+                <tr><td>Its network</td><td><code>{{ r.net.target }}</code>: {{ r.net.ips }} attacker IP(s), {{ r.net.blocks }} block(s) recently
+                    {% if r.net.ips >= 2 and not r.net.allowed_clash %}
+                    <button type="button" class="btn btn-default btn-xs" id="block-net" data-target="{{ r.net.target }}" style="margin-left:6px"><i class="ti ti-ban"></i> Block the whole /24</button>
+                    {% elif r.net.allowed_clash %}<br><small class="text-danger">contains an allowed address: {{ r.net.allowed_clash|join(', ') }}</small>{% endif %}
+                </td></tr>
+                {% endif %}
+            </table>
+            {% if r.status.iptables %}
+            <details style="margin-top:10px"><summary class="text-muted" style="font-size:12px; cursor:pointer">iptables matches ({{ r.status.iptables|length }})</summary>
+            <pre style="font-size:11px; margin-top:6px">{{ r.status.iptables|join('\n') }}</pre></details>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="panel panel-default">
+        <div class="panel-heading"><h4><i class="ti ti-world"></i> Who is this</h4></div>
+        <div class="panel-body">
+            {% set shown = [] %}
+            <table class="kv no-enhance">
+            {% for title, items in r.geo.items() %}
+                {% if title not in ('CSF Status', 'Firewall Status', 'Log Activity') %}
+                {% for it in items[:8] %}
+                <tr><td>{{ it.key }}</td><td>{{ it.value }}</td></tr>
+                {% endfor %}
+                {% endif %}
+            {% endfor %}
+            </table>
+            <p style="margin:10px 0 0; font-size:12px"><a href="/ip-lookup?ip={{ r.ip }}">Full WHOIS / reputation lookup</a></p>
+        </div>
+    </div>
+
+    <div class="panel panel-default">
+        <div class="panel-heading"><h4><i class="ti ti-history"></i> Block history</h4><span class="panel-hint">{{ r.history_count }} LFD events</span></div>
+        <div class="panel-body">
+            {% if r.reasons %}
+            <div class="chip-row" style="margin-bottom:10px">
+                {% for reason, n in r.reasons[:6] %}<span class="chip" style="cursor:default">{{ reason }} <b style="margin-left:4px">{{ n }}</b></span>{% endfor %}
+            </div>
+            {% endif %}
+            <ul class="ip-timeline">
+                {% for b in r.history %}
+                <li><time>{{ b.time }}</time><span>{{ b.why }} <code style="font-size:10px">{{ b.reason }}</code><br><span class="log">{{ b.detail }}</span></span></li>
+                {% else %}
+                <li class="text-muted">No LFD blocks recorded for this IP in the current log.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <div class="panel panel-default">
+        <div class="panel-heading"><h4><i class="ti ti-file-text"></i> Log lines</h4></div>
+        <div class="panel-body">
+            {% if r.lfd_lines %}<p class="text-muted" style="font-size:11px; margin:0 0 4px">lfd.log</p>
+            <ul class="ip-timeline">{% for l in r.lfd_lines[:15] %}<li><span class="log">{{ l }}</span></li>{% endfor %}</ul>{% endif %}
+            {% if r.auth_lines %}<p class="text-muted" style="font-size:11px; margin:10px 0 4px">auth.log</p>
+            <ul class="ip-timeline">{% for l in r.auth_lines[:10] %}<li><span class="log">{{ l }}</span></li>{% endfor %}</ul>{% endif %}
+            {% if r.ui_lines %}<p class="text-muted" style="font-size:11px; margin:10px 0 4px">CSF-eUI</p>
+            <ul class="ip-timeline">{% for l in r.ui_lines[:10] %}<li><span class="log">{{ l }}</span></li>{% endfor %}</ul>{% endif %}
+            {% if not r.lfd_lines and not r.auth_lines and not r.ui_lines %}<p class="text-muted" style="font-size:12px; margin:0">No log lines mention this IP.</p>{% endif %}
+        </div>
+    </div>
+
+    {% if r.audit %}
+    <div class="panel panel-default">
+        <div class="panel-heading"><h4><i class="ti ti-book"></i> UI actions on this IP</h4></div>
+        <div class="panel-body">
+            <ul class="ip-timeline">
+                {% for e in r.audit %}<li><time>{{ e.ts }}</time><span>{{ e.type }} by <b>{{ e.user or '?' }}</b> — {{ e.detail }}</span></li>{% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+$('#block-net').on('click', function() {
+    var b = $(this), t = b.data('target');
+    if (!confirm('Block ' + t + ' (256 addresses)? You can undo it from the bell menu.')) return;
+    b.prop('disabled', true);
+    $.ajax({url: '/api/suggestions/block', method: 'POST', contentType: 'application/json', data: JSON.stringify({target: t})})
+        .done(function(r) { CSFv2.toast(r.success ? t + ' blocked' : (r.error || 'Failed'), r.success ? 'success' : 'danger'); if (r.success) setTimeout(function() { location.reload(); }, 1000); });
+});
+</script>
+{% endblock %}
