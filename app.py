@@ -1428,6 +1428,8 @@ def settings_view():
                 flash("Username must be at least 3 characters", "danger")
             elif not new_username.replace("_", "").replace("-", "").isalnum():
                 flash("Username may only contain letters, numbers, hyphens, and underscores", "danger")
+            elif new_username == session.get("username", "admin"):
+                flash("New username is the same as your current username", "warning")
             else:
                 admin_email = email_alerts.get_admin_email()
                 if not admin_email:
