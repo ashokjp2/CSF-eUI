@@ -40,7 +40,9 @@ HELP = {
         "Counts attack attempts (failed logins, scans, floods) from all logs, not just blocks. Use it to spot where attacks come from.",
         "Suggested blocks groups attackers by network (/24) and provider (ASN) so you can shut a whole source down in one click."]},
     "/health": {"title": "Health check", "body": [
-        "A score from 0 to 100 built from checks on your firewall, SSH and system settings. Each failed check has a Fix button that applies the recommended value through safe apply."]},
+        "A score from 0 to 100 built from checks on your firewall, SSH, Docker, accounts, this panel and the system. Items are weighted: a public database or a Docker socket mount costs far more than a cosmetic warning.",
+        "Each check with a Fix button applies the recommended value through safe apply. If a finding is intentional (say, FTP really is needed), use Accept and give a reason: it stays visible but stops counting against the score.",
+        "New or worsened findings since the last run are marked, so a fresh red item stands out."]},
     "/docker": {"title": "Docker", "body": [
         "Docker opens ports on its own, bypassing the firewall's normal rules. The Exposure tab shows which container ports the internet can reach, and Restrict closes them to the outside while keeping them reachable from other containers."],
         "readme": "#SECTION:27"},

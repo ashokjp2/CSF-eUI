@@ -1799,3 +1799,39 @@ tr[data-key] td:first-child strong { font-size: 12px; }
 }
 .panel-heading h3:has(.pull-right) > .pull-right, .panel-heading h4:has(.pull-right) > .pull-right,
 .panel-heading .panel-title:has(.pull-right) > .pull-right { float: none !important; margin-left: auto; }
+
+/* ===== Health Check items (shared by /health and Server Check) ===== */
+.hc-ring { position: relative; width: 180px; height: 180px; margin: 0 auto; }
+.hc-ring svg { transform: rotate(-90deg); }
+.hc-ring-label { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+.hc-grade { font-size: 48px; font-weight: 600; line-height: 1; }
+.hc-tiles .hc-tile { background: var(--panel-bg); border: 1px solid var(--border-color); border-left-width: 4px; border-radius: 8px; padding: 8px 6px; text-align: center; margin-bottom: 10px; }
+.hc-tile b { display: block; font-size: 22px; font-weight: 600; line-height: 1.1; }
+.hc-tile small { color: var(--text-secondary); font-size: 11px; }
+.hc-item { padding: 9px 15px; border-bottom: 1px solid var(--border-light); border-left: 4px solid transparent; }
+.hc-item:last-of-type { border-bottom: none; }
+.hc-item.hc-fail { border-left-color: var(--danger); background: var(--danger-soft); }
+.hc-item.hc-warn { border-left-color: var(--warning); background: var(--warning-soft); }
+.hc-item.hc-pass { border-left-color: var(--success); }
+.hc-item.hc-info { border-left-color: var(--info); background: var(--info-soft); }
+.hc-item.hc-accepted { border-left-color: var(--border-color); color: var(--text-muted); }
+.hc-item.hc-accepted strong { font-weight: 500; color: var(--text-secondary); }
+.hc-row { display: flex; gap: 10px; align-items: flex-start; }
+.hc-icon { font-size: 18px; line-height: 1.2; flex-shrink: 0; }
+.hc-fail .hc-icon { color: var(--danger); } .hc-warn .hc-icon { color: var(--warning); }
+.hc-pass .hc-icon { color: var(--success); } .hc-info .hc-icon { color: var(--info); } .hc-accepted .hc-icon { color: var(--text-muted); }
+.hc-main { flex: 1; min-width: 0; }
+.hc-title { font-size: 13px; }
+.hc-flag { margin-left: 6px; font-size: 9px; vertical-align: 2px; }
+.hc-detail { font-size: 12px; color: var(--text-secondary); margin-top: 3px; line-height: 1.5; }
+.hc-accepted-note { font-style: italic; }
+.hc-accepted-note a { margin-left: 6px; font-style: normal; }
+.hc-actions { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; }
+.hc-actions .label { font-weight: 400; font-size: 11px; }
+.hc-accept { color: var(--text-muted); font-size: 12px; margin-left: auto; }
+.hc-accept:hover { color: var(--text-primary); text-decoration: none; }
+.hc-accept-form { display: flex; gap: 6px; margin-top: 6px; align-items: center; }
+.hc-accept-form input { max-width: 420px; }
+.hc-filter { font-weight: 400; cursor: pointer; } .hc-filter input { margin-right: 4px; }
+.badge-danger { background: var(--danger) !important; color: #fff !important; }
+@media (max-width: 767px) { .hc-accept { margin-left: 0; } .hc-accept-form { flex-wrap: wrap; } }

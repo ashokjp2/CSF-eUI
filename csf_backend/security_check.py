@@ -60,6 +60,7 @@ SSHD_SAFE_SETTINGS = {
     "port", "permitrootlogin", "passwordauthentication",
     "x11forwarding", "maxauthtries", "usedns", "clientaliveinterval",
     "clientalivecountmax", "logingracetime", "maxsessions",
+    "permitemptypasswords", "permituserenvironment", "allowtcpforwarding", "allowagentforwarding",
 }
 
 
@@ -599,14 +600,25 @@ def run_full_check():
             elif "WARNING" in line or "WARN" in line:
                 cat.append({"status": "warn", "title": line})
 
+    # --- Extra hardening checks (loopholes, Docker, accounts, CSF-eUI, system) ---
+    try:
+        from csf_backend import hardening_checks
+        checks.extend(hardening_checks.run(csf, sshd))
+        hardening_checks.finalise(checks)
+    except Exception as e:
+        checks.append({"category": "System Hardening", "items": [{"status": "info", "title": f"Hardening checks unavailable: {e}"}]})
+
     # Summary counts
     total = sum(len(c["items"]) for c in checks)
     passes = sum(1 for c in checks for i in c["items"] if i["status"] == "pass")
     warns = sum(1 for c in checks for i in c["items"] if i["status"] == "warn")
     fails = sum(1 for c in checks for i in c["items"] if i["status"] == "fail")
     infos = sum(1 for c in checks for i in c["items"] if i["status"] == "info")
+    accepted = sum(1 for c in checks for i in c["items"] if i["status"] == "accepted")
+    changed = sum(1 for c in checks for i in c["items"] if i.get("changed"))
 
     return {
         "checks": checks,
-        "summary": {"total": total, "pass": passes, "warn": warns, "fail": fails, "info": infos},
+        "summary": {"total": total, "pass": passes, "warn": warns, "fail": fails, "info": infos,
+                    "accepted": accepted, "changed": changed},
     }

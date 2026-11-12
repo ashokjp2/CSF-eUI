@@ -1,0 +1,61 @@
+{# Shared renderer for one Health Check / Server Check finding.
+   Usage: {% from "_health_item.html" import health_item, cat_icon %} {{ health_item(item, category) }} #}
+
+{% macro cat_icon(name) -%}
+{%- set icons = {'SSH Hardening': 'lock', 'CSF Firewall Settings': 'flame', 'System Security': 'shield',
+                 'Kernel iptables Modules': 'cpu', 'Firewall Rules & Loopholes': 'door-off',
+                 'Docker & Containers': 'brand-docker', 'Accounts & Access': 'users',
+                 'CSF-eUI Itself': 'layout-dashboard', 'System Hardening': 'adjustments-alt'} -%}
+<i class="ti ti-{{ icons.get(name, 'settings') }}"></i>
+{%- endmacro %}
+
+{% macro health_item(item, category, compact=False) -%}
+<div class="hc-item hc-{{ item.status }}" data-id="{{ item.id }}">
+    <div class="hc-row">
+        <i class="hc-icon ti ti-{{ 'circle-check' if item.status == 'pass' else 'alert-triangle' if item.status == 'warn' else 'circle-x' if item.status == 'fail' else 'eye-off' if item.status == 'accepted' else 'info-circle' }}"></i>
+        <div class="hc-main">
+            <div class="hc-title">
+                <strong>{{ item.title }}</strong>
+                {% if item.changed == 'new' %}<span class="label label-danger hc-flag">NEW</span>
+                {% elif item.changed == 'worse' %}<span class="label label-danger hc-flag">GOT WORSE</span>{% endif %}
+                {% if item.weight == 3 and item.status in ('fail', 'warn') %}<span class="label label-default hc-flag">High impact</span>{% endif %}
+                {% if compact and category %}<small class="text-muted">({{ category }})</small>{% endif %}
+            </div>
+            {% if item.detail %}<div class="hc-detail">{{ item.detail }}</div>{% endif %}
+            {% if item.status == 'accepted' %}
+            <div class="hc-detail hc-accepted-note"><i class="ti ti-eye-off"></i> Accepted{% if item.accepted.user %} by {{ item.accepted.user }}{% endif %}: “{{ item.accepted.reason }}”
+                <a href="#" class="js-unaccept" data-id="{{ item.id }}">Check again</a></div>
+            {% endif %}
+            {% if item.status in ('fail', 'warn', 'info') %}
+            <div class="hc-actions">
+                {% if item.current is defined and not compact %}<span class="label label-default">Current: {{ item.current }}</span>{% endif %}
+                {% if item.recommended is defined and not compact and not item.fix_value %}<span class="label label-info">Recommended: {{ item.recommended }}</span>{% endif %}
+                {% if item.setting and item.fix_value %}
+                <button class="btn btn-xs btn-warning js-quick-fix" data-setting="{{ item.setting }}" data-value="{{ item.fix_value }}"
+                        data-confirm="{{ 'This will edit /etc/ssh/sshd_config and restart sshd. Make sure you still have a way in (keys set up, port allowed) before applying.' if category == 'SSH Hardening' or category == 'Accounts & Access' else '' }}">
+                    <i class="ti ti-tool"></i> Fix: {{ item.setting }} = {{ item.fix_value }}
+                </button>
+                {% elif item.fix %}
+                <button class="btn btn-xs btn-warning js-quick-fix" data-fix='{{ item.fix|tojson }}'>
+                    <i class="ti ti-tool"></i> {% if item.fix.action == 'restrict_port' %}Restrict port {{ item.fix.port }}/{{ item.fix.proto }}{% elif item.fix.action == 'sysctl' %}Set {{ item.fix.key }} = {{ item.fix.value }}{% else %}Fix{% endif %}
+                </button>
+                {% elif item.setting %}
+                <a href="/config?q={{ item.setting }}" class="btn btn-xs btn-default"><i class="ti ti-settings"></i> Edit {{ item.setting }}</a>
+                {% endif %}
+                {% if item.link %}
+                <a href="{{ item.link }}" class="btn btn-xs btn-default"><i class="ti ti-arrow-right"></i> Open</a>
+                {% endif %}
+                {% if item.id %}
+                <a href="#" class="hc-accept js-accept" data-id="{{ item.id }}" title="This is intentional: keep it visible but stop counting it against the score"><i class="ti ti-eye-off"></i> Accept</a>
+                {% endif %}
+            </div>
+            <div class="hc-accept-form" style="display:none">
+                <input type="text" class="form-control input-sm" maxlength="200" placeholder="Why is this acceptable? e.g. FTP is needed for the legacy uploader">
+                <button class="btn btn-sm btn-primary js-accept-save"><i class="ti ti-check"></i> Accept</button>
+                <button class="btn btn-sm btn-link js-accept-cancel">Cancel</button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{%- endmacro %}

@@ -1,181 +1,67 @@
 {% extends "base.html" %}
+{% from "_health_item.html" import health_item, cat_icon %}
 {% block page_title %}Health Check{% endblock %}
 
 {% block content %}
-        <!-- Score Display -->
+        {% set ring = '#5cb85c' if score.color == 'success' else '#5bc0de' if score.color == 'info' else '#f0ad4e' if score.color == 'warning' else '#d9534f' %}
         <div class="row" style="margin-bottom:20px">
             <div class="col-md-4 text-center">
-                <div style="position:relative; width:180px; height:180px; margin:0 auto">
-                    <svg viewBox="0 0 180 180" style="transform:rotate(-90deg)">
-                        <circle cx="90" cy="90" r="80" fill="none" stroke="#eee" stroke-width="12"/>
-                        <circle cx="90" cy="90" r="80" fill="none"
-                                stroke="{{ '#5cb85c' if score.color == 'success' else '#5bc0de' if score.color == 'info' else '#f0ad4e' if score.color == 'warning' else '#d9534f' }}"
-                                stroke-width="12" stroke-linecap="round"
+                <div class="hc-ring">
+                    <svg viewBox="0 0 180 180">
+                        <circle cx="90" cy="90" r="80" fill="none" stroke="var(--bg-tertiary)" stroke-width="12"/>
+                        <circle cx="90" cy="90" r="80" fill="none" stroke="{{ ring }}" stroke-width="12" stroke-linecap="round"
                                 stroke-dasharray="{{ (score.score / 100) * 502 }} 502"/>
                     </svg>
-                    <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center">
-                        <div style="font-size:48px; font-weight:bold; color:{{ '#5cb85c' if score.color == 'success' else '#5bc0de' if score.color == 'info' else '#f0ad4e' if score.color == 'warning' else '#d9534f' }}">
-                            {{ score.grade }}
-                        </div>
-                        <div style="font-size:14px; color:#999">{{ score.score }}/100</div>
+                    <div class="hc-ring-label">
+                        <div class="hc-grade" style="color:{{ ring }}">{{ score.grade }}</div>
+                        <div class="text-muted" style="font-size:14px">{{ score.score }}/100</div>
                     </div>
                 </div>
                 <p class="text-muted" style="margin-top:10px">{{ score.description }}</p>
+                <p class="text-muted" style="font-size:12px">{{ score.summary.total }} checks across {{ score.report.checks|length }} areas.
+                    Weighted: a public database or a Docker socket mount costs far more than a cosmetic warning.</p>
             </div>
             <div class="col-md-8">
-                <div class="row">
-                    <div class="col-xs-3">
-                        <div class="well well-sm text-center" style="border-left:4px solid #5cb85c; margin-bottom:10px">
-                            <span class="text-success" style="font-size:24px; font-weight:bold">{{ score.summary.pass }}</span>
-                            <br><small>Passed</small>
-                        </div>
-                    </div>
-                    <div class="col-xs-3">
-                        <div class="well well-sm text-center" style="border-left:4px solid #f0ad4e; margin-bottom:10px">
-                            <span class="text-warning" style="font-size:24px; font-weight:bold">{{ score.summary.warn }}</span>
-                            <br><small>Warnings</small>
-                        </div>
-                    </div>
-                    <div class="col-xs-3">
-                        <div class="well well-sm text-center" style="border-left:4px solid #d9534f; margin-bottom:10px">
-                            <span class="text-danger" style="font-size:24px; font-weight:bold">{{ score.summary.fail }}</span>
-                            <br><small>Failed</small>
-                        </div>
-                    </div>
-                    <div class="col-xs-3">
-                        <div class="well well-sm text-center" style="border-left:4px solid #5bc0de; margin-bottom:10px">
-                            <span class="text-info" style="font-size:24px; font-weight:bold">{{ score.summary.info }}</span>
-                            <br><small>Info</small>
-                        </div>
-                    </div>
+                <div class="row hc-tiles">
+                    <div class="col-xs-6 col-sm-2"><div class="hc-tile" style="border-color:#5cb85c"><b class="text-success">{{ score.summary.pass }}</b><small>Passed</small></div></div>
+                    <div class="col-xs-6 col-sm-2"><div class="hc-tile" style="border-color:#f0ad4e"><b class="text-warning">{{ score.summary.warn }}</b><small>Warnings</small></div></div>
+                    <div class="col-xs-6 col-sm-2"><div class="hc-tile" style="border-color:#d9534f"><b class="text-danger">{{ score.summary.fail }}</b><small>Failed</small></div></div>
+                    <div class="col-xs-6 col-sm-2"><div class="hc-tile" style="border-color:#5bc0de"><b class="text-info">{{ score.summary.info }}</b><small>Info</small></div></div>
+                    <div class="col-xs-6 col-sm-2"><div class="hc-tile" style="border-color:#999"><b class="text-muted">{{ score.summary.accepted or 0 }}</b><small>Accepted</small></div></div>
+                    <div class="col-xs-6 col-sm-2"><div class="hc-tile" style="border-color:{{ '#d9534f' if score.summary.changed else '#ddd' }}"><b class="{{ 'text-danger' if score.summary.changed else 'text-muted' }}">{{ score.summary.changed or 0 }}</b><small>New / worse</small></div></div>
                 </div>
 
                 {% if score.recommendations %}
-                <h4 style="margin-top:5px"><span class="ti ti-tool"></span> Top Recommendations</h4>
+                <h4 style="margin-top:5px"><i class="ti ti-tool"></i> Top recommendations <small class="text-muted">most important first</small></h4>
                 {% for rec in score.recommendations %}
-                <div style="padding:8px 12px; margin-bottom:6px; border-left:4px solid {{ '#d9534f' if rec.priority == 'critical' else '#f0ad4e' }}; background:{{ '#fdf2f2' if rec.priority == 'critical' else '#fef9f0' }}">
-                    <div>
-                        {% if rec.priority == 'critical' %}
-                        <span class="label label-danger">CRITICAL</span>
-                        {% else %}
-                        <span class="label label-warning">FIX</span>
-                        {% endif %}
-                        <strong>{{ rec.title }}</strong>
-                        <small class="text-muted">({{ rec.category }})</small>
-                    </div>
-                    {% if rec.detail %}
-                    <div style="font-size:12px; color:#666; margin-top:3px">{{ rec.detail }}</div>
-                    {% endif %}
-                    {% if rec.setting %}
-                    {% if rec.fix_value %}
-                    <button class="btn btn-xs btn-warning js-quick-fix" style="margin-top:4px"
-                            data-setting="{{ rec.setting }}" data-value="{{ rec.fix_value }}">
-                        <span class="ti ti-tool"></span> Apply Fix: {{ rec.setting }} = {{ rec.fix_value }}
-                    </button>
-                    {% else %}
-                    <a href="/config" class="btn btn-xs btn-default" style="margin-top:4px">
-                        <span class="ti ti-settings"></span> Fix: {{ rec.setting }}
-                    </a>
-                    {% endif %}
-                    {% endif %}
-                </div>
+                {{ health_item(rec, rec.category, compact=True) }}
                 {% endfor %}
+                {% else %}
+                <div class="empty-state" style="padding:24px"><i class="ti ti-shield-check"></i><p>Nothing needs fixing right now.</p></div>
                 {% endif %}
             </div>
         </div>
 
-        <!-- Detailed results -->
-        <h4><span class="ti ti-list-details"></span> Detailed Check Results</h4>
+        <h4><i class="ti ti-list-details"></i> All checks
+            <span class="pull-right" style="font-size:12px;font-weight:400">
+                <label class="hc-filter"><input type="checkbox" id="hc-hide-pass" checked> Hide passed</label>
+            </span>
+        </h4>
         {% for category in score.report.checks %}
-        <div class="panel panel-default">
+        <div class="panel panel-default hc-cat">
             <div class="panel-heading">
                 <h4 class="panel-title" style="margin:0">
-                    {% if category.category == 'SSH Hardening' %}
-                    <span class="ti ti-lock"></span>
-                    {% elif category.category == 'CSF Firewall Settings' %}
-                    <span class="ti ti-flame"></span>
-                    {% elif category.category == 'System Security' %}
-                    <span class="ti ti-shield"></span>
-                    {% else %}
-                    <span class="ti ti-settings"></span>
-                    {% endif %}
-                    {{ category.category }}
-                    <span class="badge pull-right">{{ category["items"]|length }}</span>
+                    {{ cat_icon(category.category) }} {{ category.category }}
+                    {% set bad = category['items']|selectattr('status', 'in', ['fail', 'warn'])|list|length %}
+                    <span class="badge pull-right {{ 'badge-danger' if bad else '' }}">{{ bad }} / {{ category['items']|length }}</span>
                 </h4>
             </div>
             <div class="panel-body" style="padding:0">
-                {% for item in category["items"] %}
-                <div style="padding:8px 15px; border-bottom:1px solid #eee;
-                    {% if item.status == 'fail' %}border-left:4px solid #d9534f; background:#fdf2f2{% elif item.status == 'warn' %}border-left:4px solid #f0ad4e; background:#fef9f0{% elif item.status == 'pass' %}border-left:4px solid #5cb85c{% elif item.status == 'info' %}border-left:4px solid #5bc0de; background:#f0f9ff{% endif %}">
-                    <i class="ti ti-{{ 'circle-check text-success' if item.status == 'pass' else 'alert-triangle text-warning' if item.status == 'warn' else 'circle-x text-danger' if item.status == 'fail' else 'info-circle text-info' }}"></i>
-                    <strong>{{ item.title }}</strong>
-                    {% if item.detail %}
-                    <div style="margin-top:3px; padding-left:22px; font-size:12px" class="text-muted">{{ item.detail }}</div>
-                    {% endif %}
-                    {% if item.setting %}
-                    {% if item.fix_value %}
-                    <button class="btn btn-xs btn-warning js-quick-fix" style="margin-left:22px; margin-top:3px"
-                            data-setting="{{ item.setting }}" data-value="{{ item.fix_value }}">
-                        <span class="ti ti-tool"></span> Apply Fix
-                    </button>
-                    {% else %}
-                    <a href="/config" class="btn btn-xs btn-default" style="margin-left:22px; margin-top:3px">
-                        <span class="ti ti-settings"></span> Edit {{ item.setting }}
-                    </a>
-                    {% endif %}
-                    {% endif %}
-                </div>
+                {% for item in category['items'] %}
+                {{ health_item(item, category.category) }}
                 {% endfor %}
+                <div class="hc-all-good text-muted" style="display:none;padding:10px 15px;font-size:12px"><i class="ti ti-circle-check text-success"></i> Everything in this group passed.</div>
             </div>
         </div>
         {% endfor %}
-
-    </div>
-</div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-$(function () {
-    $(document).on('click', '.js-quick-fix', function () {
-        var $btn = $(this);
-        var setting = $btn.data('setting');
-        var value = $btn.data('value');
-        var $row = $btn.closest('div[style]');
-
-        $btn.prop('disabled', true).html('<span class="ti ti-refresh"></span> Applying…');
-
-        $.ajax({
-            url: '/api/health/quick-fix',
-            method: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({setting: setting, value: value}),
-            success: function (r) {
-                if (r.success) {
-                    $btn.replaceWith(
-                        '<span class="label label-success" style="margin-left:4px">' +
-                        '<span class="ti ti-check"></span> Fixed — reload page to refresh score</span>'
-                    );
-                } else {
-                    $btn.prop('disabled', false)
-                        .html('<span class="ti ti-tool"></span> Apply Fix');
-                    $row.find('.js-fix-error').remove();
-                    $row.append(
-                        '<div class="text-danger js-fix-error" style="margin-top:4px;font-size:12px">' +
-                        '<span class="ti ti-x"></span> ' +
-                        (r.error || 'Fix failed') + '</div>'
-                    );
-                }
-            },
-            error: function (xhr) {
-                $btn.prop('disabled', false)
-                    .html('<span class="ti ti-tool"></span> Apply Fix');
-                $row.find('.js-fix-error').remove();
-                var msg = (xhr.responseJSON && xhr.responseJSON.error) ? xhr.responseJSON.error : 'Request failed — check logs (HTTP ' + xhr.status + ').';
-                $row.append('<div class="text-danger js-fix-error" style="margin-top:4px;font-size:12px"><span class="ti ti-x"></span> ' + msg + '</div>');
-            }
-        });
-    });
-});
-</script>
 {% endblock %}

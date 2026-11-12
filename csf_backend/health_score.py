@@ -18,21 +18,28 @@ def calculate_score():
     if total == 0:
         return {"score": 0, "grade": "?", "color": "default", "description": "No checks ran"}
 
-    passed = summary["pass"]
-    warns = summary["warn"]
     fails = summary["fail"]
-    infos = summary["info"]
 
-    # Scoring: pass=100, info=80, warn=40, fail=0
-    checkable = total - infos
-    if checkable == 0:
-        score = 80
-    else:
-        score = int(((passed * 100) + (warns * 40)) / checkable)
+    # Weighted scoring: each pass/warn/fail item is worth its weight (1 low, 2 normal, 3 critical).
+    # pass earns all of it, warn 40%, fail nothing. info and accepted items do not count.
+    earned = possible = 0.0
+    for cat in report["checks"]:
+        for item in cat["items"]:
+            w = item.get("weight") or (3 if item["status"] == "fail" else 2)
+            if item["status"] == "pass":
+                earned += w
+                possible += w
+            elif item["status"] == "warn":
+                earned += 0.4 * w
+                possible += w
+            elif item["status"] == "fail":
+                possible += w
+    score = int(earned * 100 / possible) if possible else 80
 
-    # Penalty for critical failures
-    if fails > 0:
-        score = max(0, score - (fails * 10))
+    # Extra penalty for critical (weight 3) failures: a public database or a Docker socket
+    # mount should sink the score far more than a cosmetic warning.
+    critical = sum(1 for c in report["checks"] for i in c["items"] if i["status"] == "fail" and (i.get("weight") or 3) >= 3)
+    score = max(0, score - critical * 8 - (fails - critical) * 3)
 
     score = max(0, min(100, score))
 
@@ -50,27 +57,23 @@ def calculate_score():
     recommendations = []
     for cat in report["checks"]:
         for item in cat["items"]:
-            if item["status"] == "fail":
+            if item["status"] in ("fail", "warn"):
                 recommendations.append({
-                    "priority": "critical",
+                    "priority": "critical" if item["status"] == "fail" else "recommended",
+                    "id": item.get("id"),
                     "title": item["title"],
                     "detail": item.get("detail", ""),
                     "setting": item.get("setting"),
                     "fix_value": item.get("fix_value"),
-                    "category": cat["category"],
-                })
-            elif item["status"] == "warn":
-                recommendations.append({
-                    "priority": "recommended",
-                    "title": item["title"],
-                    "detail": item.get("detail", ""),
-                    "setting": item.get("setting"),
-                    "fix_value": item.get("fix_value"),
+                    "fix": item.get("fix"),
+                    "link": item.get("link"),
+                    "weight": item.get("weight", 2),
+                    "changed": item.get("changed"),
                     "category": cat["category"],
                 })
 
-    # Sort: critical first
-    recommendations.sort(key=lambda r: 0 if r["priority"] == "critical" else 1)
+    # Sort: critical first, then by weight (impact)
+    recommendations.sort(key=lambda r: (0 if r["priority"] == "critical" else 1, -r["weight"]))
 
     return {
         "score": score,

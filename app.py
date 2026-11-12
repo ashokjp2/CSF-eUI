@@ -29,6 +29,7 @@ from csf_backend import lfd_files
 from csf_backend import csfpost_editor
 from csf_backend import csfpost_model
 from csf_backend import security_check
+from csf_backend import hardening_checks
 from csf_backend import port_defaults
 from csf_backend import log_viewer
 from csf_backend import ip_lookup
@@ -1995,11 +1996,37 @@ def api_health():
 
 _SSH_FIX_SETTINGS = {
     "Port", "PermitRootLogin", "PasswordAuthentication", "X11Forwarding", "MaxAuthTries",
+    "PermitEmptyPasswords", "PermitUserEnvironment", "AllowTcpForwarding", "AllowAgentForwarding",
+    "LoginGraceTime", "ClientAliveInterval",
 }
 _CSF_FIX_SETTINGS = {
     "TESTING", "RESTRICT_SYSLOG", "LF_SSHD", "LF_FTPD", "LF_PERMBLOCK",
     "PS_LIMIT", "CT_LIMIT", "DOCKER", "IPV6",
+    "SYNFLOOD", "PORTFLOOD", "CONNLIMIT", "ICMP_IN_RATE", "LF_DISTATTACK", "LF_NETBLOCK",
+    "DENY_IP_LIMIT", "SMTP_BLOCK", "LF_DIRWATCH", "LF_INTEGRITY", "LF_SSH_EMAIL_ALERT", "LF_SU_EMAIL_ALERT",
 }
+
+
+@app.route("/api/health/accept", methods=["POST"])
+@login_required
+def api_health_accept():
+    """Accept a finding with a reason (it stops affecting the score) or un-accept it."""
+    if not _is_admin():
+        return jsonify({"success": False, "error": "Viewer accounts cannot change this"}), 403
+    data = request.get_json(silent=True) or {}
+    item_id = str(data.get("id", "")).strip()[:120]
+    if not item_id:
+        return jsonify({"success": False, "error": "Missing id"})
+    if data.get("unaccept"):
+        hardening_checks.unaccept(item_id)
+        audit_log.log_event("config", session.get("username", ""), request.remote_addr, f"Health finding re-enabled: {item_id}")
+        return jsonify({"success": True})
+    reason = str(data.get("reason", "")).strip()
+    if not reason:
+        return jsonify({"success": False, "error": "Give a short reason so the next admin knows why"})
+    rec = hardening_checks.accept(item_id, reason, session.get("username", ""))
+    audit_log.log_event("config", session.get("username", ""), request.remote_addr, f"Health finding accepted: {item_id} — {reason}")
+    return jsonify({"success": True, "accepted": rec})
 
 
 @app.route("/api/health/quick-fix", methods=["POST"])
@@ -2008,6 +2035,28 @@ def api_health_quick_fix():
     data = request.get_json(silent=True) or {}
     setting = str(data.get("setting", "")).strip()
     value = str(data.get("value", "")).strip()
+    action = str(data.get("action", "")).strip()
+
+    # Non-csf.conf one-click fixes
+    if action == "sysctl":
+        result = hardening_checks.apply_sysctl(str(data.get("key", "")), str(data.get("value", "")))
+        if result.get("success"):
+            audit_log.log_event("config", session.get("username", ""), request.remote_addr,
+                                f"Health quick-fix: sysctl {data.get('key')}={data.get('value')}")
+        return jsonify(result)
+    if action == "restrict_port":
+        try:
+            port, proto = int(data.get("port")), ("udp" if data.get("proto") == "udp" else "tcp")
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "error": "Bad port"})
+        result = docker.set_port_restriction(port, proto, True)
+        if result.get("success"):
+            actions_journal.record("health_fix", f"Health fix: restricted container port {port}/{proto}",
+                                   {"action": "unrestrict_port", "port": port, "proto": proto}, _actor())
+            audit_log.log_event("config", session.get("username", ""), request.remote_addr,
+                                f"Health quick-fix: restricted docker port {port}/{proto}")
+            result["message"] = f"Port {port}/{proto} is now reachable only from other containers and localhost."
+        return jsonify(result)
 
     if not setting or not value:
         return jsonify({"success": False, "error": "Missing setting or value"})

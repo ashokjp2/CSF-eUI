@@ -678,6 +678,73 @@ var CSFv2 = {
         });
     },
 
+    // ---- Health Check: quick fixes, accept-with-reason, hide passed ----
+    initHealth: function() {
+        if (!$('.hc-item').length) return;
+        function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+        function fail(row, btn, label, msg) {
+            btn.prop('disabled', false).html(label);
+            row.find('.js-fix-error').remove();
+            row.find('.hc-actions').after('<div class="text-danger js-fix-error" style="font-size:12px;margin:4px 0 0 28px"><i class="ti ti-x"></i> ' + esc(msg) + '</div>');
+        }
+        $(document).on('click', '.js-quick-fix', function() {
+            var btn = $(this), row = btn.closest('.hc-item'), label = btn.html();
+            var fix = btn.data('fix');
+            var body = fix ? fix : {setting: btn.data('setting'), value: String(btn.data('value'))};
+            var warn = btn.data('confirm');
+            if (warn && !confirm(warn)) return;
+            if (fix && fix.action === 'restrict_port' && !confirm('Restrict port ' + fix.port + '/' + fix.proto + ' so only other containers and localhost can reach it?\n\nIf your reverse proxy reaches it by host IP rather than the Docker network, it may stop working — undo is in the bell menu.')) return;
+            btn.prop('disabled', true).html('<i class="ti ti-refresh"></i> Applying…');
+            $.ajax({url: '/api/health/quick-fix', method: 'POST', contentType: 'application/json', data: JSON.stringify(body)})
+            .done(function(r) {
+                if (!r.success) return fail(row, btn, label, r.error || 'Fix failed');
+                btn.replaceWith('<span class="label label-success"><i class="ti ti-check"></i> ' + (r.safe_apply ? 'Saved — use “Apply safely” at the top' : 'Fixed') + '</span>');
+                row.removeClass('hc-fail hc-warn hc-info').addClass('hc-pass');
+                if (r.message) CSFv2.toast(r.message, 'success', 6000);
+                if (r.safe_apply) $(document).trigger('csfv2:safe-apply-refresh');
+            })
+            .fail(function(xhr) { fail(row, btn, label, (xhr.responseJSON && xhr.responseJSON.error) || ('Request failed (HTTP ' + xhr.status + ')')); });
+        });
+        $(document).on('click', '.js-accept', function(e) {
+            e.preventDefault();
+            var row = $(this).closest('.hc-item');
+            row.find('.hc-accept-form').slideDown(120).find('input').focus();
+        });
+        $(document).on('click', '.js-accept-cancel', function(e) { e.preventDefault(); $(this).closest('.hc-accept-form').slideUp(120); });
+        $(document).on('keydown', '.hc-accept-form input', function(e) { if (e.key === 'Enter') { e.preventDefault(); $(this).siblings('.js-accept-save').click(); } });
+        $(document).on('click', '.js-accept-save', function(e) {
+            e.preventDefault();
+            var form = $(this).closest('.hc-accept-form'), row = form.closest('.hc-item'), reason = form.find('input').val().trim();
+            if (!reason) { form.find('input').addClass('is-invalid').focus(); return; }
+            $.ajax({url: '/api/health/accept', method: 'POST', contentType: 'application/json', data: JSON.stringify({id: row.data('id'), reason: reason})})
+            .done(function(r) {
+                if (!r.success) { CSFv2.toast(r.error || 'Could not save', 'danger'); return; }
+                form.slideUp(120);
+                row.removeClass('hc-fail hc-warn hc-info').addClass('hc-accepted');
+                row.find('.hc-icon').attr('class', 'hc-icon ti ti-eye-off');
+                row.find('.hc-actions').replaceWith('<div class="hc-detail hc-accepted-note"><i class="ti ti-eye-off"></i> Accepted: “' + esc(reason) + '” <a href="#" class="js-unaccept" data-id="' + esc(row.data('id')) + '">Check again</a></div>');
+                CSFv2.toast('Accepted. Reload to see the new score.', 'info');
+            })
+            .fail(function() { CSFv2.toast('Request failed', 'danger'); });
+        });
+        $(document).on('click', '.js-unaccept', function(e) {
+            e.preventDefault();
+            var row = $(this).closest('.hc-item');
+            $.ajax({url: '/api/health/accept', method: 'POST', contentType: 'application/json', data: JSON.stringify({id: row.data('id'), unaccept: true})})
+            .done(function() { location.reload(); });
+        });
+        function applyHide() {
+            var hide = $('#hc-hide-pass').is(':checked');
+            $('.hc-item.hc-pass').toggle(!hide);
+            $('.hc-cat').each(function() {
+                var vis = $(this).find('.hc-item:visible').length;
+                $(this).find('.hc-all-good').toggle(hide && vis === 0 && $(this).find('.hc-item').length > 0);
+            });
+        }
+        $('#hc-hide-pass').on('change', applyHide);
+        applyHide();
+    },
+
     // ---- Command palette (Ctrl+K) ----
     _settingHelp: null,
     initPalette: function() {
@@ -784,6 +851,7 @@ $(document).ready(function() {
     CSFv2.initHelpDrawer();
     CSFv2.initValidation();
     CSFv2.initChecklist();
+    CSFv2.initHealth();
     CSFv2.applyExplanations(document);
     CSFv2.enhanceTables(document);
     /* Tables rendered later by page scripts get the same treatment */
