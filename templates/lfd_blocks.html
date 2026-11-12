@@ -68,7 +68,7 @@ $(function() {
                     '<td style="white-space:nowrap">' + (e.time || '') + '</td>' +
                     '<td><span class="label label-' + typeCls + '">' + e.type + '</span></td>' +
                     '<td><code>' + detail + '</code></td>' +
-                    '<td>' + (e.reason || '') + '</td>' +
+                    '<td><span data-explain="' + $('<div>').text(e.reason || e.detail || '').html() + '">' + (e.reason || '') + '</span></td>' +
                     '</tr>';
             });
             $('#block-table').html(html || '<tr><td colspan="4" class="text-muted">No LFD events found</td></tr>');

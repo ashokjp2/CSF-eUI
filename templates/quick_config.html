@@ -165,6 +165,8 @@
         <div class="panel-heading"><h4><span class="ti ti-arrows-shuffle"></span> Connection &amp; Rate Limits</h4></div>
         <div class="panel-body">
             <div class="alert alert-info"><span class="ti ti-info-circle"></span> <strong>How it works:</strong> These settings limit how many connections a single IP can make. This protects against DDoS attacks and brute-force attempts. The visual builders below let you add rules without remembering any syntax.</div>
+            <h5><i class="ti ti-wand"></i> Presets <small class="text-muted">— one click sets sensible limits for a kind of server; review the fields below afterwards</small></h5>
+            <div class="preset-grid" id="preset-grid"><span class="text-muted">Loading…</span></div>
             <form id="connForm">
                 <div class="row">
                     <div class="col-md-6">
@@ -827,6 +829,36 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+/* Rate-limit presets */
+$(function() {
+    function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+    function loadPresets() {
+        $.getJSON('/api/presets', function(r) {
+            $('#preset-grid').html((r.presets || []).map(function(p) {
+                var n = Object.keys(p.changes).length;
+                return '<div class="preset-card' + (p.applied ? ' applied' : '') + '"><b>' + esc(p.title) + (p.applied ? ' <span class="pill pill-success">applied</span>' : '') + '</b><p>' + esc(p.blurb) + '</p>' +
+                    '<button type="button" class="btn btn-default btn-xs js-preset" data-key="' + esc(p.key) + '" data-n="' + n + '"' + (p.applied ? ' disabled' : '') + '>' + (p.applied ? 'In use' : 'Apply (' + n + ' setting' + (n === 1 ? '' : 's') + ')') + '</button> ' +
+                    '<a href="#" class="js-preset-show" data-key="' + esc(p.key) + '" style="font-size:12px">what changes?</a><div class="preset-diff" id="pd-' + esc(p.key) + '" style="display:none; font-size:11px; margin-top:6px"></div></div>';
+            }).join(''));
+            window._presets = {}; (r.presets || []).forEach(function(p) { window._presets[p.key] = p; });
+        });
+    }
+    $('#preset-grid').on('click', '.js-preset-show', function(e) {
+        e.preventDefault();
+        var p = window._presets[$(this).data('key')], box = $('#pd-' + p.key);
+        box.html(Object.keys(p.changes).map(function(k) { return '<div><code>' + k + '</code> ' + esc(p.changes[k][0] || '(unset)') + ' → <strong>' + esc(p.changes[k][1]) + '</strong></div>'; }).join('') || '<span class="text-muted">Already matches</span>').toggle();
+    }).on('click', '.js-preset', function() {
+        var b = $(this), key = b.data('key');
+        if (!confirm('Apply this preset? ' + b.data('n') + ' setting(s) change in csf.conf; you then restart with Apply safely.')) return;
+        b.prop('disabled', true);
+        $.ajax({url: '/api/presets/apply', method: 'POST', contentType: 'application/json', data: JSON.stringify({key: key})})
+            .done(function(r) { CSFv2.toast(r.success ? 'Preset applied — use Apply safely to restart' : (r.error || 'Failed'), r.success ? 'success' : 'danger', 7000); loadPresets(); setTimeout(function() { CSFv2.initSafeApply(); }, 600); })
+            .fail(function() { CSFv2.toast('Failed', 'danger'); b.prop('disabled', false); });
+    });
+    loadPresets();
+});
+</script>
 <script>
 $(function() {
     var knownPorts = {{ ports_json|safe }};

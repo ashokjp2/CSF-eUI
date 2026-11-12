@@ -101,6 +101,45 @@ def lookup_batch(ips):
     return results
 
 
+def get_block_replay(hours=168):
+    """LFD blocks in the last `hours` with timestamps, for the time-slider replay."""
+    import time
+    from datetime import datetime, timedelta
+    from csf_backend import lfd_blocks
+    now = datetime.now()
+    cutoff = now - timedelta(hours=hours)
+    months = {m: i for i, m in enumerate(("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"), 1)}
+    events = []
+    for b in lfd_blocks.get_lfd_blocks(5000):
+        if b.get("type") != "block" or not b.get("ip"):
+            continue
+        m = re.match(r"(\w{3}) +(\d+) (\d{2}):(\d{2}):(\d{2})", b.get("time", ""))
+        if not m or m.group(1) not in months:
+            continue
+        try:
+            ts = datetime(now.year, months[m.group(1)], int(m.group(2)), int(m.group(3)), int(m.group(4)), int(m.group(5)))
+        except ValueError:
+            continue
+        if ts > now + timedelta(hours=1):
+            ts = ts.replace(year=now.year - 1)
+        if ts >= cutoff:
+            events.append((int(ts.timestamp()), b["ip"], b.get("reason", "")))
+    ips = list({ip for _, ip, _ in events})[:300]
+    geo = lookup_batch(ips) if ips else {}
+    markers = []
+    for ts, ip, reason in events:
+        g = geo.get(ip) or {}
+        if g.get("lat") and g.get("lon"):
+            markers.append({"ip": ip, "ts": ts, "lat": g["lat"], "lon": g["lon"], "country": g.get("country", ""), "city": g.get("city", ""), "isp": g.get("isp", ""), "reason": reason})
+    markers.sort(key=lambda m: m["ts"])
+    country_counts = {}
+    for m in markers:
+        country_counts[m["country"]] = country_counts.get(m["country"], 0) + 1
+    return {"markers": markers, "total_ips": len(ips), "mapped": len(markers), "hours": hours,
+            "start": int(cutoff.timestamp()), "end": int(now.timestamp()),
+            "top_countries": [{"country": c, "count": n} for c, n in sorted(country_counts.items(), key=lambda x: -x[1])[:15]]}
+
+
 def get_blocked_ips_geo():
     """Get geo data for all denied IPs."""
     try:

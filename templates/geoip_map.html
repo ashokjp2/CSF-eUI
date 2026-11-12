@@ -37,12 +37,25 @@
 
         <div class="panel panel-default">
             <div class="panel-heading">
-                <div class="pull-right">
+                <div class="pull-right" style="display:flex; gap:6px; align-items:center">
+                    <select class="form-control input-sm" id="map-mode" style="width:auto">
+                        <option value="0">Current deny list</option>
+                        <option value="24">Replay: last 24 hours</option>
+                        <option value="168">Replay: last 7 days</option>
+                        <option value="720">Replay: last 30 days</option>
+                    </select>
                     <button class="btn btn-xs btn-primary" id="btn-load-map">
                         <span class="ti ti-world"></span> Load Map
                     </button>
                 </div>
                 <h4 class="panel-title" style="margin:0">World Map</h4>
+            </div>
+            <div id="replay-bar" style="display:none; padding:8px 14px; border-bottom:1px solid var(--border-light); font-size:12px">
+                <div style="display:flex; gap:10px; align-items:center">
+                    <button class="btn btn-default btn-xs" id="replay-play" title="Play"><i class="ti ti-player-play"></i></button>
+                    <input type="range" class="time-slider" id="replay-slider" min="0" max="100" value="100">
+                    <span id="replay-label" style="white-space:nowrap; min-width:150px"></span>
+                </div>
             </div>
             <div class="panel-body" style="padding:0">
                 <div id="map"></div>
@@ -85,10 +98,40 @@ $(function() {
 
     var markersLayer = L.layerGroup().addTo(map);
 
+    /* Replay: markers carry a timestamp; the slider shows blocks up to that moment */
+    var replay = null, replayTimer = null;
+    function drawReplay(upto) {
+        markersLayer.clearLayers();
+        var shown = 0;
+        replay.markers.forEach(function(m) {
+            if (m.ts > upto) return;
+            shown++;
+            var age = (upto - m.ts) / 3600, fresh = age < 1;
+            var c = L.circleMarker([m.lat, m.lon], {radius: fresh ? 8 : 5, fillColor: fresh ? '#ff1744' : '#ff8a80', color: '#ff1744', weight: 1, opacity: .8, fillOpacity: fresh ? .8 : .4});
+            c.bindPopup('<strong>' + m.ip + '</strong><br>' + m.country + (m.city ? ', ' + m.city : '') + '<br><small>' + new Date(m.ts * 1000).toLocaleString() + (m.reason ? ' · ' + m.reason : '') + '</small>');
+            markersLayer.addLayer(c);
+        });
+        $('#replay-label').text(new Date(upto * 1000).toLocaleString() + ' · ' + shown + ' block' + (shown === 1 ? '' : 's'));
+    }
+    $('#replay-slider').on('input', function() {
+        if (!replay) return;
+        drawReplay(replay.start + (replay.end - replay.start) * (this.value / 100));
+    });
+    $('#replay-play').on('click', function() {
+        if (replayTimer) { clearInterval(replayTimer); replayTimer = null; $(this).html('<i class="ti ti-player-play"></i>'); return; }
+        var s = $('#replay-slider'); if (+s.val() >= 100) s.val(0);
+        $(this).html('<i class="ti ti-player-pause"></i>');
+        replayTimer = setInterval(function() { var v = +s.val() + 1; s.val(v).trigger('input'); if (v >= 100) { clearInterval(replayTimer); replayTimer = null; $('#replay-play').html('<i class="ti ti-player-play"></i>'); } }, 120);
+    });
+
     $('#btn-load-map').on('click', function() {
         var btn = $(this);
         btn.prop('disabled', true).html('<span class="ti ti-hourglass"></span> Loading...');
-        $.getJSON('/api/geoip-map', function(data) {
+        var hours = parseInt($('#map-mode').val(), 10);
+        $('#replay-bar').toggle(hours > 0);
+        $.getJSON('/api/geoip-map' + (hours ? '?hours=' + hours : ''), function(data) {
+            if (hours) { replay = data; $('#replay-slider').val(100); }
+            else replay = null;
             $('#stat-total').text(data.total_ips);
             $('#stat-mapped').text(data.mapped);
             $('#stat-countries').text(data.top_countries.length);
@@ -109,7 +152,8 @@ $(function() {
             $('#ip-table').html(thtml || '<tr><td colspan="4" class="text-muted">No data</td></tr>');
 
             markersLayer.clearLayers();
-            data.markers.forEach(function(m) {
+            if (replay) { drawReplay(replay.end); }
+            (replay ? [] : data.markers).forEach(function(m) {
                 var circle = L.circleMarker([m.lat, m.lon], {
                     radius: 6,
                     fillColor: '#ff5252',

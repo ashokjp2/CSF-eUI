@@ -1662,23 +1662,20 @@ $(function() {
 
 
     // Load contextual help tooltips
+    /* Plain-English help shown inline on every row: what it does, risk, tip, CSF default */
     $.getJSON('/api/setting-help', function(helpData) {
+        function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
         $('tr[data-key]').each(function() {
-            var key = $(this).data('key');
-            var help = helpData[key];
+            var key = $(this).data('key'), help = helpData[key], dflt = $(this).attr('data-default');
+            var html = '';
             if (help) {
-                var riskColor = help.risk === 'high' ? '#d9534f' : help.risk === 'medium' ? '#f0ad4e' : '#5cb85c';
-                var riskLabel = help.risk === 'high' ? 'High Impact' : help.risk === 'medium' ? 'Medium' : 'Low';
-                var tipHtml = '<span class="ti ti-help-circle setting-help-icon" style="cursor:help; margin-left:6px; color:#999; font-size:12px" '
-                    + 'data-toggle="popover" data-trigger="hover" data-html="true" data-placement="top" '
-                    + 'data-content="<div style=\'font-size:12px\'>' + help.plain.replace(/"/g, '&quot;');
-                if (help.tip) tipHtml += '<br><br><strong>Tip:</strong> ' + help.tip.replace(/"/g, '&quot;');
-                tipHtml += '<br><span style=\'color:' + riskColor + '\'><strong>' + riskLabel + '</strong></span>';
-                tipHtml += '</div>"></span>';
-                $(this).find('td:first strong, td:first label').first().after(tipHtml);
+                var riskLabel = help.risk === 'high' ? 'high impact' : help.risk === 'medium' ? 'medium' : 'low risk';
+                html += esc(help.plain) + ' <span class="risk risk-' + esc(help.risk || 'low') + '">' + riskLabel + '</span>';
+                if (help.tip) html += '<span class="tip">Tip: ' + esc(help.tip) + '</span>';
             }
+            if (dflt !== undefined) html += '<span class="tip">CSF default: <code>' + esc(dflt || '(empty)') + '</code></span>';
+            if (html) $(this).find('.setting-help').html(html).addClass('cfg-plain');
         });
-        $('[data-toggle="popover"]').popover({container: 'body'});
     });
 
     /* 1. Label toggle buttons before convertToSelects() removes some of them */

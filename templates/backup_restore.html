@@ -55,11 +55,55 @@
                 </table>
             </div>
         </div>
+
+        <div class="panel panel-default">
+            <div class="panel-heading"><h4 class="panel-title" style="margin:0"><span class="ti ti-cloud-upload"></span> Off-server copies</h4><span class="panel-hint">Every new backup is also sent here</span></div>
+            <div class="panel-body">
+                <form id="rb-form" class="form-horizontal" style="max-width:720px">
+                    <div class="form-group"><label class="col-sm-3 control-label">Send copies</label><div class="col-sm-9"><label class="checkbox-inline" style="font-weight:400"><input type="checkbox" id="rb-enabled"> Enabled</label>
+                        <select class="form-control input-sm" id="rb-method" style="display:inline-block; width:auto; margin-left:10px"><option value="sftp">SFTP (scp with an SSH key)</option><option value="webdav">WebDAV / HTTP PUT (Nextcloud, S3-compatible gateways)</option><option value="rclone">rclone remote (S3, B2, Drive…)</option></select>
+                        <label style="font-weight:400; margin-left:10px">keep last <input type="number" class="form-control input-sm" id="rb-keep" min="1" max="365" style="width:70px; display:inline-block"> copies</label></div></div>
+                    <div class="rb-sec" data-m="sftp">
+                        <div class="form-group"><label class="col-sm-3 control-label">Host / port</label><div class="col-sm-9 form-inline"><input type="text" class="form-control input-sm" id="rb-sftp-host" data-validate="domain" placeholder="backup.example.com" style="width:260px"> <input type="number" class="form-control input-sm" id="rb-sftp-port" value="22" style="width:80px"></div></div>
+                        <div class="form-group"><label class="col-sm-3 control-label">User / key</label><div class="col-sm-9 form-inline"><input type="text" class="form-control input-sm" id="rb-sftp-user" placeholder="backup" style="width:140px"> <input type="text" class="form-control input-sm" id="rb-sftp-key" placeholder="/root/.ssh/id_ed25519" style="width:260px"></div></div>
+                        <div class="form-group"><label class="col-sm-3 control-label">Remote folder</label><div class="col-sm-9"><input type="text" class="form-control input-sm" id="rb-sftp-path" placeholder="/backups/csf"><small class="text-muted">The key's public half must be in the remote user's authorized_keys.</small></div></div>
+                    </div>
+                    <div class="rb-sec" data-m="webdav" style="display:none">
+                        <div class="form-group"><label class="col-sm-3 control-label">URL</label><div class="col-sm-9"><input type="text" class="form-control input-sm" id="rb-wd-url" placeholder="https://cloud.example.com/remote.php/dav/files/user/csf"></div></div>
+                        <div class="form-group"><label class="col-sm-3 control-label">User / password</label><div class="col-sm-9 form-inline"><input type="text" class="form-control input-sm" id="rb-wd-user" style="width:160px"> <input type="password" class="form-control input-sm" id="rb-wd-pass" placeholder="leave blank to keep" style="width:200px" autocomplete="new-password"></div></div>
+                    </div>
+                    <div class="rb-sec" data-m="rclone" style="display:none">
+                        <div class="form-group"><label class="col-sm-3 control-label">Remote path</label><div class="col-sm-9"><input type="text" class="form-control input-sm" id="rb-rc-remote" placeholder="s3:my-bucket/csf"><small class="text-muted" id="rb-rc-note">Configure the remote once with <code>rclone config</code> on the server.</small></div></div>
+                    </div>
+                    <div class="form-group"><div class="col-sm-9 col-sm-offset-3"><button type="submit" class="btn btn-primary btn-sm"><span class="ti ti-device-floppy"></span> Save</button> <button type="button" class="btn btn-default btn-sm" id="rb-test"><span class="ti ti-send"></span> Send test file</button></div></div>
+                </form>
+            </div>
+        </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 $(function() {
+    /* Off-server copies */
+    $('#rb-method').on('change', function() { $('.rb-sec').hide().filter('[data-m="' + this.value + '"]').show(); });
+    $.getJSON('/api/remote-backup', function(c) {
+        $('#rb-enabled').prop('checked', !!c.enabled); $('#rb-method').val(c.method).trigger('change'); $('#rb-keep').val(c.keep);
+        $('#rb-sftp-host').val(c.sftp.host); $('#rb-sftp-port').val(c.sftp.port); $('#rb-sftp-user').val(c.sftp.user); $('#rb-sftp-key').val(c.sftp.key); $('#rb-sftp-path').val(c.sftp.path);
+        $('#rb-wd-url').val(c.webdav.url); $('#rb-wd-user').val(c.webdav.user); if (c.webdav.password_set) $('#rb-wd-pass').attr('placeholder', 'saved — leave blank to keep');
+        $('#rb-rc-remote').val(c.rclone.remote); if (!c.rclone_available) $('#rb-rc-note').html('<span class="text-danger">rclone is not installed on this server</span> — install it or use SFTP/WebDAV.');
+    });
+    function rbPayload() {
+        return {enabled: $('#rb-enabled').is(':checked'), method: $('#rb-method').val(), keep: $('#rb-keep').val(),
+            sftp: {host: $('#rb-sftp-host').val(), port: parseInt($('#rb-sftp-port').val(), 10) || 22, user: $('#rb-sftp-user').val(), key: $('#rb-sftp-key').val(), path: $('#rb-sftp-path').val()},
+            webdav: {url: $('#rb-wd-url').val(), user: $('#rb-wd-user').val(), password: $('#rb-wd-pass').val()}, rclone: {remote: $('#rb-rc-remote').val()}};
+    }
+    $('#rb-form').on('submit', function(e) { e.preventDefault(); $.ajax({url: '/api/remote-backup', method: 'POST', contentType: 'application/json', data: JSON.stringify(rbPayload())}).done(function(r) { CSFv2.toast(r.success ? 'Off-server backup settings saved' : (r.error || 'Failed'), r.success ? 'success' : 'danger'); }); });
+    $('#rb-test').on('click', function() {
+        var b = $(this).prop('disabled', true);
+        $.ajax({url: '/api/remote-backup', method: 'POST', contentType: 'application/json', data: JSON.stringify(rbPayload())}).always(function() {
+            $.post('/api/remote-backup/test', function(r) { CSFv2.toast(r.success ? 'Test file sent to ' + r.target : 'Failed: ' + (r.error || ''), r.success ? 'success' : 'danger', 8000); }).always(function() { b.prop('disabled', false); });
+        });
+    });
     function load() {
         $.getJSON('/api/backups', function(data) {
             var html = '';

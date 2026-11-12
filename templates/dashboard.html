@@ -13,8 +13,8 @@
         <li><form method="POST" action="/action/restartboth"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit"><i class="ti ti-refresh"></i> Restart csf + lfd</button></form></li>
         <li><form method="POST" action="/action/restartq"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit"><i class="ti ti-bolt"></i> Quick restart (reload rules)</button></form></li>
         <li><form method="POST" action="/action/csftest"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit"><i class="ti ti-checkup-list"></i> Check server security</button></form></li>
-        <li><button type="button" class="confirmButton text-danger" data-query="Are you sure you want to stop the firewall?" data-action="/action/stop"><i class="ti ti-player-stop"></i> Stop csf</button></li>
-        <li><button type="button" class="confirmButton text-warning" data-query="Flush ALL permanent and temporary blocks?" data-action="/action/flushall"><i class="ti ti-trash"></i> Flush all blocks</button></li>
+        <li><button type="button" class="confirmButton text-danger" data-query="Stop the firewall?" data-consequence="Every port on this server becomes reachable from the internet and attack detection stops, until you start the firewall again." data-confirm-label="Stop firewall" data-action="/action/stop"><i class="ti ti-player-stop"></i> Stop csf</button></li>
+        <li><button type="button" class="confirmButton text-warning" data-query="Remove every block?" data-consequence="All permanent and temporary blocks are deleted. Attackers that were blocked can connect again immediately; LFD will have to catch them afresh." data-confirm-label="Remove all blocks" data-action="/action/flushall"><i class="ti ti-trash"></i> Flush all blocks</button></li>
         <li class="divider"></li>
         <li class="dropdown-header">LFD</li>
         <li><form method="POST" action="/action/lfdrestart"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit"><i class="ti ti-refresh"></i> Restart LFD</button></form></li>
@@ -111,6 +111,9 @@
 </div>
 {% endif %}
 
+<!-- Onboarding checklist (filled by JS, hidden when complete or dismissed) -->
+<div id="checklist" style="display:none"></div>
+
 <!-- IP action: one box for allow / block / temp / ignore / unblock / lookup / search -->
 <div class="panel panel-default ipact" id="ipact">
     <div class="panel-heading"><h4><i class="ti ti-bolt"></i> IP action</h4><span class="panel-hint">Pick an action, enter an IP or CIDR</span></div>
@@ -134,7 +137,9 @@
                     <button type="button" class="seg-item" data-act="search">Search</button>
                 </div>
                 <button type="submit" class="btn btn-primary ipact-go" id="ipact-go">Allow IP</button>
+                <button type="button" class="btn btn-default" id="ipact-ssh" title="Temporarily allow SSH from your current address"><i class="ti ti-key"></i> SSH to me (1h)</button>
             </div>
+            <div class="impact-note" id="ipact-impact" style="display:none"></div>
             <div class="ipact-extra" id="ipact-temp" style="display:none">
                 <input type="number" class="form-control input-sm" name="timeout" value="1" min="1" aria-label="Timeout">
                 <select class="form-control input-sm" name="dur" aria-label="Duration unit">
@@ -433,6 +438,26 @@ $(function() {
     }
     $('#ipact-seg').on('click', '.seg-item', function() { setAct($(this).data('act')); ipInput.focus(); });
     ipInput.on('input', checkInput);
+    /* Impact preview for blocks (what a network block would cover / clash with) */
+    var impactTimer = null;
+    ipInput.on('input', function() {
+        clearTimeout(impactTimer);
+        var v = $.trim(ipInput.val()), a = ACTS[current];
+        if (!a.warn || !validIp(v)) { $('#ipact-impact').hide(); return; }
+        impactTimer = setTimeout(function() {
+            $.getJSON('/api/impact', {type: 'block', target: v}, function(r) {
+                if (r.error) return;
+                var txt = (r.addresses > 1 ? r.addresses + ' addresses. ' : '') + 'Covers ' + r.attackers_covered + ' recent attacker IP(s), ' + r.blocks_covered + ' block(s).' + (r.warning ? ' ' + r.warning + ': ' + r.allowed_clash.join(', ') : '');
+                $('#ipact-impact').toggleClass('warn', !!r.warning).text(txt).show();
+            });
+        }, 400);
+    });
+    $('#ipact-ssh').on('click', function() {
+        var b = $(this).prop('disabled', true);
+        $.ajax({url: '/api/quick/ssh-window', method: 'POST', contentType: 'application/json', data: '{"hours":1}'})
+            .done(function(r) { CSFv2.toast(r.success ? 'SSH port ' + r.port + ' open to ' + r.ip + ' for 1 hour' : (r.error || 'Failed'), r.success ? 'success' : 'danger', 6000); CSFv2.refreshTempBadge(); })
+            .always(function() { b.prop('disabled', false); });
+    });
     form.on('submit', function(e) {
         var v = $.trim(ipInput.val());
         var a = ACTS[current];
@@ -441,7 +466,7 @@ $(function() {
         if (!a.ajax) return;           /* temp + search: normal POST, server flashes */
         e.preventDefault();
         go.prop('disabled', true);
-        $.post(a.url, form.serialize(), function(r) {
+        $.ajax({url: a.url, method: 'POST', data: form.serialize(), headers: {'X-Requested-With': 'XMLHttpRequest'}}).done(function(r) {
             if (r.success) {
                 CSFv2.toast(a.msg + ': ' + esc(v), 'success');
                 ipInput.val(''); $('#ipact-comment').val(''); checkInput();
@@ -604,7 +629,7 @@ $(function() {
                 var reason = (e.reason ? e.reason + ' · ' : '') + raw.replace(/\([A-Z]{2}\/[^)]*\)/, '').replace(/\s+-\s*$/, '').replace(/\s+/g, ' ').trim();
                 html += '<tr>' +
                     '<td class="mono"><a href="/ip/' + encodeURIComponent(e.ip) + '" title="Why is this IP blocked?">' + esc(e.ip) + '</a></td>' +
-                    '<td class="text-muted rb-reason" title="' + esc(e.time + ' ' + raw) + '">' + (cc ? esc(cc) + ' &middot; ' : '') + esc(reason.substring(0, 90)) + '</td>' +
+                    '<td class="text-muted rb-reason" title="' + esc(e.time + ' ' + raw) + '">' + (cc ? esc(cc) + ' &middot; ' : '') + '<span data-explain="' + esc(e.reason || raw) + '">' + esc(reason.substring(0, 90)) + '</span></td>' +
                     '<td class="text-right"><span class="pill ' + (temp ? 'pill-warning' : 'pill-danger') + '" title="' + esc(e.time) + '">' + (temp ? 'Temp' : 'Blocked') + '</span></td>' +
                     '<td class="text-right rb-actions">' +
                         '<a href="/ip-lookup?ip=' + encodeURIComponent(e.ip) + '" class="rb-btn" title="Look up"><i class="ti ti-search"></i></a>' +

@@ -39,6 +39,20 @@
         </div>
 
         <div class="row">
+            <!-- Suggested blocks -->
+            <div class="col-md-12">
+                <div class="panel panel-default">
+                    <div class="panel-heading"><h4 class="panel-title" style="margin:0"><span class="ti ti-bulb"></span> Suggested blocks</h4><span class="panel-hint" id="sg-hint">Groups recent attackers by network and provider</span></div>
+                    <div class="panel-body" style="padding:8px 16px 12px">
+                        <div class="row">
+                            <div class="col-md-6"><h5 style="margin-top:4px">By network (/24)</h5><table class="table table-condensed no-toolbar"><thead><tr><th>Network</th><th>Attackers</th><th>Blocks</th><th></th></tr></thead><tbody id="sg-cidr"><tr><td colspan="4" class="text-muted">Loading…</td></tr></tbody></table></div>
+                            <div class="col-md-6"><h5 style="margin-top:4px">By provider (ASN)</h5><table class="table table-condensed no-toolbar"><thead><tr><th>Provider</th><th>Attackers</th><th>From</th></tr></thead><tbody id="sg-asn"><tr><td colspan="3" class="text-muted">Loading…</td></tr></tbody></table>
+                            <p class="text-muted" style="font-size:11px">ASN-wide blocking needs the provider's full prefix list; block its worst /24s here, or use a blocklist feed.</p></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Top Attackers -->
             <div class="col-md-7">
                 <div class="panel panel-danger">
@@ -83,6 +97,32 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+$(function() {
+    function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+    function loadSuggestions() {
+        $.getJSON('/api/suggestions', function(r) {
+            $('#sg-cidr').html((r.cidr || []).map(function(s) {
+                var clash = s.allowed_clash.length ? '<br><small class="text-danger">contains allowed: ' + esc(s.allowed_clash.join(', ')) + '</small>' : '';
+                return '<tr><td><code>' + esc(s.target) + '</code><br><small class="text-muted">' + esc(s.examples.join(', ')) + '</small>' + clash + '</td><td>' + s.ips + '</td><td>' + s.blocks + '</td>' +
+                    '<td class="text-right"><button class="btn btn-default btn-xs js-block-net" data-target="' + esc(s.target) + '" data-ips="' + s.ips + '"' + (s.allowed_clash.length ? ' disabled title="Would block an allowed address"' : '') + '><i class="ti ti-ban"></i> Block /24</button></td></tr>';
+            }).join('') || '<tr><td colspan="4" class="text-muted">No network has 2+ recent attackers</td></tr>');
+            $('#sg-asn').html((r.asn || []).map(function(s) {
+                return '<tr><td><strong>' + esc(s.target) + '</strong> <small class="text-muted">' + esc(s.name) + '</small><br><small class="text-muted">' + esc(s.examples.join(', ')) + '</small></td><td>' + s.ips + '</td><td>' + esc((s.countries || []).join(', ')) + '</td></tr>';
+            }).join('') || '<tr><td colspan="3" class="text-muted">No provider with 2+ recent attackers (needs GeoIP lookups)</td></tr>');
+            $('#sg-hint').text(r.attackers + ' distinct attackers in the current LFD log');
+        });
+    }
+    $('#sg-cidr').on('click', '.js-block-net', function() {
+        var b = $(this), t = b.data('target');
+        if (!confirm('Block ' + t + '? That is 256 addresses; it covered ' + b.data('ips') + ' attacker(s) recently. You can undo it from the bell menu.')) return;
+        b.prop('disabled', true);
+        $.ajax({url: '/api/suggestions/block', method: 'POST', contentType: 'application/json', data: JSON.stringify({target: t})})
+            .done(function(r) { CSFv2.toast(r.success ? t + ' blocked' : (r.error || 'Failed'), r.success ? 'success' : 'danger'); loadSuggestions(); });
+    });
+    loadSuggestions();
+});
+</script>
 <script>
 $(function() {
     function loadAnalytics(hours) {

@@ -101,7 +101,7 @@ var CSFv2 = {
             url: url,
             method: 'POST',
             data: data || {},
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
             beforeSend: function() {
                 self.toast('Processing...', 'info', 2000);
             },
@@ -525,11 +525,157 @@ var CSFv2 = {
         bell.on('click', function(e) {
             e.preventDefault(); e.stopPropagation();
             panel.toggle();
-            if (panel.is(':visible')) { seen = Math.floor(Date.now() / 1000); localStorage.setItem('csfv2-bell-seen', seen); badge.hide(); }
+            if (panel.is(':visible')) { seen = Math.floor(Date.now() / 1000); localStorage.setItem('csfv2-bell-seen', seen); badge.hide(); self.renderRecentActions(); }
         });
         $(document).on('click', function(e) { if (!$(e.target).closest('#bell-panel, #bell-btn').length) panel.hide(); });
         load();
         setInterval(load, 60000);
+    },
+
+    // ---- Plain-English block reasons ----
+    _codes: null,
+    loadExplanations: function(cb) {
+        var self = this;
+        if (self._codes) { cb && cb(self._codes); return; }
+        try { var c = JSON.parse(sessionStorage.getItem('csfv2-explain') || 'null'); if (c) { self._codes = c; cb && cb(c); return; } } catch (e) {}
+        $.getJSON('/api/explain', function(c) { self._codes = c; try { sessionStorage.setItem('csfv2-explain', JSON.stringify(c)); } catch (e) {} cb && cb(c); });
+    },
+    explain: function(text) {
+        var codes = this._codes || {};
+        var m = /\[(LF_[A-Z0-9_]+|PS_LIMIT|CT_LIMIT|CONNLIMIT|PORTFLOOD|SYNFLOOD|UI|BLOCKLIST|CC_DENY|RBL)[^\]]*\]/.exec(text || '') || /\b(LF_[A-Z0-9_]+|PS_LIMIT|CT_LIMIT|CONNLIMIT|PORTFLOOD|SYNFLOOD)\b/.exec(text || '');
+        var code = m ? m[1] : '';
+        if (!code) {
+            var t = (text || '').toLowerCase();
+            code = /ssh/.test(t) ? 'LF_SSHD' : /port scan/.test(t) ? 'PS_LIMIT' : /syn flood/.test(t) ? 'SYNFLOOD' : /distributed/.test(t) ? 'LF_DISTATTACK' : /smtp|exim|postfix/.test(t) ? 'LF_SMTPAUTH' : /ftp/.test(t) ? 'LF_FTPD' : /imap|dovecot/.test(t) ? 'LF_IMAPD' : /pop3/.test(t) ? 'LF_POP3D' : /modsec/.test(t) ? 'LF_MODSEC' : /blocklist/.test(t) ? 'BLOCKLIST' : '';
+        }
+        return {code: code, text: codes[code] || (text ? 'Blocked by a firewall rule' : '')};
+    },
+    applyExplanations: function(root) {
+        var self = this;
+        this.loadExplanations(function() {
+            $(root || document).find('[data-explain]').each(function() {
+                var el = $(this), ex = self.explain(el.attr('data-explain'));
+                if (ex.text && !el.data('explained')) { el.data('explained', true).attr('title', el.attr('data-explain')).text(ex.text + (ex.code ? ' ' : '')).append(ex.code ? '<code style="font-size:10px">' + ex.code + '</code>' : ''); }
+            });
+        });
+    },
+
+    // ---- Basic / Advanced sidebar mode ----
+    BASIC_PAGES: ['/', '/tasks', '/qconfig', '/ip-lists', '/temp', '/health', '/notifications', '/backup-restore', '/settings', '/activity', '/m'],
+    initBasicMode: function() {
+        var self = this, mode = localStorage.getItem('csfv2-mode') || 'advanced';
+        var wrap = $('#mode-toggle');
+        if (!wrap.length) return;
+        function apply() {
+            var basic = mode === 'basic';
+            document.body.setAttribute('data-mode', mode);
+            $('.nav-section[data-group] .nav-item').each(function() {
+                var href = $(this).attr('href');
+                $(this).toggleClass('mode-hidden', basic && self.BASIC_PAGES.indexOf(href) < 0 && !$(this).hasClass('active'));
+            });
+            $('.nav-section[data-group]').each(function() { $(this).toggle(!basic || $(this).find('.nav-item:not(.mode-hidden)').length > 0); });
+            wrap.find('button').removeClass('active').filter('[data-mode="' + mode + '"]').addClass('active');
+        }
+        wrap.on('click', 'button', function() { mode = $(this).data('mode'); localStorage.setItem('csfv2-mode', mode); apply(); });
+        apply();
+    },
+
+    // ---- In-context help drawer ----
+    initHelpDrawer: function() {
+        var drawer = $('#help-drawer');
+        if (!drawer.length) return;
+        function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+        function open(path) {
+            drawer.addClass('open');
+            $('#help-body').html('<p class="text-muted">Loading…</p>');
+            $.getJSON('/api/page-help', {path: path || location.pathname}, function(h) {
+                $('#help-title').text(h.title || 'Help');
+                $('#help-body').html((h.body || []).map(function(p) { return '<p>' + esc(p) + '</p>'; }).join('') +
+                    (h.readme ? '<p><a href="' + esc(h.readme) + '" target="_blank" rel="noopener"><i class="ti ti-external-link"></i> CSF readme</a></p>' : ''));
+            });
+        }
+        $(document).on('click', '#help-btn, [data-help]', function(e) { e.preventDefault(); open($(this).attr('data-help')); });
+        $(document).on('click', '#help-close, #help-backdrop', function() { drawer.removeClass('open'); });
+        $(document).on('keydown', function(e) { if (e.key === 'Escape') drawer.removeClass('open'); if (e.key === '?' && !$(e.target).is('input,textarea,select')) { e.preventDefault(); open(); } });
+    },
+
+    // ---- Inline validation with examples ----
+    VALIDATORS: {
+        ip:    {re: /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$|^[0-9a-f:]{3,}(\/\d{1,3})?$/i, eg: '203.0.113.9 or 10.0.0.0/24', msg: 'Enter an IPv4/IPv6 address, optionally with /prefix'},
+        port:  {re: /^\d{1,5}$/, eg: '8080', msg: 'A single port number 1–65535', check: function(v) { return +v >= 1 && +v <= 65535; }},
+        ports: {re: /^(\d{1,5}(:\d{1,5})?)(\s*,\s*\d{1,5}(:\d{1,5})?)*$/, eg: '22,80,443 or 3000:3010', msg: 'Comma-separated ports or ranges like 3000:3010'},
+        cc:    {re: /^([A-Z]{2})(\s*,\s*[A-Z]{2})*$/i, eg: 'CN,RU,KP', msg: 'Two-letter country codes separated by commas'},
+        email: {re: /^[^@\s]+@[^@\s]+\.[^@\s]+$/, eg: 'admin@example.com', msg: 'Enter a valid email address'},
+        cron:  {re: /^(\S+\s+){4}\S+$/, eg: '0 3 * * *', msg: 'Five fields: minute hour day month weekday'},
+        domain:{re: /^[a-z0-9.-]+\.[a-z]{2,}$/i, eg: 'fw.example.com', msg: 'A hostname like fw.example.com'}
+    },
+    initValidation: function() {
+        var self = this;
+        function kindFor(el) {
+            var k = el.getAttribute('data-validate'); if (k) return k;
+            var n = (el.name || el.id || '').toLowerCase(), ph = (el.placeholder || '').toLowerCase();
+            if (/^(tcp|udp)6?_(in|out)$/.test(n) || n === 'ports') return 'ports';
+            if (/port/.test(n) && el.type !== 'number') return 'port';
+            if (/^ip$|ip_?addr|^cidr|address/.test(n) || /^\d+\.\d+\.\d+\.\d+/.test(ph)) return 'ip';
+            if (/^cc_|country/.test(n)) return 'cc';
+            if (/email|alert_to|alert_from/.test(n) && el.type !== 'number') return 'email';
+            if (/cron|schedule/.test(n)) return 'cron';
+            if (/domain|hostname/.test(n)) return 'domain';
+            return null;
+        }
+        $(document).on('input blur', 'input[type=text], input[type=search], input[type=email]', function() {
+            var el = this, kind = kindFor(el), v = $.trim(el.value), rule = self.VALIDATORS[kind];
+            if (!rule) return;
+            if (!el.placeholder) el.placeholder = rule.eg;
+            var msgEl = $(el).next('.val-msg');
+            if (!msgEl.length) msgEl = $('<div class="val-msg"></div>').insertAfter(el);
+            var ok = !v || (rule.re.test(v) && (!rule.check || rule.check(v)));
+            $(el).toggleClass('is-invalid', !ok);
+            msgEl.text(ok ? '' : rule.msg + ' — e.g. ' + rule.eg);
+        });
+        $(document).on('focus', 'input[type=text]', function() { var r = self.VALIDATORS[kindFor(this)]; if (r && !this.placeholder) this.placeholder = r.eg; });
+    },
+
+    // ---- Undo (recent actions in the bell panel) ----
+    renderRecentActions: function() {
+        var self = this, box = $('#bell-actions');
+        if (!box.length) return;
+        function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+        $.getJSON('/api/actions/recent', function(r) {
+            var a = r.actions || [];
+            if (!a.length) { box.html(''); return; }
+            box.html('<div class="bell-head" style="border-top:1px solid var(--border-light)"><span>Recent actions</span></div>' + a.slice(0, 6).map(function(x) {
+                var s = Math.floor(Date.now() / 1000 - x.ts), ago = s < 3600 ? Math.floor(s / 60) + 'm' : s < 86400 ? Math.floor(s / 3600) + 'h' : Math.floor(s / 86400) + 'd';
+                return '<div class="bell-item"><i class="ti ti-arrow-back-up"></i><div><b>' + esc(x.label) + '</b><span>' + esc(x.user || '') + ' · ' + ago + ' ago</span></div>' +
+                    (x.undone ? '<small class="text-muted">undone</small>' : (x.undo ? '<button class="btn btn-default btn-xs js-undo" data-id="' + esc(x.id) + '">Undo</button>' : '')) + '</div>';
+            }).join(''));
+        });
+        box.off('click', '.js-undo').on('click', '.js-undo', function(e) {
+            e.stopPropagation();
+            var b = $(this).prop('disabled', true);
+            $.ajax({url: '/api/actions/undo', method: 'POST', contentType: 'application/json', data: JSON.stringify({id: b.data('id')})}).done(function(r) {
+                self.toast(r.success ? 'Undone: ' + r.label : (r.error || 'Undo failed'), r.success ? 'success' : 'danger'); self.renderRecentActions();
+            }).fail(function() { b.prop('disabled', false); });
+        });
+    },
+
+    // ---- Onboarding checklist (dashboard) ----
+    initChecklist: function() {
+        var box = $('#checklist');
+        if (!box.length) return;
+        function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+        $.getJSON('/api/checklist', function(c) {
+            var items = c.items || [];
+            if (!items.length) return;
+            var key = 'csfv2-checklist-dismissed-' + c.done;
+            if (c.done === c.total || localStorage.getItem(key)) return;
+            box.html('<div class="panel panel-default checklist"><div class="panel-heading"><h4><i class="ti ti-checklist"></i> Getting set up <span class="panel-hint">' + c.done + ' of ' + c.total + ' done</span></h4><a href="#" class="panel-link js-dismiss">Hide</a></div>' +
+                '<div class="panel-body"><div class="checklist-bar"><b style="width:' + Math.round(c.done / c.total * 100) + '%"></b></div>' +
+                items.map(function(i) {
+                    return '<a class="check-item' + (i.ok ? ' done' : '') + '" href="' + esc(i.href) + '"><i class="ti ' + (i.ok ? 'ti-circle-check' : 'ti-circle') + '"></i><span><b>' + esc(i.title) + '</b>' + (i.ok ? '' : '<small>' + esc(i.detail) + '</small>') + '</span>' + (i.ok ? '' : '<i class="ti ti-chevron-right"></i>') + '</a>';
+                }).join('') + '</div></div>').show();
+            box.on('click', '.js-dismiss', function(e) { e.preventDefault(); localStorage.setItem(key, '1'); box.hide(); });
+        });
     },
 
     // ---- Command palette (Ctrl+K) ----
@@ -634,10 +780,15 @@ $(document).ready(function() {
     CSFv2.initSafeApply();
     CSFv2.initLoadingStates();
     CSFv2.initBell();
+    CSFv2.initBasicMode();
+    CSFv2.initHelpDrawer();
+    CSFv2.initValidation();
+    CSFv2.initChecklist();
+    CSFv2.applyExplanations(document);
     CSFv2.enhanceTables(document);
     /* Tables rendered later by page scripts get the same treatment */
     var _tblTimer = null, _mc = document.querySelector('.main-content');
-    if (_mc) new MutationObserver(function() { clearTimeout(_tblTimer); _tblTimer = setTimeout(function() { CSFv2.enhanceTables(_mc); }, 150); })
+    if (_mc) new MutationObserver(function() { clearTimeout(_tblTimer); _tblTimer = setTimeout(function() { CSFv2.enhanceTables(_mc); CSFv2.applyExplanations(_mc); }, 150); })
         .observe(_mc, {childList: true, subtree: true});
     /* Read-only users: block state-changing forms client-side (the server enforces it too) */
     if (document.body.getAttribute('data-role') === 'viewer') {
@@ -666,8 +817,11 @@ $(document).ready(function() {
         var query = $(this).data('query') || 'Are you sure?';
         var action = $(this).data('action');
         var form = $(this).closest('form');
+        var consequence = $(this).data('consequence') || '';
 
         $('#modal-text').text(query);
+        $('#modal-consequence').text(consequence).toggle(!!consequence);
+        $('#modal-submit').text($(this).data('confirm-label') || 'Confirm');
 
         if (action) {
             $('#modal-form').attr('action', action);

@@ -68,6 +68,7 @@
         {% set nav_groups = [
             ('main', 'Firewall', [
                 ('/', 'Dashboard', 'layout-dashboard', 'exact', ''),
+                ('/tasks', 'Guided tasks', 'route', 'exact', ''),
                 ('/status', 'Firewall Status', 'activity', 'exact', ''),
                 ('/config', 'Configuration', 'settings', 'exact', ''),
                 ('/qconfig', 'Quick Config', 'adjustments', 'prefix', ''),
@@ -78,6 +79,8 @@
                 ('/rules/builder', 'Rule Builder', 'hammer', 'exact', ''),
                 ('/ip-lists', 'Allow / Deny Lists', 'list-details', 'exact', ''),
                 ('/countries', 'Country Blocks', 'world', 'exact', ''),
+                ('/scheduled-rules', 'Scheduled Rules', 'calendar-time', 'exact', ''),
+                ('/blocklist-feeds', 'Blocklist Feeds', 'list-check', 'exact', ''),
             ]),
             ('logs', 'Logs & Security', [
                 ('/logs', 'Log Viewer', 'file-text', 'exact', ''),
@@ -88,6 +91,7 @@
                 ('/geoip-map', 'GeoIP Map', 'map-pin', 'exact', ''),
                 ('/alerts', 'Alert History', 'bell', 'exact', ''),
                 ('/audit', 'Audit Log', 'book', 'exact', ''),
+                ('/activity', 'Activity', 'history', 'exact', ''),
             ]),
             ('tools', 'Tools', [
                 ('/processes', 'Process Monitor', 'cpu', 'exact', ''),
@@ -141,6 +145,9 @@
         </div>
 
         <div class="sidebar-footer">
+            <div class="mode-toggle" id="mode-toggle" title="Basic shows the everyday pages; Advanced shows everything. Nothing is removed — Ctrl+K still finds every page.">
+                <button type="button" data-mode="basic">Basic</button><button type="button" data-mode="advanced">Advanced</button>
+            </div>
             <div class="sidebar-server-info">
                 <span class="pulse pulse-green" style="animation:none"></span>
                 <div>
@@ -177,14 +184,16 @@
                     <kbd>Ctrl K</kbd>
                 </button>
                 {% if session.get('role') == 'viewer' %}<span class="role-badge" title="Your account can view but not change anything">Read-only</span>{% endif %}
+                <a href="#" class="topbar-btn" id="help-btn" title="Help for this page (?)" aria-label="Help"><i class="ti ti-help-circle"></i></a>
                 <div class="bell-wrap">
                     <a href="#" class="topbar-btn" id="bell-btn" title="Notifications" aria-label="Notifications">
                         <i class="ti ti-bell"></i>
                         <span class="bell-badge" id="bell-badge" style="display:none"></span>
                     </a>
                     <div class="bell-panel" id="bell-panel" style="display:none">
-                        <div class="bell-head"><span>Recent events</span><a href="/notifications">Push settings</a></div>
+                        <div class="bell-head"><span>Recent events</span><a href="/activity">All activity</a></div>
                         <div class="bell-list" id="bell-list"><div class="bell-empty">Loading…</div></div>
+                        <div id="bell-actions"></div>
                     </div>
                 </div>
                 <a href="#" class="topbar-btn theme-toggle" title="Toggle dark mode (Ctrl+Shift+D)">
@@ -213,6 +222,15 @@
                     <input type="hidden" name="ip" id="palette-search-ip">
                 </form>
             </div>
+        </div>
+
+        <!-- In-context help drawer -->
+        <div class="help-drawer" id="help-drawer">
+            <div class="help-backdrop" id="help-backdrop"></div>
+            <aside class="help-panel" role="dialog" aria-label="Help">
+                <div class="help-head"><b id="help-title">Help</b><button type="button" class="btn btn-default btn-xs" id="help-close" aria-label="Close"><i class="ti ti-x"></i></button></div>
+                <div class="help-body" id="help-body"></div>
+            </aside>
         </div>
 
         <!-- Safe apply bar: unapplied changes / confirmation countdown / rollback notice -->
@@ -248,6 +266,7 @@
                 </div>
                 <div class="modal-body">
                     <p id="modal-text"></p>
+                    <p id="modal-consequence" class="modal-consequence" style="display:none"></p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>

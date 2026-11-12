@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import sys
+import json
 import subprocess
 import secrets
 import functools
@@ -26,6 +27,7 @@ from csf_backend import docker_log_monitor
 from csf_backend import service_integration
 from csf_backend import lfd_files
 from csf_backend import csfpost_editor
+from csf_backend import csfpost_model
 from csf_backend import security_check
 from csf_backend import port_defaults
 from csf_backend import log_viewer
@@ -59,6 +61,17 @@ from csf_backend import ip_report
 from csf_backend import api_tokens
 from csf_backend import config_history
 from csf_backend import servers as fleet
+from csf_backend import explain as explain_mod
+from csf_backend import page_help
+from csf_backend import actions_journal
+from csf_backend import suggestions
+from csf_backend import blocklist_feeds
+from csf_backend import scheduled_rules
+from csf_backend import presets
+from csf_backend import checklist
+from csf_backend import impact
+from csf_backend import digest
+from csf_backend import remote_backup
 import socket
 import time
 from flask import g
@@ -219,6 +232,12 @@ def _is_admin():
 def _actor():
     tok = getattr(g, "api_token", None)
     return f"token:{tok['name']}" if tok else session.get("username", "")
+
+
+def _wants_json():
+    return (request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            or "application/json" in request.headers.get("Accept", "")
+            or request.is_json)
 
 
 def _require_scope(scope):
@@ -402,6 +421,11 @@ def quick_allow():
         return redirect("/")
     result = csf.allow_ip(ip, comment)
     if result["success"]:
+        actions_journal.record("allow", f"Allowed {ip}", {"action": "remove_allow", "ip": ip}, _actor())
+        audit_log.log_event("action", _actor(), request.remote_addr, f"Allowed {ip} {comment}".strip())
+    if _wants_json():
+        return jsonify(result)
+    if result["success"]:
         flash(f"Allowed {ip}", "success")
     else:
         flash(result["stderr"], "danger")
@@ -418,6 +442,11 @@ def quick_deny():
         return redirect("/")
     result = csf.deny_ip(ip, comment)
     if result["success"]:
+        actions_journal.record("deny", f"Blocked {ip}", {"action": "remove_deny", "ip": ip}, _actor())
+        audit_log.log_event("action", _actor(), request.remote_addr, f"Blocked {ip} {comment}".strip())
+    if _wants_json():
+        return jsonify(result)
+    if result["success"]:
         flash(f"Denied {ip}", "success")
     else:
         flash(result["stderr"], "danger")
@@ -432,6 +461,10 @@ def quick_ignore():
         flash("IP address required", "danger")
         return redirect("/")
     result = csf.add_ignore(ip)
+    actions_journal.record("ignore", f"Added {ip} to csf.ignore", {"action": "remove_ignore", "ip": ip}, _actor())
+    audit_log.log_event("action", _actor(), request.remote_addr, f"Ignored {ip}")
+    if _wants_json():
+        return jsonify({"success": True} if not isinstance(result, dict) else {"success": result.get("success", True), **result})
     flash(f"Added {ip} to ignore list", "success")
     return redirect("/")
 
@@ -444,7 +477,10 @@ def quick_unblock():
         flash("IP address required", "danger")
         return redirect("/")
     result = csf.unblock_ip(ip)
-    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+    if result.get("success"):
+        actions_journal.record("unblock", f"Unblocked {ip}", {"action": "deny", "ip": ip, "comment": "re-blocked by undo"}, _actor())
+        audit_log.log_event("action", _actor(), request.remote_addr, f"Unblocked {ip}")
+    if _wants_json():
         return jsonify(result)
     if result["success"]:
         flash(f"Unblocked {ip}", "success")
@@ -715,33 +751,68 @@ def csf_file_save_api(filetype):
 
 # --- csfpost.sh / csfpre.sh editor ---
 
+def _csfpost_script(value=None):
+    script = value or request.args.get("script") or "csfpost"
+    return script if script in ("csfpost", "csfpre") else "csfpost"
+
+
 @app.route("/csfpost")
 @login_required
 def csfpost_view():
-    script = request.args.get("script", "csfpost")
-    if script not in ("csfpost", "csfpre"):
-        script = "csfpost"
+    script = _csfpost_script()
     info = csfpost_editor.get_script_info(script)
     return render_template(
         "csfpost.html",
         info=info,
         script=script,
         templates=csfpost_editor.RULE_TEMPLATES,
+        choices=csfpost_editor.FORM_CHOICES,
+        form_fields=csfpost_model.FORM_FIELDS,
+        target_opts=csfpost_model.TARGET_OPT_FIELDS,
+        servers=fleet.list_servers(),
         status=get_firewall_status(),
     )
+
+
+@app.route("/api/csfpost/tree")
+@login_required
+def csfpost_tree():
+    return jsonify(csfpost_editor.get_tree(_csfpost_script()))
+
+
+# Kept for older bookmarks / scripts that still call /parse.
+@app.route("/api/csfpost/parse")
+@login_required
+def csfpost_parse():
+    script = _csfpost_script()
+    return jsonify({"rules": csfpost_editor.parse_rules(csfpost_editor.read_script(script))})
 
 
 @app.route("/api/csfpost/save", methods=["POST"])
 @login_required
 def csfpost_save():
     data = request.get_json(silent=True) or {}
-    content = data.get("content", "")
-    script = data.get("script", "csfpost")
-    if script not in ("csfpost", "csfpre"):
-        script = "csfpost"
-    result = csfpost_editor.save_script(content, script)
-    if result["success"]:
+    script = _csfpost_script(data.get("script"))
+    result = csfpost_editor.save_script(data.get("content", ""), script)
+    if result.get("success"):
+        result.update(csfpost_editor.get_tree(script))
         result["message"] = "Saved. Restart CSF+LFD to apply changes."
+        audit_log.log_event("config_change", _actor(), request.remote_addr,
+                            f"Edited {script}.sh (raw editor)")
+    return jsonify(result)
+
+
+@app.route("/api/csfpost/edit", methods=["POST"])
+@login_required
+def csfpost_edit():
+    """One structural change - add, edit, move, enable/disable or delete a rule."""
+    data = request.get_json(silent=True) or {}
+    script = _csfpost_script(data.get("script"))
+    op = data.get("op", "")
+    result = csfpost_editor.apply_edit(script, op, data.get("payload") or {})
+    if result.get("success") and not result.get("unchanged"):
+        audit_log.log_event("config_change", _actor(), request.remote_addr,
+                            f"{script}.sh: {op}")
     return jsonify(result)
 
 
@@ -749,27 +820,148 @@ def csfpost_save():
 @login_required
 def csfpost_check():
     data = request.get_json(silent=True) or {}
-    content = data.get("content", "")
-    return jsonify(csfpost_editor.check_syntax(content))
+    return jsonify(csfpost_editor.check_syntax(data.get("content", "")))
+
+
+@app.route("/api/csfpost/dry-run", methods=["POST"])
+@login_required
+def csfpost_dry_run():
+    data = request.get_json(silent=True) or {}
+    content = data.get("content")
+    if content is None:
+        content = csfpost_editor.read_script(_csfpost_script(data.get("script")))
+    return jsonify(csfpost_editor.dry_run(content))
+
+
+@app.route("/api/csfpost/preview", methods=["POST"])
+@login_required
+def csfpost_preview():
+    data = request.get_json(silent=True) or {}
+    return jsonify(csfpost_editor.preview_rule(data.get("spec") or {}))
 
 
 @app.route("/api/csfpost/build-rule", methods=["POST"])
 @login_required
 def csfpost_build_rule():
     data = request.get_json(silent=True) or {}
-    template_id = data.get("template_id", "")
-    params = data.get("params", {})
-    return jsonify(csfpost_editor.build_rule(template_id, params))
+    return jsonify(csfpost_editor.build_rule(data.get("template_id", ""),
+                                             data.get("params", {})))
 
 
-@app.route("/api/csfpost/parse")
+# --- Backups -------------------------------------------------------------
+
+@app.route("/api/csfpost/backups")
 @login_required
-def csfpost_parse():
-    script = request.args.get("script", "csfpost")
-    if script not in ("csfpost", "csfpre"):
-        script = "csfpost"
-    info = csfpost_editor.get_script_info(script)
-    return jsonify({"rules": info["rules"]})
+def csfpost_backups():
+    script = _csfpost_script()
+    return jsonify({"backups": csfpost_editor.list_backups(script)})
+
+
+@app.route("/api/csfpost/backup")
+@login_required
+def csfpost_backup_read():
+    script = _csfpost_script()
+    content = csfpost_editor.read_backup(script, request.args.get("file", ""))
+    if content is None:
+        return jsonify({"success": False, "error": "Backup not found"}), 404
+    return jsonify({"success": True, "content": content})
+
+
+@app.route("/api/csfpost/restore", methods=["POST"])
+@login_required
+def csfpost_restore():
+    data = request.get_json(silent=True) or {}
+    script = _csfpost_script(data.get("script"))
+    result = csfpost_editor.restore_backup(script, data.get("file", ""))
+    if result.get("success"):
+        audit_log.log_event("config_change", _actor(), request.remote_addr,
+                            f"Restored {script}.sh from backup {data.get('file', '')}")
+    return jsonify(result)
+
+
+# --- Portable bundles: recreate this script on another server ------------
+
+@app.route("/api/csfpost/export")
+@login_required
+def csfpost_export():
+    script = _csfpost_script()
+    bundle = csfpost_editor.export_bundle(script)
+    if request.args.get("download"):
+        payload = json.dumps(bundle, indent=2)
+        return Response(
+            payload, mimetype="application/json",
+            headers={"Content-Disposition":
+                     f'attachment; filename="{script}-{bundle["exported"]}.csfv2.json"'})
+    if request.args.get("shell"):
+        return Response(bundle["content"] or "", mimetype="text/plain",
+                        headers={"Content-Disposition": f'attachment; filename="{script}.sh"'})
+    return jsonify(bundle)
+
+
+@app.route("/api/csfpost/import", methods=["POST"])
+@login_required
+def csfpost_import():
+    data = request.get_json(silent=True) or {}
+    script = _csfpost_script(data.get("script"))
+    mode = data.get("mode", "append")
+    if mode not in ("append", "merge", "replace"):
+        return jsonify({"success": False, "error": "Unknown import mode"}), 400
+    if data.get("raw") is not None:
+        result = csfpost_editor.import_raw(script, data.get("raw", ""), mode)
+    else:
+        result = csfpost_editor.import_bundle(script, data.get("bundle") or {},
+                                              mode, data.get("items"))
+    if result.get("success"):
+        audit_log.log_event("config_change", _actor(), request.remote_addr,
+                            f"Imported rules into {script}.sh ({mode})")
+    return jsonify(result)
+
+
+@app.route("/api/csfpost/pull", methods=["POST"])
+@login_required
+def csfpost_pull():
+    """Fetch another server's script so it can be previewed and imported here."""
+    data = request.get_json(silent=True) or {}
+    server = fleet._get_server(data.get("server", ""))
+    if not server:
+        return jsonify({"success": False, "error": "Unknown server"}), 404
+    script = _csfpost_script(data.get("script"))
+    r = fleet._request(server, "/api/v1/csfpost?script=" + script)
+    if not r.get("ok"):
+        return jsonify({"success": False, "error": r.get("error") or "Request failed"})
+    return jsonify({"success": True, "bundle": r.get("data") or {},
+                    "server": server["name"]})
+
+
+@app.route("/api/csfpost/push", methods=["POST"])
+@login_required
+def csfpost_push():
+    """Send this server's script to other CSF-eUI servers."""
+    data = request.get_json(silent=True) or {}
+    script = _csfpost_script(data.get("script"))
+    mode = data.get("mode", "append")
+    if mode not in ("append", "merge", "replace"):
+        return jsonify({"success": False, "error": "Unknown import mode"}), 400
+    bundle = csfpost_editor.export_bundle(script)
+    body = {"script": script, "mode": mode, "bundle": bundle,
+            "restart": bool(data.get("restart"))}
+    if data.get("items") is not None:
+        body["items"] = data["items"]
+    targets = [s for s in fleet._load()["servers"] if s["id"] in (data.get("servers") or [])]
+    out = []
+    for server in targets:
+        r = fleet._request(server, "/api/v1/csfpost", body)
+        payload = r.get("data") or {}
+        out.append({
+            "id": server["id"], "name": server["name"],
+            "ok": bool(r.get("ok")) and bool(payload.get("success")),
+            "error": r.get("error") or payload.get("error", ""),
+            "ms": r.get("ms"),
+        })
+    if out:
+        audit_log.log_event("config_change", _actor(), request.remote_addr,
+                            f"Pushed {script}.sh ({mode}) to " + ", ".join(x["name"] for x in out))
+    return jsonify({"success": True, "results": out})
 
 
 # --- Templates ---
@@ -1763,7 +1955,7 @@ def backups_view():
 def api_backup_create():
     data = request.get_json(force=True)
     label = data.get("label", "")
-    return jsonify(config_backup.create_backup(label))
+    return jsonify(remote_backup.maybe_upload(config_backup.create_backup(label)))
 
 
 @app.route("/api/backup/restore", methods=["POST"])
@@ -1828,16 +2020,17 @@ def api_health_quick_fix():
         return jsonify(result)
 
     if setting in _CSF_FIX_SETTINGS:
+        old = csf.load_csf_conf().get(setting, "")
         save_result = csf.save_csf_conf({setting: value})
         if not save_result.get("success"):
             return jsonify(save_result)
-        reload_result = csf.csf_restart()
+        config_history.record([{"key": setting, "old": old, "new": value}], session.get("username", ""))
+        actions_journal.record("health_fix", f"Health fix: {setting} = {value}", {"action": "set_conf", "key": setting, "value": old}, _actor())
         audit_log.log_event("config", session.get("username", ""), request.remote_addr,
                             f"Health quick-fix: csf {setting}={value}")
-        if reload_result.get("returncode", 1) != 0:
-            return jsonify({"success": True,
-                            "message": f"{setting} set to {value}. CSF reload had warnings — check logs."})
-        return jsonify({"success": True, "message": f"{setting} set to {value}. CSF reloaded."})
+        # No immediate restart: the safe-apply bar offers a restart with automatic rollback
+        return jsonify({"success": True, "safe_apply": True,
+                        "message": f"{setting} set to {value}. Use “Apply safely” in the bar at the top to restart with automatic rollback."})
 
     return jsonify({"success": False, "error": f"Setting '{setting}' is not allowed for quick-fix"})
 
@@ -2667,6 +2860,9 @@ def page_geoip_map():
 @app.route("/api/geoip-map")
 @login_required
 def api_geoip_map():
+    hours = request.args.get("hours", type=int)
+    if hours:
+        return jsonify(geoip_map.get_block_replay(min(hours, 24 * 30)))
     return jsonify(geoip_map.get_blocked_ips_geo())
 
 
@@ -2753,7 +2949,10 @@ def api_backups_list():
 @login_required
 def api_backups_create():
     data = request.get_json(force=True)
-    return jsonify(backup_restore.create_backup(data.get("label", "")))
+    result = backup_restore.create_backup(data.get("label", ""))
+    if result.get("success") and not result.get("path"):
+        result["path"] = os.path.join(backup_restore.BACKUP_DIR, result.get("filename") or (result.get("name", "") + ".tar.gz"))
+    return jsonify(remote_backup.maybe_upload(result))
 
 @app.route("/api/backups/upload", methods=["POST"])
 @login_required
@@ -3052,10 +3251,418 @@ def api_docker_exposure_restrict():
     proto = "udp" if data.get("proto") == "udp" else "tcp"
     if not 0 < port < 65536:
         return jsonify({"success": False, "error": "Invalid port"}), 400
-    res = docker.set_port_restriction(port, proto, bool(data.get("enable", True)))
+    enable = bool(data.get("enable", True))
+    res = docker.set_port_restriction(port, proto, enable)
     audit_log.log_event("action", _actor(), request.remote_addr,
-                        f"{'Restricted' if data.get('enable', True) else 'Unrestricted'} Docker port {port}/{proto}")
+                        f"{'Restricted' if enable else 'Unrestricted'} Docker port {port}/{proto}")
+    if res.get("success"):
+        actions_journal.record("docker_port", f"{'Restricted' if enable else 'Unrestricted'} Docker port {port}/{proto}",
+                               {"action": "unrestrict_port" if enable else "restrict_port", "port": port, "proto": proto}, _actor())
     return jsonify(res)
+
+
+# --- Explanations, in-context help, undo ---
+
+@app.route("/api/explain")
+@login_required
+def api_explain():
+    return jsonify(explain_mod.CODES)
+
+
+@app.route("/api/page-help")
+@login_required
+def api_page_help():
+    return jsonify(page_help.get(request.args.get("path", "/")))
+
+
+@app.route("/api/actions/recent")
+@login_required
+def api_actions_recent():
+    return jsonify({"actions": actions_journal.recent(10)})
+
+
+@app.route("/api/actions/undo", methods=["POST"])
+@login_required
+def api_actions_undo():
+    d = request.get_json(silent=True) or {}
+    r = actions_journal.undo(d.get("id", ""))
+    if r.get("success"):
+        audit_log.log_event("action", _actor(), request.remote_addr, f"Undo: {r.get('label')}")
+    return jsonify(r)
+
+
+# --- Block suggestions (/24 and ASN) and impact preview ---
+
+@app.route("/api/suggestions")
+@login_required
+def api_suggestions():
+    return jsonify(suggestions.suggest(lookup_asn=request.args.get("asn", "1") == "1"))
+
+
+@app.route("/api/suggestions/block", methods=["POST"])
+@login_required
+def api_suggestions_block():
+    d = request.get_json(silent=True) or {}
+    target = (d.get("target") or "").strip()
+    r = suggestions.block_cidr(target, d.get("comment", ""))
+    if r.get("success"):
+        actions_journal.record("block_cidr", f"Blocked network {target}", {"action": "remove_deny", "ip": target}, _actor())
+        audit_log.log_event("action", _actor(), request.remote_addr, f"Blocked network {target} (suggestion)")
+    return jsonify({"success": bool(r.get("success")), "error": (r.get("stderr") or r.get("error") or "")[:200]})
+
+
+@app.route("/api/impact")
+@login_required
+def api_impact():
+    kind = request.args.get("type", "block")
+    target = request.args.get("target", "")
+    return jsonify(impact.block(target) if kind == "block" else impact.port(target))
+
+
+# --- Blocklist feeds ---
+
+@app.route("/blocklist-feeds")
+@login_required
+def blocklist_feeds_page():
+    return render_template("blocklist_feeds.html", status=get_firewall_status())
+
+
+@app.route("/api/blocklist-feeds")
+@login_required
+def api_blocklist_feeds():
+    return jsonify({"feeds": blocklist_feeds.status(), "presets": {k: v[3] for k, v in blocklist_feeds.PRESETS.items()}})
+
+
+@app.route("/api/blocklist-feeds/toggle", methods=["POST"])
+@login_required
+def api_blocklist_feeds_toggle():
+    d = request.get_json(silent=True) or {}
+    r = blocklist_feeds.set_enabled(d.get("name", ""), bool(d.get("enabled")), (d.get("url") or "").strip() or None)
+    if r.get("success"):
+        audit_log.log_event("config_change", _actor(), request.remote_addr, f"Blocklist feed {d.get('name')} {'enabled' if d.get('enabled') else 'disabled'}")
+    return jsonify(r)
+
+
+# --- Temporary SSH window ---
+
+@app.route("/api/quick/ssh-window", methods=["POST"])
+@login_required
+def api_ssh_window():
+    d = request.get_json(silent=True) or {}
+    hours = max(1, min(24, int(d.get("hours") or 1)))
+    ip = request.remote_addr
+    try:
+        ssh_port = port_defaults._detect_ssh()
+    except Exception:
+        ssh_port = "22"
+    r = csf.temp_allow(ip, hours * 3600, ssh_port, f"SSH window for {session.get('username', '')}")
+    ok = bool(r.get("success"))
+    if ok:
+        actions_journal.record("ssh_window", f"Opened SSH ({ssh_port}) to {ip} for {hours}h", {"action": "remove_temp", "type": "allow", "ip": ip}, _actor())
+        audit_log.log_event("action", _actor(), request.remote_addr, f"Temporary SSH window: {ip} port {ssh_port} for {hours}h")
+    return jsonify({"success": ok, "ip": ip, "port": ssh_port, "hours": hours, "error": "" if ok else (r.get("stderr") or "")[:200]})
+
+
+# --- Rate-limit presets ---
+
+@app.route("/api/presets")
+@login_required
+def api_presets():
+    return jsonify({"presets": presets.list_presets()})
+
+
+@app.route("/api/presets/apply", methods=["POST"])
+@login_required
+def api_presets_apply():
+    d = request.get_json(silent=True) or {}
+    r = presets.apply(d.get("key", ""))
+    if r.get("success"):
+        config_history.record(r.get("changes", []), session.get("username", ""))
+        audit_log.log_event("config_change", _actor(), request.remote_addr, f"Applied rate-limit preset {d.get('key')}")
+    return jsonify(r)
+
+
+# --- Scheduled rules ---
+
+@app.route("/scheduled-rules")
+@login_required
+def scheduled_rules_page():
+    return render_template("scheduled_rules.html", status=get_firewall_status())
+
+
+@app.route("/api/scheduled-rules", methods=["GET"])
+@login_required
+def api_scheduled_rules():
+    return jsonify({"rules": scheduled_rules.list_rules(), "now": int(time.time())})
+
+
+@app.route("/api/scheduled-rules", methods=["POST"])
+@login_required
+def api_scheduled_rules_add():
+    d = request.get_json(silent=True) or {}
+    if not ip_report.valid_ip((d.get("ip") or "").strip()):
+        return jsonify({"success": False, "error": "Invalid IP or network"}), 400
+    ok, res = scheduled_rules.add(d.get("kind"), d.get("ip", ""), d.get("start"), d.get("end"), d.get("ports", ""), d.get("comment", ""), session.get("username", ""))
+    if ok:
+        scheduled_rules.tick()
+        audit_log.log_event("action", _actor(), request.remote_addr, f"Scheduled {d.get('kind')} {d.get('ip')} until {d.get('end')}")
+    return jsonify({"success": ok, "id" if ok else "error": res})
+
+
+@app.route("/api/scheduled-rules/<rid>", methods=["POST", "DELETE"])
+@login_required
+def api_scheduled_rules_edit(rid):
+    if request.method == "DELETE":
+        return jsonify({"success": scheduled_rules.delete(rid)})
+    d = request.get_json(silent=True) or {}
+    if d.get("op") == "extend":
+        return jsonify({"success": scheduled_rules.extend(rid, d.get("end"))})
+    if d.get("op") == "expire":
+        return jsonify({"success": scheduled_rules.expire_now(rid)})
+    return jsonify({"success": False, "error": "Unknown op"}), 400
+
+
+# --- Weekly digest ---
+
+@app.route("/api/digest/send", methods=["POST"])
+@login_required
+def api_digest_send():
+    return jsonify(digest.send())
+
+
+@app.route("/api/digest/preview")
+@login_required
+def api_digest_preview():
+    return jsonify({"body": digest.compose()})
+
+
+# --- Activity timeline (everything that changed, in one list) ---
+
+@app.route("/activity")
+@login_required
+def activity_page():
+    return render_template("activity.html", status=get_firewall_status())
+
+
+@app.route("/api/activity")
+@login_required
+def api_activity():
+    items = []
+    for e in audit_log.get_events(300):
+        try:
+            ts = int(time.mktime(time.strptime(e.get("ts", ""), "%Y-%m-%d %H:%M:%S")))
+        except (ValueError, TypeError):
+            ts = 0
+        items.append({"ts": ts, "source": "audit", "kind": e.get("type", ""), "who": e.get("user", ""), "ip": e.get("ip", ""), "what": e.get("detail", "")})
+    for h in config_history.recent(100):
+        items.append({"ts": h.get("ts", 0), "source": "config", "kind": "config_change", "who": h.get("user", ""), "ip": "",
+                      "what": "csf.conf: " + ", ".join(f"{c['key']}: {c['old']} → {c['new']}" for c in h.get("changes", [])[:6])})
+    for n in notifications.recent_events(100):
+        items.append({"ts": n.get("ts", 0), "source": "event", "kind": n.get("kind", ""), "who": "system", "ip": "", "what": n.get("title", "") + (" — " + n["body"].split("\n")[0] if n.get("body") else "")})
+    for a in actions_journal.recent(50):
+        items.append({"ts": a.get("ts", 0), "source": "action", "kind": a.get("kind", ""), "who": a.get("user", ""), "ip": "",
+                      "what": a.get("label", "") + (" (undone)" if a.get("undone") else "")})
+    try:
+        with open("/var/log/csfv2.log") as f:
+            for line in f.readlines()[-400:]:
+                if "safe-apply:" in line:
+                    try:
+                        ts = int(time.mktime(time.strptime(line[1:20], "%Y-%m-%d %H:%M:%S")))
+                    except ValueError:
+                        ts = 0
+                    items.append({"ts": ts, "source": "safe-apply", "kind": "safe_apply", "who": "system", "ip": "", "what": line.split("safe-apply:", 1)[1].strip()})
+    except OSError:
+        pass
+    items.sort(key=lambda i: -i["ts"])
+    return jsonify({"items": items[:500]})
+
+
+# --- Onboarding checklist ---
+
+@app.route("/api/checklist")
+@login_required
+def api_checklist():
+    try:
+        return jsonify(checklist.build(session.get("username", "")))
+    except Exception as e:
+        return jsonify({"items": [], "done": 0, "total": 0, "error": str(e)})
+
+
+# --- Off-server backups ---
+
+@app.route("/api/remote-backup", methods=["GET"])
+@login_required
+def api_remote_backup_get():
+    return jsonify(remote_backup.public())
+
+
+@app.route("/api/remote-backup", methods=["POST"])
+@login_required
+def api_remote_backup_save():
+    if not _is_admin():
+        return jsonify({"success": False, "error": "Admins only"}), 403
+    remote_backup.save(request.get_json(silent=True) or {})
+    audit_log.log_event("config_change", _actor(), request.remote_addr, "Updated off-server backup settings")
+    return jsonify({"success": True})
+
+
+@app.route("/api/remote-backup/test", methods=["POST"])
+@login_required
+def api_remote_backup_test():
+    return jsonify(remote_backup.test())
+
+
+# --- Mobile emergency view ---
+
+@app.route("/m")
+@login_required
+def mobile_page():
+    return render_template("mobile.html", status=get_firewall_status(), my_ip=request.remote_addr)
+
+
+# --- Guided tasks ---
+
+@app.route("/tasks")
+@login_required
+def tasks_page():
+    try:
+        ssh_port = port_defaults._detect_ssh()
+    except Exception:
+        ssh_port = "22"
+    return render_template("tasks.html", status=get_firewall_status(), my_ip=request.remote_addr, ssh_port=ssh_port,
+                           tcp_in=csf.load_csf_conf().get("TCP_IN", ""))
+
+
+# --- Token API additions: config profiles and inbound hooks ---
+
+PROFILE_KEYS = ("TCP_IN", "TCP_OUT", "UDP_IN", "UDP_OUT", "TCP6_IN", "TCP6_OUT", "UDP6_IN", "UDP6_OUT", "CC_DENY", "CC_ALLOW", "CC_ALLOW_FILTER",
+                "CT_LIMIT", "CT_INTERVAL", "CT_BLOCK_TIME", "CONNLIMIT", "PORTFLOOD", "SYNFLOOD", "SYNFLOOD_RATE", "SYNFLOOD_BURST",
+                "LF_SSHD", "LF_SSHD_PERM", "LF_FTPD", "LF_SMTPAUTH", "LF_POP3D", "LF_IMAPD", "LF_HTACCESS", "LF_MODSEC", "LF_DISTATTACK",
+                "PS_LIMIT", "PS_INTERVAL", "LF_PERMBLOCK", "LF_PERMBLOCK_COUNT", "LF_PERMBLOCK_INTERVAL", "DENY_IP_LIMIT", "DENY_TEMP_IP_LIMIT",
+                "LF_APACHE_404", "LF_APACHE_403", "RESTRICT_SYSLOG", "DOCKER")
+
+
+@app.route("/api/v1/config", methods=["GET"])
+@login_required
+def api_v1_config_get():
+    err = _require_scope("read")
+    if err:
+        return err
+    conf = csf.load_csf_conf()
+    return jsonify({k: conf.get(k, "") for k in PROFILE_KEYS if k in conf})
+
+
+@app.route("/api/v1/config", methods=["POST"])
+@login_required
+def api_v1_config_set():
+    err = _require_scope("config")
+    if err:
+        return err
+    d = request.get_json(silent=True) or {}
+    values = {k: str(v) for k, v in (d.get("values") or {}).items() if k in PROFILE_KEYS}
+    diff = config_history.diff(values)
+    if d.get("dry_run"):
+        return jsonify({"success": True, "changes": diff})
+    if not diff:
+        return jsonify({"success": True, "changes": []})
+    r = csf.save_csf_conf(values)
+    if r.get("success"):
+        config_history.record(diff, _actor())
+        audit_log.log_event("config_change", _actor(), request.remote_addr, f"Profile pushed: {len(diff)} setting(s)")
+        if d.get("restart"):
+            csf.restart_both()
+    return jsonify({"success": bool(r.get("success")), "changes": diff, "error": r.get("error", "")})
+
+
+@app.route("/api/v1/csfpost", methods=["GET"])
+@login_required
+def api_v1_csfpost_get():
+    """Export csfpost.sh / csfpre.sh as a portable bundle."""
+    err = _require_scope("script")
+    if err:
+        return err
+    return jsonify(csfpost_editor.export_bundle(_csfpost_script()))
+
+
+@app.route("/api/v1/csfpost", methods=["POST"])
+@login_required
+def api_v1_csfpost_set():
+    """Import a bundle sent by another CSF-eUI server."""
+    err = _require_scope("script")
+    if err:
+        return err
+    d = request.get_json(silent=True) or {}
+    script = _csfpost_script(d.get("script"))
+    mode = d.get("mode", "append")
+    if mode not in ("append", "merge", "replace"):
+        return jsonify({"success": False, "error": "Unknown import mode"}), 400
+    if d.get("raw") is not None:
+        result = csfpost_editor.import_raw(script, d.get("raw", ""), mode)
+    else:
+        result = csfpost_editor.import_bundle(script, d.get("bundle") or {},
+                                              mode, d.get("items"))
+    # The node tree is large and the caller does not need it over the wire.
+    result.pop("nodes", None)
+    result.pop("content", None)
+    if result.get("success"):
+        audit_log.log_event("config_change", _actor(), request.remote_addr,
+                            f"{script}.sh imported over API ({mode})")
+        if d.get("restart"):
+            restart = csf.restart_both()
+            result["restarted"] = bool(restart.get("success"))
+    return jsonify(result)
+
+
+@app.route("/api/v1/hook/<source>", methods=["POST"])
+@login_required
+def api_v1_hook(source):
+    """Inbound webhook from Fail2ban, CrowdSec, a WAF or anything else: {ip, action?, duration?, fleet?}."""
+    d = request.get_json(silent=True) or request.form
+    ip = (d.get("ip") or d.get("source_ip") or d.get("value") or "").strip()
+    action = (d.get("action") or d.get("type") or "deny").lower()
+    action = {"ban": "deny", "block": "deny", "unban": "unblock", "release": "unblock", "temp": "temp-deny", "tempban": "temp-deny"}.get(action, action)
+    if action not in ("deny", "temp-deny", "unblock", "allow") or not ip_report.valid_ip(ip):
+        return jsonify({"success": False, "error": "Need a valid ip and an action of deny/temp-deny/unblock/allow"}), 400
+    scope = {"deny": "deny", "temp-deny": "deny", "unblock": "unblock", "allow": "allow"}[action]
+    err = _require_scope(scope)
+    if err:
+        return err
+    comment = f"{source} hook" + (f": {d.get('reason')}" if d.get("reason") else "")
+    if action == "deny":
+        r = csf.deny_ip(ip, comment)
+    elif action == "temp-deny":
+        r = csf.temp_deny(ip, int(d.get("duration") or d.get("seconds") or 3600), "*", comment)
+    elif action == "allow":
+        r = csf.allow_ip(ip, comment)
+    else:
+        r = csf.unblock_ip(ip)
+    results = [{"name": socket.gethostname(), "ok": bool(r.get("success"))}]
+    if d.get("fleet") in (True, "1", "true", "yes"):
+        fa = {"deny": "deny", "temp-deny": "temp-deny", "unblock": "unblock", "allow": "allow"}[action]
+        results += [{"name": x["name"], "ok": x["ok"]} for x in fleet.fan_out(fa, ip, [s["id"] for s in fleet.list_servers()], comment, int(d.get("duration") or 3600))]
+    audit_log.log_event("action", _actor(), request.remote_addr, f"Hook {source}: {action} {ip} → " + ", ".join(f"{x['name']}={'ok' if x['ok'] else 'fail'}" for x in results))
+    return jsonify({"success": bool(r.get("success")), "ip": ip, "action": action, "results": results})
+
+
+# --- Push a config profile from this server to fleet servers ---
+
+@app.route("/api/servers/profile", methods=["POST"])
+@login_required
+def api_servers_profile():
+    d = request.get_json(silent=True) or {}
+    keys = [k for k in (d.get("keys") or []) if k in PROFILE_KEYS] or list(PROFILE_KEYS)
+    conf = csf.load_csf_conf()
+    values = {k: conf.get(k, "") for k in keys if k in conf}
+    body = {"values": values, "dry_run": bool(d.get("dry_run", True)), "restart": bool(d.get("restart"))}
+    targets = [s for s in fleet._load()["servers"] if s["id"] in (d.get("servers") or [])]
+    out = []
+    for s in targets:
+        r = fleet._request(s, "/api/v1/config", body)
+        data = r.get("data") or {}
+        out.append({"id": s["id"], "name": s["name"], "ok": r["ok"] and bool(data.get("success", True)), "error": r.get("error") or data.get("error", ""), "changes": data.get("changes", [])})
+    if not body["dry_run"]:
+        audit_log.log_event("config_change", _actor(), request.remote_addr, f"Pushed profile ({len(values)} keys) to " + ", ".join(x["name"] for x in out))
+    return jsonify({"success": True, "results": out, "keys": keys})
 
 
 # --- Safe apply (restart with automatic rollback) ---
