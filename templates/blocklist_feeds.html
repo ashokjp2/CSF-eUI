@@ -18,7 +18,7 @@
 {% block scripts %}
 <script>
 $(function() {
-    function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+    function esc(t) { return CSFv2.escapeHtml(t); }
     var HEALTH = {ok: 'Fetching fine', stale: 'Not fetched recently — check the URL or LFD', never: 'Enabled but never fetched yet', empty: 'Fetched but contains no addresses', 'needs-key': 'Needs an API key in the URL', off: 'Disabled'};
     function load() {
         $.getJSON('/api/blocklist-feeds', function(r) {

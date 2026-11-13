@@ -48,6 +48,7 @@
 {% block scripts %}
 <script>
 $(function() {
+    function esc(t) { return CSFv2.escapeHtml(t); }
     var currentSort = 'cpu';
 
     function loadProcesses() {
@@ -56,9 +57,9 @@ $(function() {
             d.processes.forEach(function(p) {
                 var cpuCls = p.cpu > 50 ? 'danger' : p.cpu > 20 ? 'warning' : '';
                 var memCls = p.mem > 50 ? 'danger' : p.mem > 20 ? 'warning' : '';
-                html += '<tr class="' + cpuCls + '" data-search="' + (p.user + ' ' + p.command).toLowerCase() + '">' +
+                html += '<tr class="' + cpuCls + '" data-search="' + esc((p.user + ' ' + p.command).toLowerCase()) + '">' +
                     '<td><code>' + p.pid + '</code></td>' +
-                    '<td>' + p.user + '</td>' +
+                    '<td>' + esc(p.user) + '</td>' +
                     '<td><strong>' + p.cpu + '%</strong></td>' +
                     '<td>' + p.mem + '%</td>' +
                     '<td><span class="label label-default">' + p.stat + '</span></td>' +
@@ -75,7 +76,7 @@ $(function() {
         $.getJSON('/api/processes/ports', function(ports) {
             var html = '';
             ports.forEach(function(p) {
-                html += '<tr><td><strong>' + p.port + '</strong></td><td><code>' + p.bind + '</code></td><td>' + p.process + '</td><td><span class="label label-success">' + p.state + '</span></td></tr>';
+                html += '<tr><td><strong>' + esc(p.port) + '</strong></td><td><code>' + esc(p.bind) + '</code></td><td>' + esc(p.process) + '</td><td><span class="label label-success">' + esc(p.state) + '</span></td></tr>';
             });
             $('#ports-tbody').html(html || '<tr><td colspan="4" class="text-muted">No listening ports found</td></tr>');
         });

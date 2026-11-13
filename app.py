@@ -103,10 +103,13 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = True
 app.config["PERMANENT_SESSION_LIFETIME"] = 43200  # 12 hours
+app.config["MAX_CONTENT_LENGTH"] = 52 * 1024 * 1024
 
 
 @app.after_request
 def set_security_headers(response):
+    if request.endpoint != "static":
+        response.headers["Cache-Control"] = "no-store"
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
@@ -119,6 +122,7 @@ def set_security_headers(response):
         "font-src 'self' https://maxcdn.bootstrapcdn.com https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
         "img-src 'self' data: https://cdnjs.cloudflare.com; "
         "connect-src 'self'; "
+        "object-src 'none'; base-uri 'self'; form-action 'self'; "
         "frame-ancestors 'self';"
     )
     return response
@@ -182,6 +186,22 @@ VIEWER_POST_OK = ("/settings", "/quick/search", "/logs/tail", "/logs/grep", "/lo
 
 
 @app.before_request
+def validate_session():
+    if not session.get("logged_in"):
+        return
+    user = auth.load_auth_config().get("users", {}).get(session.get("username"))
+    fingerprint = session.get("auth_fingerprint", "")
+    if (not user or not hmac.compare_digest(fingerprint, auth.session_fingerprint(user))
+            or not auth.valid_session(session.get("session_id"), session.get("username"), fingerprint)
+            or not auth.is_ip_allowed(request.remote_addr) or auth.is_ip_banned(request.remote_addr)):
+        auth.revoke_session(session.get("session_id"))
+        session.clear()
+        return redirect(url_for("login"))
+    # Role changes take effect immediately, including in existing sessions.
+    session["role"] = user.get("role", "admin")
+
+
+@app.before_request
 def check_api_token():
     """Bearer-token access for /api/v1/*: no session, no CSRF."""
     if not request.path.startswith("/api/v1/"):
@@ -197,20 +217,19 @@ def check_api_token():
 def check_csrf():
     if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
         return
-    if request.path.startswith("/.well-known/") or request.path.startswith("/api/v1/"):
+    if getattr(g, "api_token", None):
         return
-    if request.path == "/login":
-        return
-    if session.get("role") == "viewer" and not any(request.path.startswith(p) for p in VIEWER_POST_OK):
+    if session.get("role") == "viewer" and request.path not in VIEWER_POST_OK:
         if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.path.startswith("/api/") or request.is_json:
             return jsonify({"success": False, "error": "Your account is read-only"}), 403
         flash("Your account is read-only", "warning")
-        return redirect(request.referrer or "/")
+        return redirect("/")
     # Accept token from header (AJAX) or form field
+    body = request.get_json(silent=True)
     token = (request.headers.get("X-CSRFToken")
              or request.form.get("csrf_token")
-             or (request.get_json(silent=True) or {}).get("csrf_token"))
-    if not token or not hmac.compare_digest(token, session.get("csrf_token", "")):
+             or (body.get("csrf_token") if isinstance(body, dict) else None))
+    if not isinstance(token, str) or not token.isascii() or not token or not hmac.compare_digest(token, session.get("csrf_token", "")):
         return jsonify({"error": "CSRF validation failed"}), 403
     # Safe apply: keep a known-good snapshot before the first firewall config change
     if session.get("logged_in") and safe_apply.is_change_path(request.path):
@@ -229,8 +248,15 @@ def login_required(f):
     return decorated
 
 
+def _local_path(target):
+    """Only same-site paths are followed; anything else goes to the dashboard."""
+    if not isinstance(target, str) or not target.startswith("/") or target.startswith(("//", "/\\")):
+        return "/"
+    return target.splitlines()[0]
+
+
 def _is_admin():
-    return session.get("role", "admin") == "admin"
+    return bool(session.get("logged_in")) and session.get("role") == "admin"
 
 
 def _actor():
@@ -278,7 +304,9 @@ def login():
         if ok:
             if auth.second_factor_status(username)["enabled"]:
                 session.clear()
-                session["pending_2fa"] = {"username": username, "expires": int(time.time()) + 300}
+                user = auth.load_auth_config()["users"][username]
+                session["pending_2fa"] = {"username": username, "expires": int(time.time()) + 300,
+                                          "fingerprint": auth.session_fingerprint(user)}
                 return redirect(url_for("login_2fa"))
             _complete_login(username, remote_ip)
             return redirect(url_for("dashboard"))
@@ -289,24 +317,34 @@ def login():
 
 
 def _complete_login(username, remote_ip):
-    session.pop("pending_2fa", None)
+    user = auth.load_auth_config()["users"][username]
+    auth.revoke_session(session.get("session_id"))
+    session.clear()
     session["logged_in"] = True
     session["username"] = username
     session["role"] = auth.get_role(username)
+    session["auth_fingerprint"] = auth.session_fingerprint(user)
+    session["session_id"] = auth.create_session(username, session["auth_fingerprint"])
     session.permanent = True
+    auth.clear_failed(remote_ip)
     login_history.record_login(username, remote_ip, True)
     notifications.event("ui_login", "UI login", f"'{username}' signed in from {remote_ip}")
 
 
 @app.route("/login/2fa", methods=["GET", "POST"])
 def login_2fa():
-    pending = session.get("pending_2fa") or {}
+    pending = _pending_2fa() or {}
     if not pending.get("username") or time.time() > pending.get("expires", 0):
         session.pop("pending_2fa", None)
         flash("Sign in again to continue", "warning")
         return redirect(url_for("login"))
     if request.method == "POST":
         remote_ip = request.remote_addr
+        ok, msg = auth.pre_login_check(auth.load_auth_config(), remote_ip)
+        if not ok:
+            flash(msg, "danger")
+            return render_template("login_2fa.html", twofa=auth.second_factor_status(pending["username"]),
+                                   passkey_problem=_passkey_problem(), error=msg), 429
         if auth.totp_check_login(pending["username"], request.form.get("code", "")):
             _complete_login(pending["username"], remote_ip)
             return redirect(url_for("dashboard"))
@@ -345,12 +383,16 @@ def _passkey_challenge(key, mode=None):
     state = session.pop(key, None) or {}
     if not state.get("challenge") or time.time() > state.get("expires", 0) or state.get("mode") != mode:
         return None
+    if not auth.consume_challenge(state.get("nonce"), state["challenge"]):
+        return None
     return state["challenge"]
 
 
 def _pending_2fa():
     pending = session.get("pending_2fa") or {}
-    if pending.get("username") and time.time() <= pending.get("expires", 0):
+    user = auth.load_auth_config().get("users", {}).get(pending.get("username"))
+    if (user and time.time() <= pending.get("expires", 0)
+            and hmac.compare_digest(pending.get("fingerprint", ""), auth.session_fingerprint(user))):
         return pending
     return None
 
@@ -362,7 +404,8 @@ def api_passkey_register_options():
         opts, challenge = passkeys.registration_options(session.get("username", "admin"), request.host)
     except RuntimeError as e:
         return jsonify({"success": False, "error": str(e)}), 400
-    session["passkey_reg"] = {"challenge": challenge, "expires": int(time.time()) + passkeys.CHALLENGE_TTL}
+    session["passkey_reg"] = {"challenge": challenge, "expires": int(time.time()) + passkeys.CHALLENGE_TTL,
+                              "nonce": auth.issue_challenge(challenge)}
     return jsonify({"success": True, "options": json.loads(opts)})
 
 
@@ -390,6 +433,9 @@ def api_passkey_login_options():
     from the login page, where the passkey plus the device's PIN/biometric is the whole sign-in."""
     body = request.get_json(silent=True) or {}
     pending = _pending_2fa()
+    ok, msg = auth.pre_login_check(auth.load_auth_config(), request.remote_addr)
+    if not ok:
+        return jsonify({"success": False, "error": msg}), 429
     if session.get("logged_in"):
         return jsonify({"success": False, "error": "Already signed in"}), 400
     try:
@@ -406,7 +452,8 @@ def api_passkey_login_options():
     except RuntimeError as e:
         return jsonify({"success": False, "error": str(e)}), 400
     session["passkey_auth"] = {"challenge": challenge, "mode": mode,
-                               "expires": int(time.time()) + passkeys.CHALLENGE_TTL}
+                               "expires": int(time.time()) + passkeys.CHALLENGE_TTL,
+                               "nonce": auth.issue_challenge(challenge)}
     return jsonify({"success": True, "options": json.loads(opts)})
 
 
@@ -416,6 +463,9 @@ def api_passkey_login_verify():
     cred = body.get("credential") or {}
     remote_ip = request.remote_addr
     pending = _pending_2fa()
+    ok, msg = auth.pre_login_check(auth.load_auth_config(), remote_ip)
+    if not ok:
+        return jsonify({"success": False, "error": msg}), 429
     if pending:
         challenge = _passkey_challenge("passkey_auth", "2fa")
         username = pending["username"]
@@ -448,6 +498,7 @@ def api_passkey_login_verify():
 
 @app.route("/logout")
 def logout():
+    auth.revoke_session(session.get("session_id"))
     session.clear()
     return redirect(url_for("login"))
 
@@ -482,7 +533,7 @@ def dashboard():
 @login_required
 def csf_action(action):
     result = None
-    redirect_to = request.form.get("redirect_to", "/")
+    redirect_to = _local_path(request.form.get("redirect_to", "/"))
 
     actions = {
         "start": csf.csf_start,
@@ -663,7 +714,10 @@ def temp_list():
 def temp_add():
     ip = request.form.get("ip", "").strip()
     action = request.form.get("do", "block")
-    timeout = int(request.form.get("timeout", "3600"))
+    try:
+        timeout = int(request.form.get("timeout", "3600"))
+    except ValueError:
+        timeout = 0
     dur = request.form.get("dur", "seconds")
     ports = request.form.get("ports", "*").strip() or "*"
     comment = request.form.get("comment", "").strip()
@@ -1191,7 +1245,7 @@ _ALLOWED_LOG_DIRS = (
     "/var/log/",
     "/var/lib/csf/",
     "/etc/csf/",
-    "/tmp/csfv2",
+    "/tmp/csfv2/",
 )
 
 _ALLOWED_LOG_FILES = {
@@ -1546,7 +1600,11 @@ def settings_view():
         if action == "change_password":
             new_pass = request.form.get("new_password", "")
             confirm = request.form.get("confirm_password", "")
-            if not new_pass or len(new_pass) < 8:
+            current = request.form.get("current_password", "")
+            me = auth.load_auth_config().get("users", {}).get(session.get("username", ""), {})
+            if not current or not auth.verify_password(current, me.get("password", "")):
+                flash("Current password is incorrect", "danger")
+            elif not new_pass or len(new_pass) < 8:
                 flash("Password must be at least 8 characters", "danger")
             elif new_pass != confirm:
                 flash("Passwords do not match", "danger")
@@ -1698,9 +1756,10 @@ def confirm_username():
     if not token:
         flash("Missing verification token", "danger")
         return redirect(url_for("settings_view"))
-    ok, new_username_or_err = auth.confirm_username_change(token)
+    ok, new_username_or_err = auth.confirm_username_change(token, session.get("username"))
     if ok:
-        session["username"] = new_username_or_err
+        auth.revoke_session(session.get("session_id"))
+        session.clear()
         flash(f"Username successfully changed to '{new_username_or_err}'", "success")
     else:
         flash(f"Verification failed: {new_username_or_err}", "danger")
@@ -2489,7 +2548,7 @@ def api_version_check():
     return jsonify(app_updater.get_version_info(force=force))
 
 
-@app.route("/api/version/update-stream")
+@app.route("/api/version/update-stream", methods=["POST"])
 @login_required
 def api_version_update_stream():
     from flask import stream_with_context

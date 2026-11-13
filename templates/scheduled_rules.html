@@ -48,7 +48,7 @@
 <script>
 $(function() {
     var kind = 'allow';
-    function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+    function esc(t) { return CSFv2.escapeHtml(t); }
     function toLocal(ts) { var d = new Date(ts * 1000); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); }
     function fmt(ts) { return new Date(ts * 1000).toLocaleString([], {dateStyle: 'short', timeStyle: 'short'}); }
     $('#sr-kind').on('click', '.seg-item', function() { kind = $(this).data('kind'); $('#sr-kind .seg-item').removeClass('active'); $(this).addClass('active'); });

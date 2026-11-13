@@ -147,13 +147,13 @@ def _validate_archive(path):
     """Validate that an archive contains only regular, expected CSF files."""
     try:
         with tarfile.open(path, "r:gz") as tar:
-            members = tar.getmembers()
-            if not members:
-                return False, "Backup archive is empty"
-
             allowed_files = set(BACKUP_FILES) | set(SSL_ARCHIVE_FILES)
             seen = set()
-            for member in members:
+            total_size = 0
+            for member in tar:
+                total_size += member.size
+                if total_size > MAX_UPLOAD_BYTES:
+                    return False, "Uncompressed backup exceeds 50 MB"
                 if member.name not in allowed_files:
                     return False, f"Unexpected file in backup: {member.name}"
                 if member.name in seen:
@@ -161,6 +161,8 @@ def _validate_archive(path):
                 if not member.isfile():
                     return False, f"Backup contains a non-regular file: {member.name}"
                 seen.add(member.name)
+            if not seen:
+                return False, "Backup archive is empty"
             ssl_members = set(SSL_ARCHIVE_FILES) & seen
             if ssl_members and ssl_members != set(SSL_ARCHIVE_FILES):
                 return False, "SSL backup is incomplete"
@@ -170,7 +172,7 @@ def _validate_archive(path):
                     paths = json.load(metadata)
                 except (TypeError, ValueError):
                     return False, "Invalid SSL path metadata in backup"
-                if not (
+                if not isinstance(paths, dict) or not (
                     _is_allowed_ssl_path(paths.get("cert_path"))
                     and _is_allowed_ssl_path(paths.get("key_path"))
                 ):
@@ -244,8 +246,19 @@ def restore_backup(filename):
         with tarfile.open(path, "r:gz") as tar:
             members = tar.getmembers()
             config_members = [member for member in members if member.name in BACKUP_FILES]
-            if config_members:
-                tar.extractall(CSF_DIR, members=config_members)
+            for member in config_members:
+                target = os.path.join(CSF_DIR, member.name)
+                temporary = None
+                try:
+                    with tempfile.NamedTemporaryFile(dir=CSF_DIR, delete=False) as destination:
+                        temporary = destination.name
+                        os.chmod(temporary, 0o600)
+                        with tar.extractfile(member) as source:
+                            shutil.copyfileobj(source, destination)
+                    os.replace(temporary, target)
+                finally:
+                    if temporary and os.path.exists(temporary):
+                        os.unlink(temporary)
 
             ssl_members = set(SSL_ARCHIVE_FILES) & {member.name for member in members}
             if ssl_members:

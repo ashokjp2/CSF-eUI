@@ -157,6 +157,7 @@ def find_user_by_credential(cred_id):
     return None
 
 
+@auth._auth_transaction
 def remove_passkey(username, cred_id, password):
     """Delete one passkey. Requires the account password. Returns (ok, message)."""
     config = auth.load_auth_config()
@@ -182,6 +183,7 @@ def remove_passkey(username, cred_id, password):
     return True, f"Passkey '{removed.get('name', '')}' removed"
 
 
+@auth._auth_transaction
 def rename_passkey(username, cred_id, name):
     config = auth.load_auth_config()
     user = _user(config, username)
@@ -222,6 +224,7 @@ def _descriptor(p):
     return PublicKeyCredentialDescriptor(id=base64url_to_bytes(p["id"]), transports=transports or None)
 
 
+@auth._auth_transaction
 def registration_options(username, host):
     """Build the browser's create() options. Returns (options_json_str, challenge_b64url)."""
     ok, reason = availability()
@@ -265,6 +268,7 @@ def registration_options(username, host):
     return options_to_json(opts), bytes_to_base64url(opts.challenge)
 
 
+@auth._auth_transaction
 def registration_verify(username, host, origin, challenge_b64url, credential_json, name):
     """Check the browser's create() result and store the new passkey.
 
@@ -347,6 +351,7 @@ def authentication_options(username, host, passwordless=False):
     return options_to_json(opts), bytes_to_base64url(opts.challenge)
 
 
+@auth._auth_transaction
 def authentication_verify(username, host, origin, challenge_b64url, credential_json, require_uv=False):
     """Check the browser's get() result against the stored passkey. Returns (ok, message).
 

@@ -281,14 +281,19 @@ else
     while true; do
         read -r -s -p "  Password: " ADMIN_PASS; echo
         read -r -s -p "  Confirm password: " ADMIN_PASS2; echo
+        if [[ ${#ADMIN_PASS} -lt 12 ]]; then
+            warn "Password must be at least 12 characters."
+            continue
+        fi
         [[ "$ADMIN_PASS" == "$ADMIN_PASS2" ]] && break
         warn "Passwords do not match, try again."
     done
 
+    CSFV2_SETUP_USER="$ADMIN_USER" CSFV2_SETUP_PASSWORD="$ADMIN_PASS" \
     "$INSTALL_DIR/venv/bin/python3" -c "
-import sys; sys.path.insert(0, '$INSTALL_DIR')
+import os, sys; sys.path.insert(0, os.getcwd())
 from csf_backend.auth import create_user
-create_user('$ADMIN_USER', '$ADMIN_PASS')
+create_user(os.environ['CSFV2_SETUP_USER'], os.environ['CSFV2_SETUP_PASSWORD'])
 print('User created.')
 "
     info "Admin user '$ADMIN_USER' created."

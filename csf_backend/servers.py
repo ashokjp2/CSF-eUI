@@ -18,6 +18,12 @@ TIMEOUT = 8
 ACTIONS = {"allow": "allow", "deny": "deny", "unblock": "unblock", "temp-deny": "temp-deny"}
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # Never forward a server's bearer token to a redirect destination.
+        return None
+
+
 def _load():
     try:
         with open(REGISTRY_PATH) as f:
@@ -98,7 +104,8 @@ def _request(server, path, body=None):
         ctx.verify_mode = ssl.CERT_NONE
     t0 = time.time()
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT, context=ctx) as r:
+        opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx), _NoRedirect())
+        with opener.open(req, timeout=TIMEOUT) as r:
             payload = json.loads(r.read().decode("utf-8", "replace") or "{}")
             return {"ok": True, "data": payload, "ms": int((time.time() - t0) * 1000)}
     except urllib.error.HTTPError as e:

@@ -2,6 +2,7 @@ import os
 import shutil
 import tarfile
 import time
+import tempfile
 from pathlib import Path
 
 CSF_DIR = "/etc/csf"
@@ -19,6 +20,7 @@ CSF_FILES = [
 
 def _ensure_dir():
     os.makedirs(BACKUP_DIR, exist_ok=True)
+    os.chmod(BACKUP_DIR, 0o700)
 
 
 def create_backup(label=""):
@@ -37,6 +39,7 @@ def create_backup(label=""):
                 if os.path.isfile(full):
                     tar.add(full, arcname=fn)
         size = os.path.getsize(tar_path)
+        os.chmod(tar_path, 0o600)
         _cleanup_old()
         return {
             "success": True,
@@ -98,10 +101,23 @@ def restore_backup(filename):
     try:
         with tarfile.open(path, "r:gz") as tar:
             names = tar.getnames()
+            if len(names) != len(set(names)) or any(not m.isfile() for m in tar.getmembers()):
+                return {"success": False, "error": "Backup must contain unique regular files"}
             for name in names:
                 if name not in CSF_FILES:
                     return {"success": False, "error": f"Unexpected file in backup: {name}"}
-            tar.extractall(path=CSF_DIR)
+            for member in tar.getmembers():
+                temporary = None
+                try:
+                    with tempfile.NamedTemporaryFile(dir=CSF_DIR, delete=False) as destination:
+                        temporary = destination.name
+                        os.chmod(temporary, 0o600)
+                        with tar.extractfile(member) as source:
+                            shutil.copyfileobj(source, destination)
+                    os.replace(temporary, os.path.join(CSF_DIR, member.name))
+                finally:
+                    if temporary and os.path.exists(temporary):
+                        os.unlink(temporary)
         return {
             "success": True,
             "restored": names,

@@ -40,7 +40,7 @@ var nodes = D.nodes;
 var summary = D.summary;
 var backups = D.backups;
 
-function esc(s){ return $('<div>').text(s == null ? '' : String(s)).html(); }
+function esc(s){ return CSFv2.escapeHtml(s); }
 function toast(msg, type){
     if (window.CSFv2 && CSFv2.toast) { CSFv2.toast(msg, type || 'info'); return; }
     var cls = type === 'danger' ? 'danger' : (type || 'info');

@@ -84,7 +84,7 @@
 {% block scripts %}
 <script>
 $(function() {
-    function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+    function esc(t) { return CSFv2.escapeHtml(t); }
     $(document).on('click', '.lv-raw-toggle', function(e) {
         e.preventDefault();
         $(this).toggleClass('open').siblings('.lv-raw').slideToggle(120);
@@ -100,17 +100,17 @@ $(function() {
         $.getJSON('/api/ip/lookup', {ip: ip}, function(data) {
             $('#lookup-loading').hide();
             if (data.error) {
-                $('#lookup-content').html('<div class="alert alert-danger">' + data.error + '</div>');
+                $('#lookup-content').html('<div class="alert alert-danger">' + esc(data.error) + '</div>');
                 return;
             }
             var html = '';
             data.sections.forEach(function(s) {
                 var panelClass = s.status === 'blocked' ? 'danger' : s.status === 'allowed' ? 'success' : s.status === 'temp_blocked' ? 'warning' : 'default';
                 html += '<div class="panel panel-' + panelClass + '">';
-                html += '<div class="panel-heading"><h4 class="panel-title" style="margin:0"><i class="ti ti-' + CSFv2.ti(s.icon) + '"></i> ' + s.title + '</h4></div>';
+                html += '<div class="panel-heading"><h4 class="panel-title" style="margin:0"><i class="ti ti-' + esc(CSFv2.ti(s.icon)) + '"></i> ' + esc(s.title) + '</h4></div>';
                 html += '<div class="panel-body"><table class="table table-condensed" style="margin:0">';
                 s.items.forEach(function(item) {
-                    html += '<tr><td style="width:150px;font-weight:bold">' + item.key + '</td><td>' + $('<span>').text(item.value).html() + '</td></tr>';
+                    html += '<tr><td style="width:150px;font-weight:bold">' + esc(item.key) + '</td><td>' + esc(item.value) + '</td></tr>';
                 });
                 html += '</table>';
                 if (s.log_explained && s.log_explained.length) {
@@ -131,8 +131,9 @@ $(function() {
                 html += '</div></div>';
             });
             html += '<div class="well well-sm"><strong>Quick Actions for ' + $('<span>').text(ip).html() + ':</strong>';
-            html += ' <form method="POST" action="/quick/allow" style="display:inline;margin-left:10px"><input type="hidden" name="ip" value="' + ip + '"><button class="btn btn-success btn-xs"><span class="ti ti-check"></span> Allow</button></form>';
-            html += ' <form method="POST" action="/quick/deny" style="display:inline;margin-left:5px"><input type="hidden" name="ip" value="' + ip + '"><button class="btn btn-danger btn-xs"><span class="ti ti-ban"></span> Block</button></form>';
+            var csrfField = '<input type="hidden" name="csrf_token" value="' + esc($('meta[name="csrf-token"]').attr('content')) + '">';
+            html += ' <form method="POST" action="/quick/allow" style="display:inline;margin-left:10px">' + csrfField + '<input type="hidden" name="ip" value="' + esc(ip) + '"><button class="btn btn-success btn-xs"><span class="ti ti-check"></span> Allow</button></form>';
+            html += ' <form method="POST" action="/quick/deny" style="display:inline;margin-left:5px">' + csrfField + '<input type="hidden" name="ip" value="' + esc(ip) + '"><button class="btn btn-danger btn-xs"><span class="ti ti-ban"></span> Block</button></form>';
             html += ' <a href="/logs?search=' + encodeURIComponent(ip) + '" class="btn btn-default btn-xs" style="margin-left:5px"><span class="ti ti-list-details"></span> View in Logs</a>';
             html += '</div>';
             $('#lookup-content').html(html);

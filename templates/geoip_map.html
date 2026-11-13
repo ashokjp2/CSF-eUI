@@ -89,6 +89,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 $(function() {
+    function esc(t) { return CSFv2.escapeHtml(t); }
     var map = L.map('map', { scrollWheelZoom: true }).setView([20, 0], 2);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -108,7 +109,7 @@ $(function() {
             shown++;
             var age = (upto - m.ts) / 3600, fresh = age < 1;
             var c = L.circleMarker([m.lat, m.lon], {radius: fresh ? 8 : 5, fillColor: fresh ? '#ff1744' : '#ff8a80', color: '#ff1744', weight: 1, opacity: .8, fillOpacity: fresh ? .8 : .4});
-            c.bindPopup('<strong>' + m.ip + '</strong><br>' + m.country + (m.city ? ', ' + m.city : '') + '<br><small>' + new Date(m.ts * 1000).toLocaleString() + (m.reason ? ' · ' + m.reason : '') + '</small>');
+            c.bindPopup('<strong>' + esc(m.ip) + '</strong><br>' + esc(m.country) + (m.city ? ', ' + esc(m.city) : '') + '<br><small>' + new Date(m.ts * 1000).toLocaleString() + (m.reason ? ' · ' + esc(m.reason) : '') + '</small>');
             markersLayer.addLayer(c);
         });
         $('#replay-label').text(new Date(upto * 1000).toLocaleString() + ' · ' + shown + ' block' + (shown === 1 ? '' : 's'));
@@ -139,15 +140,15 @@ $(function() {
             var chtml = '';
             data.top_countries.forEach(function(c) {
                 chtml += '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #eee">' +
-                    '<span>' + c.country + '</span>' +
+                    '<span>' + esc(c.country) + '</span>' +
                     '<span class="badge">' + c.count + '</span></div>';
             });
             $('#country-list').html(chtml || '<p class="text-muted">No data</p>');
 
             var thtml = '';
             data.markers.forEach(function(m) {
-                thtml += '<tr><td><code>' + m.ip + '</code></td><td>' + m.country + '</td>' +
-                    '<td>' + (m.city || '-') + '</td><td>' + (m.isp || '-') + '</td></tr>';
+                thtml += '<tr><td><code>' + esc(m.ip) + '</code></td><td>' + esc(m.country) + '</td>' +
+                    '<td>' + esc(m.city || '-') + '</td><td>' + esc(m.isp || '-') + '</td></tr>';
             });
             $('#ip-table').html(thtml || '<tr><td colspan="4" class="text-muted">No data</td></tr>');
 
@@ -163,9 +164,9 @@ $(function() {
                     fillOpacity: 0.6
                 });
                 circle.bindPopup(
-                    '<strong>' + m.ip + '</strong><br>' +
-                    m.country + (m.city ? ', ' + m.city : '') +
-                    (m.isp ? '<br><small>' + m.isp + '</small>' : '')
+                    '<strong>' + esc(m.ip) + '</strong><br>' +
+                    esc(m.country) + (m.city ? ', ' + esc(m.city) : '') +
+                    (m.isp ? '<br><small>' + esc(m.isp) + '</small>' : '')
                 );
                 markersLayer.addLayer(circle);
             });

@@ -25,7 +25,7 @@
 <script>
 $(function() {
     var all = [], src = '';
-    function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+    function esc(t) { return CSFv2.escapeHtml(t); }
     function render() {
         var rows = all.filter(function(i) { return !src || i.source === src; });
         var pill = {audit: 'pill-muted', config: 'pill-warning', 'safe-apply': 'pill-danger', event: 'pill-muted', action: 'pill-success'};

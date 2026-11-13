@@ -4,6 +4,10 @@ import os
 import shutil
 import subprocess
 import time
+import tempfile
+import re
+import shlex
+from urllib.parse import urlsplit
 
 CONF = "/etc/csfv2/remote_backup.json"
 DEFAULT = {"enabled": False, "method": "sftp", "sftp": {"host": "", "port": 22, "user": "", "key": "/root/.ssh/id_ed25519", "path": "/backups/csf"},
@@ -66,21 +70,28 @@ def upload(local_path):
         s = c["sftp"]
         if not (s["host"] and s["user"]):
             return {"success": False, "error": "SFTP host/user not set"}
+        if (not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", s["user"])
+                or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.:-]*", s["host"])
+                or not isinstance(s["path"], str) or not re.fullmatch(r"/[A-Za-z0-9_./-]*", s["path"])):
+            return {"success": False, "error": "Invalid SFTP host, user or absolute path"}
+        quoted_path = shlex.quote(s["path"])
         base = ["-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new", "-P", str(s["port"]), "-i", s["key"]]
         ok, out = _run(["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new", "-p", str(s["port"]), "-i", s["key"],
-                        f"{s['user']}@{s['host']}", f"mkdir -p '{s['path']}'"])
+                        f"{s['user']}@{s['host']}", f"mkdir -p -- {quoted_path}"])
         if ok:
             ok, out = _run(["scp"] + base + [local_path, f"{s['user']}@{s['host']}:{s['path']}/{name}"])
         if ok:
             _run(["ssh", "-o", "BatchMode=yes", "-p", str(s["port"]), "-i", s["key"], f"{s['user']}@{s['host']}",
-                  f"cd '{s['path']}' && ls -1t csf_backup_*.tar.gz 2>/dev/null | tail -n +{int(c['keep']) + 1} | xargs -r rm -f"])
+                  f"cd -- {quoted_path} && ls -1t csf_backup_*.tar.gz 2>/dev/null | tail -n +{int(c['keep']) + 1} | xargs -r rm -f"])
         return {"success": ok, "error": "" if ok else out, "target": f"sftp://{s['host']}{s['path']}/{name}"}
     if m == "webdav":
         w = c["webdav"]
         if not w["url"]:
             return {"success": False, "error": "WebDAV URL not set"}
+        if urlsplit(w["url"]).scheme.lower() not in ("http", "https") or not urlsplit(w["url"]).hostname:
+            return {"success": False, "error": "WebDAV requires an HTTP or HTTPS URL"}
         url = w["url"].rstrip("/") + "/" + name
-        cmd = ["curl", "-sS", "-f", "-T", local_path, url]
+        cmd = ["curl", "-sS", "-f", "--proto", "=http,https", "-T", local_path, "--url", url]
         if w["user"]:
             cmd += ["-u", f"{w['user']}:{w['password']}"]
         ok, out = _run(cmd)
@@ -91,6 +102,8 @@ def upload(local_path):
             return {"success": False, "error": "rclone is not installed on this server"}
         if not r["remote"]:
             return {"success": False, "error": "rclone remote not set (e.g. s3:bucket/csf)"}
+        if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*:[^\r\n\x00]+", r["remote"]):
+            return {"success": False, "error": "Use a named rclone remote with a destination path"}
         ok, out = _run(["rclone", "copyto", local_path, r["remote"].rstrip("/") + "/" + name])
         if ok:
             _run(["rclone", "delete", "--min-age", f"{int(c['keep']) * 7}d", r["remote"]])
@@ -111,13 +124,14 @@ def maybe_upload(result):
 
 def test():
     c = load()
-    tmp = "/tmp/csf_backup_test.tar.gz"
     try:
         import tarfile
-        with tarfile.open(tmp, "w:gz") as t:
-            pass
+        with tempfile.TemporaryDirectory(prefix="csfv2-backup-test-") as directory:
+            tmp = os.path.join(directory, "csf_backup_test.tar.gz")
+            with tarfile.open(tmp, "w:gz"):
+                pass
+            r = upload(tmp)
+            r["method"] = c["method"]
+            return r
     except Exception as e:
         return {"success": False, "error": str(e)}
-    r = upload(tmp)
-    r["method"] = c["method"]
-    return r

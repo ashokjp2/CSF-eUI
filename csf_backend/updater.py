@@ -9,7 +9,7 @@ from datetime import datetime
 GITHUB_REPO = "ashokjp2/CSF-eUI"
 INSTALL_DIR = "/opt/csfv2"
 VERSION_FILE = os.path.join(INSTALL_DIR, "VERSION")
-CACHE_FILE = "/tmp/csfv2_version_cache.json"
+CACHE_FILE = "/var/cache/csfv2/version.json"
 _DEFAULT_CACHE_TTL = 12 * 3600
 
 UPDATE_SERVICE_UNIT = "/etc/systemd/system/csfv2-update-check.service"
@@ -276,8 +276,11 @@ def get_version_info(force=False):
         if latest:
             cache = {"checked_at": time.time(), "latest": latest}
             try:
-                with open(CACHE_FILE, "w") as f:
+                os.makedirs(os.path.dirname(CACHE_FILE), mode=0o700, exist_ok=True)
+                with tempfile.NamedTemporaryFile(mode="w", dir=os.path.dirname(CACHE_FILE), delete=False) as f:
+                    temporary = f.name
                     json.dump(cache, f)
+                os.replace(temporary, CACHE_FILE)
             except Exception:
                 pass
         else:

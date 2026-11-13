@@ -2,6 +2,7 @@ import subprocess
 import shlex
 import os
 import re
+import ipaddress
 import time
 from pathlib import Path
 
@@ -148,26 +149,71 @@ def restart_both():
     }
 
 
+# Input guards: every IP-related csf call goes through these so a crafted value
+# can never become an extra csf argument or an extra line in csf.allow/csf.deny.
+def _bad(msg):
+    return {"success": False, "stdout": "", "stderr": msg, "returncode": 1}
+
+
+def valid_ip(ip):
+    if not isinstance(ip, str) or not ip or ip.startswith("-") or len(ip) > 64:
+        return False
+    try:
+        ipaddress.ip_network(ip, strict=False)
+        return True
+    except ValueError:
+        return False
+
+
+def _clean_comment(comment):
+    """Single line, no control characters, csf-safe length."""
+    comment = "".join(c for c in str(comment or "") if c.isprintable())
+    return comment.strip()[:200]
+
+
+def _valid_ports(ports):
+    return isinstance(ports, str) and bool(re.fullmatch(r"\*|\d{1,5}(?:[,\-]\d{1,5})*", ports))
+
+
+def _valid_timeout(secs):
+    try:
+        return 0 < int(secs) <= 365 * 86400
+    except (TypeError, ValueError):
+        return False
+
+
 # IP management
 def allow_ip(ip, comment=""):
+    if not valid_ip(ip):
+        return _bad("Invalid IP address")
     args = ["-a", ip]
+    comment = _clean_comment(comment)
     if comment:
         args.append(comment)
     return run_csf(args)
 
 def deny_ip(ip, comment=""):
+    if not valid_ip(ip):
+        return _bad("Invalid IP address")
     args = ["-d", ip]
+    comment = _clean_comment(comment)
     if comment:
         args.append(comment)
     return run_csf(args)
 
 def remove_allow(ip):
+    if not valid_ip(ip):
+        return _bad("Invalid IP address")
     return run_csf(["-ar", ip])
 
 def remove_deny(ip):
+    if not valid_ip(ip):
+        return _bad("Invalid IP address")
     return run_csf(["-dr", ip])
 
 def unblock_ip(ip):
+    if not valid_ip(ip):
+        return _bad("Invalid IP address")
     r1 = run_csf(["-dr", ip])
     r2 = run_csf(["-trd", ip])
     return {
@@ -182,6 +228,8 @@ def flush_deny():
     return run_csf(["-df"])
 
 def search_ip(ip):
+    if not valid_ip(ip):
+        return _bad("Invalid IP address")
     return run_csf(["-g", ip])
 
 def flush_all_blocks():
@@ -197,27 +245,49 @@ def flush_all_blocks():
 
 # Temporary blocks
 def temp_deny(ip, timeout_secs, ports="*", comment=""):
+    if not valid_ip(ip):
+        return _bad("Invalid IP address")
+    if not _valid_timeout(timeout_secs):
+        return _bad("Invalid timeout")
+    if not _valid_ports(ports):
+        return _bad("Invalid port specification")
+    timeout_secs = int(timeout_secs)
     args = ["-td", ip, str(timeout_secs), "-p", ports]
+    comment = _clean_comment(comment)
     if comment:
         args.append(comment)
     return run_csf(args)
 
 def temp_allow(ip, timeout_secs, ports="*", comment=""):
+    if not valid_ip(ip):
+        return _bad("Invalid IP address")
+    if not _valid_timeout(timeout_secs):
+        return _bad("Invalid timeout")
+    if not _valid_ports(ports):
+        return _bad("Invalid port specification")
+    timeout_secs = int(timeout_secs)
     args = ["-ta", ip, str(timeout_secs), "-p", ports]
+    comment = _clean_comment(comment)
     if comment:
         args.append(comment)
     return run_csf(args)
 
 def remove_temp_deny(ip):
+    if not valid_ip(ip):
+        return _bad("Invalid IP address")
     return run_csf(["-trd", ip])
 
 def remove_temp_allow(ip):
+    if not valid_ip(ip):
+        return _bad("Invalid IP address")
     return run_csf(["-tra", ip])
 
 def flush_temp():
     return run_csf(["-tf"])
 
 def temp_to_perm(ip):
+    if not valid_ip(ip):
+        return _bad("Invalid IP address")
     run_csf(["-tr", ip])
     return run_csf(["-d", ip])
 
@@ -352,6 +422,13 @@ def load_csf_conf_full():
 
 
 def save_csf_conf(changes):
+    # A quoted value must never escape its assignment or inject another line.
+    if not isinstance(changes, dict) or any(
+        not isinstance(k, str) or not re.fullmatch(r"[A-Z][A-Z0-9_]*", k)
+        or not isinstance(v, str) or any(c in v for c in ('"', '\\', '\r', '\n', '\x00'))
+        for k, v in changes.items()
+    ):
+        return {"success": False, "error": "Invalid configuration key or value"}
     if not os.path.exists(CSF_CONF):
         return {"success": False, "error": "csf.conf not found"}
     with open(CSF_CONF) as f:

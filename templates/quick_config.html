@@ -832,7 +832,7 @@
 <script>
 /* Rate-limit presets */
 $(function() {
-    function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+    function esc(t) { return CSFv2.escapeHtml(t); }
     function loadPresets() {
         $.getJSON('/api/presets', function(r) {
             $('#preset-grid').html((r.presets || []).map(function(p) {

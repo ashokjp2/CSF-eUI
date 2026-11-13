@@ -107,7 +107,7 @@ var INTROS = {
     iptables: 'General system messages. On some systems firewall drops are written here too.'
 };
 
-function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+function esc(t) { return CSFv2.escapeHtml(t); }
 
 function ipLink(html, ip) {
     if (!ip) return html;

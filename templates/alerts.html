@@ -75,7 +75,7 @@ $(function() {
             var flag = a.country ? '<img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/7.2.3/flags/4x3/' + a.country.toLowerCase() + '.svg" style="height:12px; margin:0 4px"> ' : '';
             var ipLink = a.ip ? '<a href="/ip-lookup?ip=' + a.ip + '" class="label label-default">' + a.ip + '</a> ' : '';
 
-            html += '<div class="list-group-item ' + cls + '" style="padding:6px 12px; font-size:12px" data-cat="' + a.category + '" data-search="' + a.line.toLowerCase() + '">' +
+            html += '<div class="list-group-item ' + cls + '" style="padding:6px 12px; font-size:12px" data-cat="' + CSFv2.escapeHtml(a.category) + '" data-search="' + CSFv2.escapeHtml(a.line.toLowerCase()) + '">' +
                 '<i class="ti ti-' + CSFv2.ti(a.icon) + '"></i> ' +
                 flag + ipLink +
                 '<span class="label label-' + a.severity + '" style="margin-right:4px">' + a.category + '</span> ' +

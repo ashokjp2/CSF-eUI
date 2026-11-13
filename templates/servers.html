@@ -63,7 +63,7 @@
 {% block scripts %}
 <script>
 $(function() {
-    function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+    function esc(t) { return CSFv2.escapeHtml(t); }
     var servers = [];
     function pill(ok, txt) { return '<span class="pill ' + (ok ? 'pill-success' : 'pill-danger') + '">' + txt + '</span>'; }
     function load() {

@@ -296,7 +296,7 @@
     }
 
     function esc(s) {
-        return $('<span>').text(s || '').html();
+        return CSFv2.escapeHtml(s);
     }
 
     function saveEntries(callback) {

@@ -479,6 +479,11 @@ def revoke_certificate(cert_path=""):
     """Revoke a Let's Encrypt certificate."""
     if not cert_path:
         return {"success": False, "error": "No certificate path provided"}
+    real = os.path.realpath(cert_path)
+    allowed = (CERT_DIR + "/", "/etc/letsencrypt/", "/root/.acme.sh/")
+    if not real.startswith(allowed) or cert_path.startswith("-"):
+        return {"success": False, "error": "Certificate path is outside the managed certificate directories"}
+    cert_path = real
     if not os.path.isfile(cert_path):
         return {"success": False, "error": f"Certificate not found: {cert_path}"}
     code, out, err = _run([

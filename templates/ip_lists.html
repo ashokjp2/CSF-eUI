@@ -97,14 +97,15 @@ $(function() {
     }
 
     function renderList(type, entries) {
+        function esc(t) { return CSFv2.escapeHtml(t); }
         var html = '';
         entries.forEach(function(e) {
-            html += '<tr data-search="' + (e.ip + ' ' + (e.comment || '')).toLowerCase() + '">' +
-                '<td style="width:50%"><code>' + e.ip + '</code></td>' +
-                '<td style="font-size:11px; color:#777">' + (e.comment || '') + '</td>' +
+            html += '<tr data-search="' + esc((e.ip + ' ' + (e.comment || '')).toLowerCase()) + '">' +
+                '<td style="width:50%"><code>' + esc(e.ip) + '</code></td>' +
+                '<td style="font-size:11px; color:#777">' + esc(e.comment || '') + '</td>' +
                 '<td style="width:80px; text-align:right">' +
-                '<button class="btn btn-xs btn-default ip-remove" data-type="' + type + '" data-ip="' + e.ip + '" title="Remove"><span class="ti ti-x text-danger"></span></button> ' +
-                '<a href="/ip/' + e.ip.split('/')[0] + '" class="btn btn-xs btn-default" title="Why is this IP listed?"><span class="ti ti-search"></span></a>' +
+                '<button class="btn btn-xs btn-default ip-remove" data-type="' + type + '" data-ip="' + esc(e.ip) + '" title="Remove"><span class="ti ti-x text-danger"></span></button> ' +
+                '<a href="/ip/' + encodeURIComponent(e.ip.split('/')[0]) + '" class="btn btn-xs btn-default" title="Why is this IP listed?"><span class="ti ti-search"></span></a>' +
                 '</td></tr>';
         });
         $('#' + type + '-tbody').html(html || '<tr><td colspan="3" class="text-center text-muted" style="padding:20px">Empty</td></tr>');

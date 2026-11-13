@@ -5,14 +5,21 @@ import os
 
 
 def run_cmd(cmd, timeout=30):
+    if not isinstance(cmd, (list, tuple)):
+        return {"success": False, "stdout": "", "stderr": "Command must be an argument list"}
     try:
         result = subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout,
-            shell=isinstance(cmd, str),
+            shell=False,
         )
         return {"success": result.returncode == 0, "stdout": result.stdout, "stderr": result.stderr}
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
         return {"success": False, "stdout": "", "stderr": str(e)}
+
+
+def valid_id(value):
+    """Container/network name or ID: never empty, never an option flag."""
+    return isinstance(value, str) and bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", value))
 
 
 def is_docker_installed():
@@ -31,6 +38,8 @@ def get_docker_version():
 
 
 def container_action(container_id, action):
+    if not valid_id(container_id):
+        return {"success": False, "stdout": "", "stderr": "Invalid container ID"}
     if action not in ("start", "stop", "restart"):
         return {"success": False, "stdout": "", "stderr": "Invalid action"}
     return run_cmd(["docker", action, container_id])
@@ -55,6 +64,8 @@ def list_containers(all_containers=False):
 
 
 def get_container_details(container_id):
+    if not valid_id(container_id):
+        return None
     r = run_cmd(["docker", "inspect", container_id])
     if not r["success"]:
         return None
@@ -81,6 +92,8 @@ def list_networks():
 
 
 def get_network_details(network_id):
+    if not valid_id(network_id):
+        return None
     r = run_cmd(["docker", "network", "inspect", network_id])
     if not r["success"]:
         return None

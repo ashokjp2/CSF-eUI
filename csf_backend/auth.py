@@ -4,6 +4,9 @@ import os
 import json
 import secrets
 import time
+import functools
+import threading
+import tempfile
 from pathlib import Path
 
 AUTH_CONF = "/etc/csfv2/auth.json"
@@ -13,11 +16,109 @@ UI_BAN = "/etc/csfv2/ui.ban"
 LOGIN_LOG = "/var/log/csfv2.log"
 MAX_FAILED = 5
 LOCKOUT_SECS = 900
+_auth_lock = threading.RLock()
+_lock_state = threading.local()
+
+
+def _auth_transaction(func):
+    """Serialize credential/counter changes across threads and Gunicorn workers."""
+    @functools.wraps(func)
+    def wrapped(*args, **kwargs):
+        with _auth_lock:
+            if getattr(_lock_state, "active", False):
+                return func(*args, **kwargs)
+            os.makedirs(os.path.dirname(AUTH_CONF), exist_ok=True)
+            fd = os.open(AUTH_CONF + ".lock", os.O_CREAT | os.O_RDWR, 0o600)
+            try:
+                try:
+                    import fcntl
+                except ImportError:  # Windows development; production uses flock.
+                    fcntl = None
+                if fcntl:
+                    fcntl.flock(fd, fcntl.LOCK_EX)
+                _lock_state.active = True
+                return func(*args, **kwargs)
+            finally:
+                _lock_state.active = False
+                os.close(fd)
+    return wrapped
 
 
 def init_auth():
     os.makedirs(os.path.dirname(AUTH_CONF), exist_ok=True)
     os.makedirs(SESSION_DIR, exist_ok=True)
+    os.chmod(SESSION_DIR, 0o700)
+
+
+def create_session(username, fingerprint):
+    os.makedirs(SESSION_DIR, exist_ok=True)
+    _cleanup_expired(SESSION_DIR, 43200)
+    token = secrets.token_hex(32)
+    path = os.path.join(SESSION_DIR, token)
+    fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump({"username": username, "fingerprint": fingerprint,
+                   "expires": time.time() + 43200}, f)
+    return token
+
+
+def valid_session(token, username, fingerprint):
+    if not isinstance(token, str) or len(token) != 64 or any(c not in "0123456789abcdef" for c in token):
+        return False
+    try:
+        with open(os.path.join(SESSION_DIR, token)) as f:
+            state = json.load(f)
+        return (state.get("username") == username and state.get("expires", 0) > time.time()
+                and hmac.compare_digest(state.get("fingerprint", ""), fingerprint))
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def revoke_session(token):
+    if isinstance(token, str) and len(token) == 64 and all(c in "0123456789abcdef" for c in token):
+        try:
+            os.unlink(os.path.join(SESSION_DIR, token))
+        except FileNotFoundError:
+            pass
+
+
+def issue_challenge(challenge):
+    """Persist a WebAuthn nonce so a copied signed cookie cannot replay it."""
+    directory = os.path.join(SESSION_DIR, "challenges")
+    os.makedirs(directory, mode=0o700, exist_ok=True)
+    _cleanup_expired(directory, 300)
+    nonce = secrets.token_hex(32)
+    fd = os.open(os.path.join(directory, nonce), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump({"challenge": challenge, "expires": time.time() + 300}, f)
+    return nonce
+
+
+def _cleanup_expired(directory, lifetime):
+    for entry in os.scandir(directory):
+        try:
+            if entry.is_file(follow_symlinks=False) and time.time() - entry.stat().st_mtime > lifetime:
+                os.unlink(entry.path)
+        except FileNotFoundError:
+            pass
+
+
+@_auth_transaction
+def consume_challenge(nonce, challenge):
+    if not isinstance(nonce, str) or len(nonce) != 64 or any(c not in "0123456789abcdef" for c in nonce):
+        return False
+    path = os.path.join(SESSION_DIR, "challenges", nonce)
+    claimed = path + "." + secrets.token_hex(8)
+    try:
+        os.rename(path, claimed)  # Exactly one worker can claim this nonce.
+    except FileNotFoundError:
+        return False
+    try:
+        with open(claimed) as f:
+            state = json.load(f)
+        return state.get("expires", 0) > time.time() and hmac.compare_digest(state.get("challenge", ""), challenge)
+    finally:
+        os.unlink(claimed)
 
 
 def hash_password(password, salt=None):
@@ -44,14 +145,22 @@ def load_auth_config():
 
 def save_auth_config(config):
     os.makedirs(os.path.dirname(AUTH_CONF), exist_ok=True)
-    with open(AUTH_CONF, "w") as f:
-        json.dump(config, f, indent=2)
-    os.chmod(AUTH_CONF, 0o600)
+    path = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", dir=os.path.dirname(AUTH_CONF), delete=False) as f:
+            path = f.name
+            os.chmod(path, 0o600)
+            json.dump(config, f, indent=2)
+        os.replace(path, AUTH_CONF)
+    finally:
+        if path and os.path.exists(path):
+            os.unlink(path)
 
 
 ROLES = {"admin": "Full control", "viewer": "Read-only: can see everything, change nothing"}
 
 
+@_auth_transaction
 def create_user(username, password, role="admin"):
     config = load_auth_config()
     config.setdefault("users", {})[username] = {
@@ -63,7 +172,15 @@ def create_user(username, password, role="admin"):
 
 
 def get_role(username):
-    return load_auth_config().get("users", {}).get(username, {}).get("role", "admin")
+    user = load_auth_config().get("users", {}).get(username)
+    return user.get("role", "admin") if user else "viewer"
+
+
+def session_fingerprint(user):
+    """Bind signed sessions to the current account credentials."""
+    return hashlib.sha256(json.dumps(
+        [user.get("password"), user.get("created")], separators=(",", ":")
+    ).encode()).hexdigest()
 
 
 def list_users():
@@ -74,6 +191,7 @@ def list_users():
              "twofa": user_has_second_factor(d)} for u, d in sorted(users.items())]
 
 
+@_auth_transaction
 def set_role(username, role):
     config = load_auth_config()
     users = config.get("users", {})
@@ -88,6 +206,7 @@ def set_role(username, role):
     return True, "Role updated"
 
 
+@_auth_transaction
 def delete_user(username, acting_user):
     config = load_auth_config()
     users = config.get("users", {})
@@ -126,6 +245,7 @@ def pre_login_check(config, remote_ip):
     return True, ""
 
 
+@_auth_transaction
 def clear_failed(remote_ip):
     config = load_auth_config()
     if remote_ip and remote_ip in config.get("failed_attempts", {}):
@@ -133,6 +253,7 @@ def clear_failed(remote_ip):
         save_auth_config(config)
 
 
+@_auth_transaction
 def authenticate(username, password, remote_ip=None):
     config = load_auth_config()
 
@@ -150,18 +271,25 @@ def authenticate(username, password, remote_ip=None):
         record_failed(config, remote_ip)
         return False, "Invalid credentials"
 
-    if remote_ip and remote_ip in failed:
-        del failed[remote_ip]
-    save_auth_config(config)
+    # Keep failures until the second factor has also succeeded.
+    if not user_has_second_factor(users[username]):
+        clear_failed(remote_ip)
 
     log_event(f"Successful login: {username} from {remote_ip}")
     return True, "OK"
 
 
+@_auth_transaction
 def record_failed(config, remote_ip):
     if not remote_ip:
         return
+    # Reload under the lock; the caller's snapshot may belong to another worker.
+    config = load_auth_config()
     failed = config.setdefault("failed_attempts", {})
+    now = time.time()
+    for address in list(failed):
+        if now - failed[address].get("last_attempt", 0) >= LOCKOUT_SECS:
+            del failed[address]
     if remote_ip not in failed:
         failed[remote_ip] = {"count": 0}
     failed[remote_ip]["count"] = failed[remote_ip].get("count", 0) + 1
@@ -200,6 +328,7 @@ def is_ip_banned(ip):
 TOKEN_TTL = 900  # 15 minutes
 
 
+@_auth_transaction
 def create_username_change_token(old_username, new_username, password):
     """Validate password and store a pending token; return (ok, token_or_error)."""
     config = load_auth_config()
@@ -222,12 +351,15 @@ def create_username_change_token(old_username, new_username, password):
     return True, token
 
 
-def confirm_username_change(token):
+@_auth_transaction
+def confirm_username_change(token, acting_user=None):
     """Apply the pending username change if the token matches and hasn't expired."""
     config = load_auth_config()
     pending = config.get("pending_username_change")
     if not pending:
         return False, "No pending username change"
+    if acting_user != pending.get("old"):
+        return False, "This verification link belongs to another account"
     if time.time() > pending.get("expires", 0):
         config.pop("pending_username_change", None)
         save_auth_config(config)
@@ -294,6 +426,7 @@ def totp_status(username):
     return {"enabled": bool(t.get("enabled")), "backup_codes_left": len(t.get("backup_codes", []))}
 
 
+@_auth_transaction
 def totp_enable(username, secret, code):
     """Verify the first code from the app, then enable 2FA. Returns (ok, backup_codes_or_error)."""
     if not totp_verify(secret, code):
@@ -314,6 +447,7 @@ def totp_enable(username, secret, code):
     return True, plain_codes
 
 
+@_auth_transaction
 def totp_disable(username, password, code):
     """Disable 2FA; requires the password and a current code (or backup code)."""
     config = load_auth_config()
@@ -324,21 +458,34 @@ def totp_disable(username, password, code):
         return False, "Invalid password"
     if not totp_check_login(username, code):
         return False, "Invalid authentication code"
+    config = load_auth_config()
+    user = config["users"][username]
     user.pop("totp", None)
     save_auth_config(config)
     log_event(f"Two-factor authentication disabled for {username}")
     return True, "Two-factor authentication disabled"
 
 
+@_auth_transaction
 def totp_check_login(username, code):
     """Verify a login code: TOTP first, then single-use backup codes (TOTP or passkey recovery)."""
     config = load_auth_config()
     user = config.get("users", {}).get(username, {})
+    if not user:
+        return False
     if not user_has_second_factor(user):
         return True
     t = user.get("totp") or {}
-    if t.get("enabled") and totp_verify(t.get("secret", ""), code):
-        return True
+    if t.get("enabled"):
+        now = time.time()
+        for offset in (-1, 0, 1):
+            timestamp = now + offset * 30
+            step = int(timestamp // 30)
+            if (step > t.get("last_login_step", -1)
+                    and hmac.compare_digest(totp_code(t.get("secret", ""), timestamp), (code or "").strip().replace(" ", ""))):
+                t["last_login_step"] = step
+                save_auth_config(config)
+                return True
     digest = hashlib.sha256((code or "").strip().lower().encode()).hexdigest()
     for pool_name, codes in (("backup", t.get("backup_codes", [])), ("recovery", user.get("passkey_recovery", []))):
         for stored in codes:
@@ -371,6 +518,7 @@ def second_factor_status(username):
     }
 
 
+@_auth_transaction
 def ensure_recovery_codes(username):
     """Give a passkey-only user single-use recovery codes, so a lost device is not a lockout.
 
@@ -390,6 +538,7 @@ def ensure_recovery_codes(username):
     return plain
 
 
+@_auth_transaction
 def change_password(username, new_password):
     config = load_auth_config()
     if username not in config.get("users", {}):
@@ -402,8 +551,9 @@ def change_password(username, new_password):
 def log_event(message):
     try:
         os.makedirs(os.path.dirname(LOGIN_LOG), exist_ok=True)
-        with open(LOGIN_LOG, "a") as f:
+        with open(LOGIN_LOG, "a", encoding="utf-8") as f:
             ts = time.strftime("%Y-%m-%d %H:%M:%S")
+            message = str(message).replace("\r", "\\r").replace("\n", "\\n")
             f.write(f"[{ts}] {message}\n")
     except OSError:
         pass
@@ -413,6 +563,4 @@ def setup_initial_user():
     config = load_auth_config()
     if config.get("users"):
         return False
-    create_user("admin", "admin")
-    log_event("Initial admin user created - CHANGE PASSWORD IMMEDIATELY")
-    return True
+    raise RuntimeError("No users configured. Run the installer to create an administrator.")

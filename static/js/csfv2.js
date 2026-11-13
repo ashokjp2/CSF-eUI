@@ -4,6 +4,11 @@
 var TI_MAP = {"refresh":"refresh","plus":"plus","info-sign":"info-circle","ok":"check","hourglass":"hourglass","trash":"trash","warning-sign":"alert-triangle","floppy-disk":"device-floppy","search":"search","ok-circle":"circle-check","globe":"world","flash":"bolt","cog":"settings","ban-circle":"ban","remove":"x","upload":"upload","transfer":"arrows-exchange","lock":"lock","envelope":"mail","wrench":"tool","list-alt":"list-details","eye-open":"eye","th-list":"list","cloud":"cloud","chevron-down":"chevron-down","repeat":"repeat","play":"player-play","list":"list","link":"link","certificate":"certificate","time":"clock","remove-sign":"circle-x","random":"arrows-shuffle","pencil":"pencil","floppy-save":"device-floppy","fire":"flame","exclamation-sign":"alert-circle","download":"download","cloud-download":"cloud-download","unchecked":"square","question-sign":"help-circle","ok-sign":"circle-check","chevron-up":"chevron-up","stop":"player-stop","shield":"shield","pause":"player-pause","log-in":"login","hdd":"server","folder-open":"folder-open","flag":"flag","file":"file","edit":"edit","console":"terminal-2","check":"checkbox","alert":"alert-triangle","user":"user","tasks":"list-check","star":"star","signal":"antenna-bars-5","share-alt":"share","send":"send","resize-full":"arrows-maximize","remove-circle":"circle-x","open":"upload","off":"power","minus":"minus","map-marker":"map-pin","filter":"filter","dashboard":"layout-dashboard","comment":"message","bell":"bell","arrow-right":"arrow-right","arrow-left":"arrow-left","eye-close":"eye-off","ban":"ban","heart":"heart","calendar":"calendar","home":"home","asterisk":"asterisk","tag":"tag","cloud-upload":"cloud-upload","import":"file-import","export":"file-export","copy":"copy","th":"layout-grid","book":"book","briefcase":"briefcase","chevron-right":"chevron-right","chevron-left":"chevron-left","exclamation":"alert-circle","stats":"chart-bar","save":"device-floppy","new-window":"external-link","phone":"phone","earphone":"phone","bullhorn":"speakerphone","equalizer":"adjustments","road":"road","plane":"plane","question":"help-circle","log":"file-text","plus-sign":"circle-plus","minus-sign":"circle-minus","tags":"tags","folder-close":"folder","arrow-up":"arrow-up","arrow-down":"arrow-down","share":"share","knight":"chess-knight","tower":"building-broadcast-tower","flask":"flask","list-check":"list-check","sort":"arrows-sort","inbox":"inbox","lamp":"bulb","leaf":"leaf","tint":"droplet","picture":"photo","camera":"camera","print":"printer","zoom-in":"zoom-in","zoom-out":"zoom-out","fullscreen":"arrows-maximize","thumbs-up":"thumb-up","thumbs-down":"thumb-down","pushpin":"pin","bookmark":"bookmark","gift":"gift","magnet":"magnet","music":"music","scale":"scale","education":"school","credit-card":"credit-card","bitcoin":"currency-bitcoin","usd":"currency-dollar","sunglasses":"sunglasses","king":"crown","queen":"chess-queen","pawn":"chess","bishop":"chess-bishop","tree-conifer":"christmas-tree","tree-deciduous":"tree","cutlery":"tools-kitchen-2","glass":"glass","headphones":"headphones","paperclip":"paperclip","font":"typography","bold":"bold","italic":"italic","align-left":"align-left","align-right":"align-right","align-center":"align-center","align-justify":"align-justified","move":"arrows-move","retweet":"repeat","eject":"player-eject","forward":"player-skip-forward","backward":"player-skip-back","fast-forward":"player-track-next","step-forward":"player-skip-forward","play-circle":"player-play","volume-up":"volume","volume-down":"volume-2","volume-off":"volume-off","qrcode":"qrcode","barcode":"barcode","adjust":"contrast","erase":"eraser","scissors":"scissors","level-up":"arrow-up","resize-small":"arrows-minimize","resize-vertical":"arrows-vertical","resize-horizontal":"arrows-horizontal","menu-hamburger":"menu-2","menu-down":"caret-down","menu-up":"caret-up","menu-left":"caret-left","menu-right":"caret-right","triangle-right":"caret-right","triangle-left":"caret-left","triangle-top":"caret-up","triangle-bottom":"caret-down","log-out":"logout","moon":"moon","sun":"sun","option-horizontal":"dots","star-empty":"star","heart-empty":"heart","download-alt":"download","th-large":"layout-grid","screenshot":"screenshot","facetime-video":"video","sort-by-alphabet":"sort-a-z","sort-by-alphabet-alt":"sort-z-a","sort-by-attributes":"sort-ascending","sort-by-attributes-alt":"sort-descending","sort-by-order":"sort-ascending","sort-by-order-alt":"sort-descending","modal-window":"app-window","compressed":"file-zip","cd":"disc","circle-arrow-right":"circle-arrow-right","circle-arrow-down":"circle-arrow-down","circle-arrow-up":"circle-arrow-up","hand-right":"hand-move","hand-left":"hand-move","hand-up":"hand-move","hand-down":"hand-move","text-size":"text-size","text-height":"text-size","text-width":"text-size","header":"heading","superscript":"superscript","subscript":"subscript","indent-left":"indent-decrease","indent-right":"indent-increase","oil":"flame","grain":"grain","tent":"tent","blackboard":"chalkboard","bed":"bed","apple":"brand-apple","piggy-bank":"pig-money","ruble":"currency-rubel","gbp":"currency-pound","eur":"currency-euro","yen":"currency-yen","ice-lolly":"ice-cream","sound-dolby":"volume","duplicate":"copy","object-align-top":"layout-align-top"};
 
 var CSFv2 = {
+    escapeHtml: function(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, function(ch) {
+            return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch];
+        });
+    },
     /* Map a legacy glyphicon name (possibly with trailing classes) to a Tabler class list */
     ti: function(name) {
         name = String(name || '').replace(/^glyphicon-/, '');
@@ -75,8 +80,9 @@ var CSFv2 = {
             info: 'ti-info-circle'
         };
         toast.innerHTML = '<i class="ti ' + (icons[type] || icons.info) + '"></i> ' +
-            '<span style="flex:1">' + message + '</span>' +
+            '<span style="flex:1"></span>' +
             '<span class="toast-close ti ti-x"></span>';
+        toast.querySelector('span').textContent = message;
         container.appendChild(toast);
         this._updateDismissAll();
 
@@ -512,7 +518,7 @@ var CSFv2 = {
         if (!bell.length) return;
         var self = this, panel = $('#bell-panel'), list = $('#bell-list'), badge = $('#bell-badge');
         var seen = parseInt(localStorage.getItem('csfv2-bell-seen') || '0', 10);
-        function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+        function esc(t) { return CSFv2.escapeHtml(t); }
         function ago(ts) { var s = Math.max(0, Math.floor(Date.now() / 1000 - ts)); if (s < 60) return s + 's ago'; if (s < 3600) return Math.floor(s / 60) + 'm ago'; if (s < 86400) return Math.floor(s / 3600) + 'h ago'; return Math.floor(s / 86400) + 'd ago'; }
         function render(events) {
             var unread = events.filter(function(e) { return e.ts > seen; }).length;
@@ -587,7 +593,7 @@ var CSFv2 = {
     initHelpDrawer: function() {
         var drawer = $('#help-drawer');
         if (!drawer.length) return;
-        function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+        function esc(t) { return CSFv2.escapeHtml(t); }
         function open(path) {
             drawer.addClass('open');
             $('#help-body').html('<p class="text-muted">Loading…</p>');
@@ -643,7 +649,7 @@ var CSFv2 = {
     renderRecentActions: function() {
         var self = this, box = $('#bell-actions');
         if (!box.length) return;
-        function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+        function esc(t) { return CSFv2.escapeHtml(t); }
         $.getJSON('/api/actions/recent', function(r) {
             var a = r.actions || [];
             if (!a.length) { box.html(''); return; }
@@ -666,7 +672,7 @@ var CSFv2 = {
     initChecklist: function() {
         var box = $('#checklist');
         if (!box.length) return;
-        function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+        function esc(t) { return CSFv2.escapeHtml(t); }
         $.getJSON('/api/checklist', function(c) {
             var items = c.items || [];
             if (!items.length) return;
@@ -706,7 +712,7 @@ var CSFv2 = {
     // ---- Health Check: quick fixes, accept-with-reason, hide passed ----
     initHealth: function() {
         if (!$('.hc-item').length) return;
-        function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+        function esc(t) { return CSFv2.escapeHtml(t); }
         function fail(row, btn, label, msg) {
             btn.prop('disabled', false).html(label);
             row.find('.js-fix-error').remove();
@@ -794,7 +800,7 @@ var CSFv2 = {
         var IPRE = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$|^[0-9a-f:]{3,}(\/\d{1,3})?$/i;
         var sel = 0;
 
-        function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+        function esc(t) { return CSFv2.escapeHtml(t); }
         function open() {
             backdrop.style.display = 'block';
             q.value = ''; render(''); q.focus();

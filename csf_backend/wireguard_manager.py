@@ -9,11 +9,13 @@ WG_CONF_DIR = "/etc/wireguard"
 WG_BIN = "/usr/bin/wg"
 
 
-def run_cmd(cmd, timeout=15):
+def run_cmd(cmd, timeout=15, input_text=None):
+    if not isinstance(cmd, (list, tuple)):
+        return {"success": False, "stdout": "", "stderr": "Command must be an argument list"}
     try:
         result = subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout,
-            shell=isinstance(cmd, str),
+            shell=False, input=input_text,
         )
         return {"success": result.returncode == 0, "stdout": result.stdout, "stderr": result.stderr}
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
@@ -160,11 +162,11 @@ def interface_restart(iface):
 
 
 def generate_keypair():
-    priv = run_cmd(f"{WG_BIN} genkey", timeout=5)
+    priv = run_cmd([WG_BIN, "genkey"], timeout=5)
     if not priv["success"]:
         return None
     private_key = priv["stdout"].strip()
-    pub = run_cmd(f"echo '{private_key}' | {WG_BIN} pubkey", timeout=5)
+    pub = run_cmd([WG_BIN, "pubkey"], timeout=5, input_text=private_key + "\n")
     if not pub["success"]:
         return None
     return {
@@ -174,8 +176,48 @@ def generate_keypair():
 
 
 def generate_preshared_key():
-    r = run_cmd(f"{WG_BIN} genpsk", timeout=5)
+    r = run_cmd([WG_BIN, "genpsk"], timeout=5)
     return r["stdout"].strip() if r["success"] else None
+
+
+# Peer fields are written verbatim into wg<N>.conf, which wg-quick executes as
+# root (PostUp/PreDown). Reject anything that is not a single well-formed value.
+_KEY_RE = re.compile(r"[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=")
+
+
+def valid_key(value):
+    return isinstance(value, str) and bool(_KEY_RE.fullmatch(value))
+
+
+def valid_cidr_list(value):
+    if not isinstance(value, str) or not value.strip():
+        return False
+    try:
+        for part in value.split(","):
+            ipaddress.ip_network(part.strip(), strict=False)
+        return True
+    except ValueError:
+        return False
+
+
+def valid_endpoint(value):
+    if not isinstance(value, str) or len(value) > 259:
+        return False
+    host, sep, port = value.rpartition(":")
+    if not sep:
+        return False
+    if host.startswith("[") and host.endswith("]"):
+        try:
+            ipaddress.IPv6Address(host[1:-1])
+        except ValueError:
+            return False
+    elif not re.fullmatch(r"[A-Za-z0-9.-]+", host):
+        return False
+    return port.isdigit() and 0 < int(port) < 65536
+
+
+def valid_keepalive(value):
+    return isinstance(value, (int, str)) and str(value).isdigit() and 0 <= int(value) <= 65535
 
 
 def add_peer(iface, public_key, allowed_ips, endpoint=None, preshared_key=None,
@@ -183,6 +225,17 @@ def add_peer(iface, public_key, allowed_ips, endpoint=None, preshared_key=None,
     conf_path = os.path.join(WG_CONF_DIR, f"{iface}.conf")
     if not os.path.exists(conf_path):
         return {"success": False, "error": "Config not found"}
+    if not valid_key(public_key):
+        return {"success": False, "error": "Invalid public key"}
+    if not valid_cidr_list(allowed_ips):
+        return {"success": False, "error": "Allowed IPs must be a comma-separated list of IPs or CIDRs"}
+    if endpoint and not valid_endpoint(endpoint):
+        return {"success": False, "error": "Endpoint must be host:port"}
+    if preshared_key and not valid_key(preshared_key):
+        return {"success": False, "error": "Invalid preshared key"}
+    if persistent_keepalive and not valid_keepalive(persistent_keepalive):
+        return {"success": False, "error": "Keepalive must be a number of seconds"}
+    allowed_ips = ", ".join(p.strip() for p in allowed_ips.split(","))
 
     peer_block = f"\n[Peer]\nPublicKey = {public_key}\nAllowedIPs = {allowed_ips}\n"
     if endpoint:
@@ -203,7 +256,7 @@ def add_peer(iface, public_key, allowed_ips, endpoint=None, preshared_key=None,
             cmd_args.extend(["preshared-key", "/dev/stdin"])
         if persistent_keepalive:
             cmd_args.extend(["persistent-keepalive", str(persistent_keepalive)])
-        run_cmd(cmd_args)
+        run_cmd(cmd_args, input_text=(preshared_key + "\n") if preshared_key else None)
 
     return {"success": True}
 
@@ -262,6 +315,9 @@ def get_transfer_stats(iface="wg0"):
 
 def generate_client_config(server_iface, client_ip, server_endpoint,
                            server_public_key, dns="1.1.1.1"):
+    if (not valid_cidr_list(client_ip) or not valid_endpoint(server_endpoint)
+            or not valid_key(server_public_key) or not valid_cidr_list(dns)):
+        return None
     keys = generate_keypair()
     if not keys:
         return None

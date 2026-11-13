@@ -117,7 +117,7 @@ $(function() {
     var MY_IP = {{ my_ip|tojson }}, SSH_PORT = {{ ssh_port|tojson }};
     var TITLES = {'open-port': 'Open a port for an app', 'stop-attacker': 'Stop someone attacking me', 'let-office-in': 'Let my office or home in', 'locked-out': 'I locked myself out', 'docker-app': 'Add a Docker app', 'block-country': 'Block a country'};
     var task = null, step = 1, total = 1;
-    function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+    function esc(t) { return CSFv2.escapeHtml(t); }
     function flow() { return $('.task-flow[data-task="' + task + '"]'); }
     function show() {
         flow().find('.task-step').removeClass('active').filter('[data-step="' + step + '"]').addClass('active');

@@ -5,6 +5,7 @@ import json
 import os
 import secrets
 import time
+from csf_backend.auth import _auth_transaction
 
 TOKENS_PATH = "/etc/csfv2/tokens.json"
 SCOPES = {
@@ -40,6 +41,7 @@ def list_tokens():
     return [{k: v for k, v in t.items() if k != "hash"} for t in _load()["tokens"]]
 
 
+@_auth_transaction
 def create(name, scopes, created_by=""):
     name = (name or "").strip()[:60] or "token"
     scopes = [s for s in scopes if s in SCOPES] or ["read"]
@@ -53,6 +55,7 @@ def create(name, scopes, created_by=""):
     return raw
 
 
+@_auth_transaction
 def revoke(token_id):
     data = _load()
     before = len(data["tokens"])
@@ -61,6 +64,7 @@ def revoke(token_id):
     return len(data["tokens"]) < before
 
 
+@_auth_transaction
 def authenticate(raw):
     """Return the token record for a bearer string, or None. Updates last_used."""
     if not raw or not raw.startswith("csf_"):

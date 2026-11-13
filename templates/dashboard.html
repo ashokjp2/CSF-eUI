@@ -389,7 +389,7 @@
 {% block scripts %}
 <script>
 $(function() {
-    function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+    function esc(t) { return CSFv2.escapeHtml(t); }
 
     /* ---------- IP action box ---------- */
     var ACTS = {

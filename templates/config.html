@@ -745,7 +745,7 @@ $(function() {
     $('#clearSearch').on('click', function() {
         $('#configSearch').val('').trigger('input');
     });
-    function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+    function esc(t) { return CSFv2.escapeHtml(t); }
     $('#diffConfirm').on('click', function() {
         $('#diffModal').modal('hide');
         var f = document.getElementById('configForm');
@@ -1664,7 +1664,7 @@ $(function() {
     // Load contextual help tooltips
     /* Plain-English help shown inline on every row: what it does, risk, tip, CSF default */
     $.getJSON('/api/setting-help', function(helpData) {
-        function esc(t) { return $('<div>').text(t == null ? '' : String(t)).html(); }
+        function esc(t) { return CSFv2.escapeHtml(t); }
         $('tr[data-key]').each(function() {
             var key = $(this).data('key'), help = helpData[key], dflt = $(this).attr('data-default');
             var html = '';
