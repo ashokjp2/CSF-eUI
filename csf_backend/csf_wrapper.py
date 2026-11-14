@@ -83,7 +83,7 @@ def csf_start():
     return _apply_csf_with_docker_recovery()
 
 def csf_stop():
-    return run_csf(["-f"])
+    return _recover_docker_chains(run_csf(["-f"]))
 
 def csf_restart():
     return _apply_csf_with_docker_recovery()
@@ -116,14 +116,30 @@ def _apply_csf_with_docker_recovery():
         result["stdout"] = (result.get("stdout", "") + "\n" + docker_result["message"]).strip()
     return result
 
+def _recover_docker_chains(result):
+    """Keep Docker networks usable after any CSF state-changing operation."""
+    if not result.get("success"):
+        return result
+    from csf_backend import service_integration
+
+    docker_result = service_integration.restore_docker_firewall_chains({})
+    if not docker_result.get("success"):
+        result["success"] = False
+        result["stderr"] = (result.get("stderr", "") + "\n" + docker_result.get(
+            "message", "Docker firewall recovery failed."
+        )).strip()
+    elif docker_result.get("changed"):
+        result["stdout"] = (result.get("stdout", "") + "\n" + docker_result["message"]).strip()
+    return result
+
 def csf_restart_q():
-    return run_csf(["-q"], timeout=300)
+    return _recover_docker_chains(run_csf(["-q"], timeout=300))
 
 def csf_enable():
-    return run_csf(["-e"])
+    return _recover_docker_chains(run_csf(["-e"]))
 
 def csf_disable():
-    return run_csf(["-x"])
+    return _recover_docker_chains(run_csf(["-x"]))
 
 def lfd_start():
     return run_command(["systemctl", "start", "lfd"])
