@@ -397,54 +397,17 @@ if not result.get('success', False):
     raise SystemExit(1)
 " || warn "Could not configure the Docker firewall compatibility hook; use Quick Config > Services to retry."
 
-DOCKER_CHAIN_GUARD="/usr/local/sbin/csfv2-docker-chain-guard"
-cat > "$DOCKER_CHAIN_GUARD" <<'GUARD'
-#!/bin/bash
-set -eu
-
-systemctl is-active --quiet docker || exit 0
-docker info --format '{{.Server.Version}}' >/dev/null 2>&1 || exit 0
-iptables -t filter -S DOCKER-FORWARD >/dev/null 2>&1 && exit 0
-
-logger -t csfv2-docker-chain-guard "DOCKER-FORWARD missing; restarting Docker to restore its chains"
-systemctl restart docker
-
-for _ in $(seq 1 20); do
-    iptables -t filter -S DOCKER-FORWARD >/dev/null 2>&1 && exit 0
-    sleep 1
-done
-
-logger -t csfv2-docker-chain-guard "Docker restarted but DOCKER-FORWARD is still missing"
-exit 1
-GUARD
-chmod 755 "$DOCKER_CHAIN_GUARD"
-
-cat > /etc/systemd/system/csfv2-docker-chain-guard.service <<'UNIT'
-[Unit]
-Description=CSFv2 Docker firewall chain guard
-After=docker.service
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/csfv2-docker-chain-guard
-UNIT
-
-cat > /etc/systemd/system/csfv2-docker-chain-guard.timer <<'UNIT'
-[Unit]
-Description=Check Docker firewall chains every 30 seconds
-
-[Timer]
-OnBootSec=30s
-OnUnitActiveSec=30s
-Unit=csfv2-docker-chain-guard.service
-
-[Install]
-WantedBy=timers.target
-UNIT
-
-systemctl daemon-reload
-systemctl enable --now csfv2-docker-chain-guard.timer >/dev/null 2>&1 || \
-    warn "Could not enable the Docker firewall chain guard timer."
+# The guard script and its systemd units live in updater.py so installs and
+# updates always write the same, current version.
+"$INSTALL_DIR/venv/bin/python3" -c "
+import sys
+sys.path.insert(0, '$INSTALL_DIR')
+from csf_backend.updater import _repair_docker_chain_guard
+messages = _repair_docker_chain_guard()
+print(' '.join(messages))
+if any(m.startswith('WARNING') for m in messages):
+    raise SystemExit(1)
+" || warn "Could not enable the Docker firewall chain guard timer."
 
 section "Opening firewall port"
 

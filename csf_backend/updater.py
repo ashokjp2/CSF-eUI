@@ -39,6 +39,133 @@ WantedBy=timers.target
 """
 
 
+DOCKER_GUARD_SCRIPT = "/usr/local/sbin/csfv2-docker-chain-guard"
+DOCKER_GUARD_SERVICE_UNIT = "/etc/systemd/system/csfv2-docker-chain-guard.service"
+DOCKER_GUARD_TIMER_UNIT = "/etc/systemd/system/csfv2-docker-chain-guard.timer"
+
+# Runs every 30 seconds, so the healthy path must stay a single iptables call.
+# The Docker CLI is only consulted once the chain is actually missing, and a
+# cooldown stops a persistent problem from turning into a Docker restart loop.
+_DOCKER_GUARD_SCRIPT_CONTENT = r"""#!/bin/bash
+# Managed by CSFv2 (rewritten on every update). Restores Docker's firewall
+# chains when something outside CSFv2 flushes iptables (e.g. csf -r from a shell).
+set -u
+
+chain_ok() { iptables -w 5 -t filter -S DOCKER-FORWARD >/dev/null 2>&1; }
+
+chain_ok && exit 0
+systemctl is-active --quiet docker || exit 0
+
+# Only Docker 28+ with the iptables backend owns a DOCKER-FORWARD chain.
+VERSION="$(docker version --format '{{.Server.Version}}' 2>/dev/null || true)"
+MAJOR="${VERSION%%.*}"
+case "$MAJOR" in ''|*[!0-9]*) exit 0 ;; esac
+[ "$MAJOR" -ge 28 ] || exit 0
+BACKEND="$(docker info --format '{{with .FirewallBackend}}{{.Driver}}{{end}}' 2>/dev/null || true)"
+case "$BACKEND" in *nftables*) exit 0 ;; esac
+
+# CSF may be mid-reload; give its csfpost hook time to finish first.
+sleep 10
+chain_ok && exit 0
+
+STAMP=/run/csfv2-docker-chain-guard.last
+NOW="$(date +%s)"
+LAST="$(cat "$STAMP" 2>/dev/null || echo 0)"
+case "$LAST" in ''|*[!0-9]*) LAST=0 ;; esac
+[ $((NOW - LAST)) -ge 600 ] || exit 0
+echo "$NOW" > "$STAMP"
+
+logger -t csfv2-docker-chain-guard "DOCKER-FORWARD missing; restarting Docker to restore its chains"
+systemctl restart docker || true
+
+for _ in $(seq 1 20); do
+    chain_ok && exit 0
+    sleep 1
+done
+
+logger -t csfv2-docker-chain-guard "Docker restarted but DOCKER-FORWARD is still missing"
+exit 1
+"""
+
+_DOCKER_GUARD_SERVICE_CONTENT = """[Unit]
+Description=CSFv2 Docker firewall chain guard
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/csfv2-docker-chain-guard
+TimeoutStartSec=180
+# Hide the per-run Starting/Finished lines; guard notices still reach the journal.
+LogLevelMax=notice
+"""
+
+_DOCKER_GUARD_TIMER_CONTENT = """[Unit]
+Description=Check Docker firewall chains every 30 seconds
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30s
+Unit=csfv2-docker-chain-guard.service
+
+[Install]
+WantedBy=timers.target
+"""
+
+
+def _write_if_changed(path, content, mode):
+    """Atomically write ``content`` to ``path``; return True when it changed."""
+    try:
+        with open(path) as f:
+            if f.read() == content:
+                return False
+    except FileNotFoundError:
+        pass
+    fd, temp_path = tempfile.mkstemp(prefix=".csfv2-", dir=os.path.dirname(path), text=True)
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(content)
+        os.chmod(temp_path, mode)
+        os.replace(temp_path, path)
+    finally:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+    return True
+
+
+def _repair_docker_chain_guard():
+    """Install or upgrade the Docker chain guard script and its timer.
+
+    v1.2.74 shipped a guard whose ``docker info`` template was invalid, so it
+    exited before checking anything while still costing a Docker CLI call every
+    30 seconds. Rewrite it on every update/startup; safe to re-run.
+    """
+    systemctl = shutil.which("systemctl")
+    if not systemctl:
+        return ["WARNING: systemctl is unavailable; skipped Docker chain guard repair."]
+    if not (os.path.exists(DOCKER_GUARD_SCRIPT) or shutil.which("docker")):
+        return ["Docker not installed; Docker chain guard not needed."]
+
+    try:
+        changed = _write_if_changed(DOCKER_GUARD_SCRIPT, _DOCKER_GUARD_SCRIPT_CONTENT, 0o755)
+        units_changed = False
+        for path, content in ((DOCKER_GUARD_SERVICE_UNIT, _DOCKER_GUARD_SERVICE_CONTENT),
+                              (DOCKER_GUARD_TIMER_UNIT, _DOCKER_GUARD_TIMER_CONTENT)):
+            units_changed = _write_if_changed(path, content, 0o644) or units_changed
+        if units_changed:
+            subprocess.run([systemctl, "daemon-reload"], capture_output=True, text=True, timeout=15)
+        subprocess.run([systemctl, "enable", "--now", "csfv2-docker-chain-guard.timer"],
+                       capture_output=True, text=True, timeout=15)
+        active = subprocess.run([systemctl, "is-active", "--quiet", "csfv2-docker-chain-guard.timer"],
+                                capture_output=True, text=True, timeout=15)
+        if active.returncode != 0:
+            return ["WARNING: Docker chain guard timer is not active."]
+        if changed or units_changed:
+            return ["Docker chain guard updated and timer is active."]
+        return ["Docker chain guard verified active."]
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return [f"WARNING: Docker chain guard repair failed: {exc}"]
+
+
 def _get_cache_ttl():
     try:
         from csf_backend import auto_update as _au
@@ -387,6 +514,8 @@ def run_update_stream(force=False):
     yield from _sse("Checking the update-check systemd timer...")
     for timer_message in _repair_update_timer():
         yield from _sse(timer_message)
+    for guard_message in _repair_docker_chain_guard():
+        yield from _sse(guard_message)
 
     # pip install
     pip_bin = os.path.join(INSTALL_DIR, "venv/bin/pip")

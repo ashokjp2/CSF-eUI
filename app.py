@@ -94,6 +94,9 @@ if os.path.isdir("/run/systemd/system") and getattr(os, "geteuid", lambda: 1)() 
     for _timer_message in app_updater._repair_update_timer():
         if _timer_message.startswith("WARNING"):
             app.logger.error(_timer_message)
+    for _guard_message in app_updater._repair_docker_chain_guard():
+        if _guard_message.startswith("WARNING"):
+            app.logger.error(_guard_message)
     # Passkeys need the 'webauthn' package; a file deploy or git pull does not run pip, so do it here.
     passkeys.ensure_installed()
 app.secret_key = (os.environ.get("CSFV2_SECRET_KEY")
